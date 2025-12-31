@@ -1,0 +1,74 @@
+name: healthsteward
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python
+  - python=3.11
+
+  # Core ML/AI Libraries
+  - pytorch::pytorch>=2.1.0
+  - pytorch::torchvision
+  - pytorch::torchaudio
+  - transformers>=4.36.0
+  - datasets
+  - accelerate
+  - peft  # For LoRA fine-tuning
+  - bitsandbytes  # For quantization
+
+  # Vector DB & RAG
+  - faiss-cpu  # or faiss-gpu if you have CUDA
+  - langchain>=0.1.0
+  - chromadb
+
+  # Data Science Essentials
+  - numpy>=1.24.0
+  - pandas>=2.0.0
+  - scipy
+  - scikit-learn
+
+  # API & Web
+  - anthropic  # Claude API
+  - fastapi
+  - uvicorn
+  - httpx
+  - aiohttp
+
+  # Calendar & Scheduling
+  - python-dateutil
+  - icalendar
+  - apscheduler
+
+  # Data Storage
+  - sqlalchemy
+  - alembic
+
+  # Configuration & Environment
+  - python-dotenv
+  - pydantic>=2.0.0
+  - pyyaml
+
+  # Development Tools
+  - pytest
+  - pytest-asyncio
+  - black
+  - ruff
+  - mypy
+  - ipython
+  - jupyter
+  - jupyterlab
+
+  # Monitoring & Logging
+  - loguru
+  - tqdm
+
+  # Pip packages (not in conda)
+  - pip
+  - pip:
+    - anthropic  # Ensure latest version via pip
+    - sentence-transformers  # For embeddings
+    - einops  # Tensor operations
+    - wandb  # Optional: experiment tracking (can remove if not needed)
+    - evaluate  # HuggingFace evaluation metrics

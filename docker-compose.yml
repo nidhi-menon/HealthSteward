@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # Main HealthSteward application
+  app:
+    build:
+      context: .
+      target: development
+    container_name: healthsteward_app
+    ports:
+      - "8000:8000"  # FastAPI
+      - "8888:8888"  # Jupyter (optional)
+    volumes:
+      # Mount source code for development (hot reload)
+      - ./src:/app/src
+      - ./config:/app/config
+      # Persistent data volumes (NEVER expose these!)
+      - ./data/health_records:/app/data/health_records
+      - ./data/models:/app/data/models
+      - ./logs:/app/logs
+    environment:
+      - ENVIRONMENT=development
+    env_file:
+      - .env
+    networks:
+      - healthsteward_network
+    restart: unless-stopped
+    # GPU support (uncomment if you have NVIDIA GPU)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # PostgreSQL database for structured data (appointments, reminders, etc.)
+  db:
+    image: postgres:16-alpine
+    container_name: healthsteward_db
+    environment:
+      POSTGRES_DB: healthsteward
+      POSTGRES_USER: ${DB_USER:-healthsteward}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - healthsteward_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-healthsteward}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and task queues (optional but recommended)
+  redis:
+    image: redis:7-alpine
+    container_name: healthsteward_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - healthsteward_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Vector database for RAG (ChromaDB)
+  # When you implement RAG, you can use this service
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: healthsteward_chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=False
+      - ALLOW_RESET=True
+    networks:
+      - healthsteward_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  chromadb_data:
+    driver: local
+
+networks:
+  healthsteward_network:
+    driver: bridge
