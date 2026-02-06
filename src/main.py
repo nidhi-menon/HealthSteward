@@ -1,23 +1,43 @@
-"""
-HealthSteward main application entry point
-"""
+"""HealthSteward main application entry point."""
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
+from loguru import logger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+from src.api import appointments, conditions, doctors, health_profile, medications, visits
+from src.config import get_settings
+from src.data.database import init_db
+from src.utils.logging import setup_logging
+
+# Get settings
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager for startup and shutdown."""
+    # Startup
+    setup_logging()
+    logger.info("Starting HealthSteward...")
+
+    # Initialize database
+    await init_db()
+    logger.info("Database initialized")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down HealthSteward...")
+
 
 # Create FastAPI app
 app = FastAPI(
-    title="HealthSteward",
+    title=settings.app_name,
     description="Privacy-first AI health coordination system",
-    version="0.1.0"
+    version=settings.app_version,
+    lifespan=lifespan,
 )
 
 # Add CORS middleware (restrict in production)
@@ -29,30 +49,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(health_profile.router)
+app.include_router(conditions.router)
+app.include_router(medications.router)
+app.include_router(doctors.router)
+app.include_router(appointments.router)
+app.include_router(visits.router)
+
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Health check endpoint."""
     return {
         "status": "healthy",
-        "service": "HealthSteward",
-        "version": "0.1.0"
+        "service": settings.app_name,
+        "version": settings.app_version,
     }
 
 
 @app.get("/health")
 async def health_check():
-    """Detailed health check"""
+    """Detailed health check."""
     return {
         "status": "ok",
-        "services": {
-            "api": "running",
-            "database": "not_configured",
-            "ai_agent": "not_configured"
-        }
+        "database": "connected",
+        "ai_agent": "configured" if settings.anthropic_api_key else "not_configured",
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(
+        "src.main:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=settings.is_development,
+    )
