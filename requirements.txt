@@ -1,0 +1,70 @@
+# Core ML & LLM Libraries
+torch==2.1.2
+transformers==4.36.2
+accelerate==0.25.0
+peft==0.7.1
+bitsandbytes==0.41.2
+trl==0.7.9
+
+# Model Quantization (add later when needed)
+# auto-gptq - requires CUDA, skip for Mac development
+# awq - requires CUDA, skip for Mac development
+onnxruntime==1.17.1
+
+# RAG & Vector Databases
+langchain==0.1.6
+langchain-community==0.0.18
+chromadb==0.4.21
+faiss-cpu==1.7.4
+sentence-transformers==2.2.2
+
+# Model Serving (add later when deploying)
+# vllm==0.3.0
+ollama==0.6.1
+
+# Data Processing & Analysis
+pandas==2.1.3
+numpy==1.24.3
+scikit-learn==1.3.2
+scipy==1.11.4
+
+# Health-specific or data handling
+python-dateutil==2.8.2
+pytz==2023.3
+requests==2.31.0
+
+# Development & Notebooks
+jupyter==1.0.0
+ipython==8.18.1
+ipykernel==6.26.0
+
+# Utilities & Configuration
+python-dotenv==1.0.0
+pydantic==2.9.0
+loguru==0.7.2
+typer==0.9.0
+click==8.1.7
+
+# Testing & Code Quality
+pytest==7.4.3
+black==23.12.0
+flake8==6.1.0
+mypy==1.7.1
+isort==5.13.2
+
+# API & Web
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic-settings==2.1.0
+httpx==0.27.0
+
+# Database
+sqlalchemy[asyncio]==2.0.25
+aiosqlite==0.19.0
+alembic==1.13.1
+
+# Anthropic SDK (for your health agent)
+anthropic>=0.40.0
+
+# Async Testing
+pytest-asyncio==0.23.3

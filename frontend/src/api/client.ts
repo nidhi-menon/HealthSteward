@@ -1,0 +1,156 @@
+import type {
+  HealthProfile,
+  HealthProfileCreate,
+  Condition,
+  ConditionCreate,
+  Medication,
+  MedicationCreate,
+  Doctor,
+  DoctorCreate,
+  Appointment,
+  AppointmentCreate,
+  VisitPrep,
+} from '../types';
+
+const API_BASE = '/api';
+
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Request failed: ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json();
+}
+
+// Health Profiles
+export const profiles = {
+  list: () => request<HealthProfile[]>('/profiles/'),
+  get: (id: string) => request<HealthProfile>(`/profiles/${id}`),
+  create: (data: HealthProfileCreate) =>
+    request<HealthProfile>('/profiles/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: Partial<HealthProfileCreate>) =>
+    request<HealthProfile>(`/profiles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request<void>(`/profiles/${id}`, { method: 'DELETE' }),
+};
+
+// Conditions
+export const conditions = {
+  list: (profileId: string) =>
+    request<Condition[]>(`/profiles/${profileId}/conditions/`),
+  get: (profileId: string, id: string) =>
+    request<Condition>(`/profiles/${profileId}/conditions/${id}`),
+  create: (profileId: string, data: ConditionCreate) =>
+    request<Condition>(`/profiles/${profileId}/conditions/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (profileId: string, id: string, data: Partial<ConditionCreate>) =>
+    request<Condition>(`/profiles/${profileId}/conditions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (profileId: string, id: string) =>
+    request<void>(`/profiles/${profileId}/conditions/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Medications
+export const medications = {
+  list: (profileId: string) =>
+    request<Medication[]>(`/profiles/${profileId}/medications/`),
+  get: (profileId: string, id: string) =>
+    request<Medication>(`/profiles/${profileId}/medications/${id}`),
+  create: (profileId: string, data: MedicationCreate) =>
+    request<Medication>(`/profiles/${profileId}/medications/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (profileId: string, id: string, data: Partial<MedicationCreate>) =>
+    request<Medication>(`/profiles/${profileId}/medications/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (profileId: string, id: string) =>
+    request<void>(`/profiles/${profileId}/medications/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Doctors
+export const doctors = {
+  list: (profileId: string) =>
+    request<Doctor[]>(`/profiles/${profileId}/doctors/`),
+  get: (profileId: string, id: string) =>
+    request<Doctor>(`/profiles/${profileId}/doctors/${id}`),
+  create: (profileId: string, data: DoctorCreate) =>
+    request<Doctor>(`/profiles/${profileId}/doctors/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (profileId: string, id: string, data: Partial<DoctorCreate>) =>
+    request<Doctor>(`/profiles/${profileId}/doctors/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (profileId: string, id: string) =>
+    request<void>(`/profiles/${profileId}/doctors/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Appointments
+export const appointments = {
+  list: (profileId: string) =>
+    request<Appointment[]>(`/profiles/${profileId}/appointments/`),
+  get: (profileId: string, id: string) =>
+    request<Appointment>(`/profiles/${profileId}/appointments/${id}`),
+  create: (profileId: string, data: AppointmentCreate) =>
+    request<Appointment>(`/profiles/${profileId}/appointments/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (profileId: string, id: string, data: Partial<AppointmentCreate>) =>
+    request<Appointment>(`/profiles/${profileId}/appointments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (profileId: string, id: string) =>
+    request<void>(`/profiles/${profileId}/appointments/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Visit Prep
+export const visitPrep = {
+  prepare: (appointmentId: string, additionalConcerns?: string) =>
+    request<VisitPrep>(`/visits/${appointmentId}/prepare`, {
+      method: 'POST',
+      body: JSON.stringify({ additional_concerns: additionalConcerns }),
+    }),
+  get: (appointmentId: string) =>
+    request<VisitPrep>(`/visits/${appointmentId}/prep`),
+};
