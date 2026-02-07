@@ -224,6 +224,142 @@ Compare with profile → User confirms → Update profile + archive PDF
 
 ---
 
+### DEC-006: PII Anonymization for LLM Calls
+
+**Date:** 2026-02-05
+
+**Topic:** How to protect personally identifiable information when sending health data to LLM APIs
+
+**Context:** Visit prep feature sends patient data to Claude API. Need to prevent PII leakage while maintaining useful medical context.
+
+**Data Classification:**
+
+| Field | Risk | Action |
+|-------|------|--------|
+| Patient name | High | → "Patient" |
+| Date of birth | High | → Exact age (e.g., "39 years old") |
+| Emergency contact | Medium | → Remove entirely |
+| Doctor name | Medium | → "your [specialty]" or "Doctor" |
+| Doctor phone/email | Medium | → Remove entirely |
+| Doctor clinic | Low | → Keep |
+| Prescribing doctor | Medium | → "Prescribing physician" |
+| Conditions/medications | Low | → Keep (medically relevant) |
+| Free-text notes | Varies | → Regex + NER scanning |
+
+**Approach:** Hybrid
+- Structured fields: Deterministic replacement
+- Free-text fields: Regex patterns (phone, email, SSN) + spaCy NER for names
+- Medical data: Always preserve
+
+**LLM Provider Strategy:**
+- Support both Claude + Anonymization and Ollama (local)
+- Configurable via settings
+- Same anonymization layer for both
+
+**ConversationLog:** Log anonymized content only (not raw PII)
+
+**Testing Strategy:**
+- Unit tests for each anonymization rule
+- Integration tests verifying no PII in API calls
+- Regression guards to prevent bypass
+
+**Decision:** APPROVED
+
+**Status:** In progress
+
+---
+
+### DEC-007: Action Items Extraction (Phase 3)
+
+**Date:** 2026-02-05
+
+**Topic:** Extracting actionable items (follow-ups, labs, referrals) from visit notes and PDFs
+
+**Context:** After appointments, users have notes like "Follow up in 3 months", "Order HbA1c lab". These should become trackable action items.
+
+**Feature Scope:**
+- Parse `visit_notes` field for action items
+- Parse uploaded after-visit PDFs for action items
+- Extract: follow-up appointments, lab orders, referrals, medication changes
+- User confirms before adding to profile
+
+**New Models Required:**
+- `ActionItem`: source, action_type, description, due_date, status, linked_record
+- `LabTest`: test_name, ordered_date, due_date, completed_date, results
+
+**Sources for Extraction:**
+- `appointment.visit_notes` (user-entered)
+- Uploaded PDFs (after-visit summaries)
+
+**Decision:** Combined with Phase 3 (PDF Processing + Action Extraction)
+
+**Status:** Deferred - Phase 3
+
+---
+
+### DEC-008: Visit Notes Structure & Intelligent Context Selection
+
+**Date:** 2026-02-05
+
+**Topic:** How to structure appointment notes and intelligently select relevant visit history for prep
+
+**Context:** Users need prep notes (before) and visit notes (during/after). When preparing for a visit, need to include relevant past visit context without wasting tokens on irrelevant visits.
+
+**Part A: Visit Notes Fields**
+
+Model changes:
+- Rename `notes` → `prep_notes` (before visit)
+- Add `visit_notes` (during/after visit)
+- Add `visit_notes_updated_at` timestamp
+- Add `exclude_from_prep_context` flag on Doctor model
+
+**Part B: 4-Stage Context Selection**
+
+```
+STAGE 1: Rules-Based Filter (instant, free)
+├── ✓ Include: Same doctor's last visit
+├── ✓ Include: All PCP/Internal Medicine visits
+├── ✓ Include: Related specialties (mapping)
+└── ✗ Exclude: Doctors with exclude_from_prep flag
+
+        ↓ If > 5 visits remain
+
+STAGE 2: Local LLM Relevance Scoring (Ollama)
+├── Score each visit 1-10 for relevance
+├── Keep visits scoring >= 7
+└── Fallback: Skip if Ollama unavailable
+
+        ↓
+
+STAGE 3: Token Budget Check
+├── If over budget: summarize older visits
+└── Use local LLM for summarization
+
+        ↓
+
+STAGE 4: Anonymize + Send to Main LLM
+```
+
+**Specialty Mapping:**
+```
+Primary Care / Internal Medicine → Relevant to all
+Endocrinology → Cardiology, Nephrology, Ophthalmology, Podiatry, Neurology
+Cardiology → Endocrinology, Nephrology, Pulmonology, Vascular Surgery
+Oncology → Relevant to all
+(extensible)
+```
+
+**Configuration:**
+- Stage 2 threshold: > 5 visits
+- Relevance score cutoff: >= 7
+- Fallback if Ollama unavailable: Skip Stage 2, use rules + truncation
+
+**Decision:** APPROVED
+
+**Status:** In progress
+
+---
+
 ## Template for New Decisions
 
 ```markdown

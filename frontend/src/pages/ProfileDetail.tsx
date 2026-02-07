@@ -371,7 +371,7 @@ function AppointmentsTab({ profileId, appointments, doctors, onAdd }: { profileI
             <Card key={appt.id} className="hover:border-emerald-300 transition-colors">
               <CardContent>
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex-1">
                     <h4 className="font-medium text-gray-900">{getDoctorName(appt.doctor_id)}</h4>
                     <p className="text-sm text-gray-500">
                       {new Date(appt.scheduled_date).toLocaleString()}
@@ -384,13 +384,25 @@ function AppointmentsTab({ profileId, appointments, doctors, onAdd }: { profileI
                     }`}>
                       {appt.status}
                     </span>
+                    {appt.prep_notes && (
+                      <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                        <span className="font-medium text-blue-700">Pre-visit notes: </span>
+                        <span className="text-blue-900">{appt.prep_notes}</span>
+                      </div>
+                    )}
+                    {appt.visit_notes && (
+                      <div className="mt-2 p-2 bg-green-50 rounded text-sm">
+                        <span className="font-medium text-green-700">Visit notes: </span>
+                        <span className="text-green-900">{appt.visit_notes}</span>
+                      </div>
+                    )}
                   </div>
                   <Button
                     size="sm"
                     variant="secondary"
                     onClick={() => navigate(`/profiles/${profileId}/appointments/${appt.id}/prep`)}
                   >
-                    Prepare Visit
+                    {appt.status === 'completed' ? 'View Details' : 'Prepare Visit'}
                   </Button>
                 </div>
               </CardContent>
@@ -503,6 +515,18 @@ function DoctorModal({ isOpen, onClose, profileId }: { isOpen: boolean; onClose:
         <Input label="Phone" value={formData.phone || ''} onChange={(e) => setFormData({ ...formData, phone: e.target.value || null })} />
         <Input label="Email" type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value || null })} />
         <Textarea label="Notes" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })} />
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="exclude_from_prep"
+            checked={formData.exclude_from_prep_context || false}
+            onChange={(e) => setFormData({ ...formData, exclude_from_prep_context: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+          />
+          <label htmlFor="exclude_from_prep" className="text-sm text-gray-700">
+            Exclude from visit prep context (for sensitive specialties)
+          </label>
+        </div>
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Adding...' : 'Add Doctor'}</Button>
@@ -552,7 +576,7 @@ function AppointmentModal({ isOpen, onClose, profileId, doctors }: { isOpen: boo
           required
         />
         <Input label="Purpose" value={formData.purpose || ''} onChange={(e) => setFormData({ ...formData, purpose: e.target.value || null })} placeholder="e.g., Annual checkup" />
-        <Textarea label="Notes" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })} />
+        <Textarea label="Pre-Visit Notes" value={formData.prep_notes || ''} onChange={(e) => setFormData({ ...formData, prep_notes: e.target.value || null })} placeholder="Questions or concerns to discuss" />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Scheduling...' : 'Schedule'}</Button>

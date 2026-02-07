@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { profiles, appointments, doctors, visitPrep } from '../api/client';
@@ -10,6 +10,8 @@ export default function VisitPrep() {
   const { profileId, appointmentId } = useParams<{ profileId: string; appointmentId: string }>();
   const queryClient = useQueryClient();
   const [additionalConcerns, setAdditionalConcerns] = useState('');
+  const [visitNotes, setVisitNotes] = useState('');
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
 
   // Queries
   const { data: profile } = useQuery({
@@ -18,7 +20,7 @@ export default function VisitPrep() {
     enabled: !!profileId,
   });
 
-  const { data: appointment } = useQuery({
+  const { data: appointment, refetch: refetchAppointment } = useQuery({
     queryKey: ['appointment', profileId, appointmentId],
     queryFn: () => appointments.get(profileId!, appointmentId!),
     enabled: !!profileId && !!appointmentId,
@@ -37,6 +39,13 @@ export default function VisitPrep() {
     retry: false,
   });
 
+  // Initialize visit notes from appointment
+  useEffect(() => {
+    if (appointment?.visit_notes) {
+      setVisitNotes(appointment.visit_notes);
+    }
+  }, [appointment?.visit_notes]);
+
   // Generate mutation
   const generateMutation = useMutation({
     mutationFn: () => visitPrep.prepare(appointmentId!, additionalConcerns || undefined),
@@ -45,11 +54,25 @@ export default function VisitPrep() {
     },
   });
 
+  // Update appointment mutation (for visit notes)
+  const updateAppointmentMutation = useMutation({
+    mutationFn: (data: { visit_notes?: string; status?: string }) =>
+      appointments.update(profileId!, appointmentId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointment', profileId, appointmentId] });
+      queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      setIsEditingNotes(false);
+    },
+  });
+
   const doctor = doctorList?.find((d) => d.id === appointment?.doctor_id);
 
   if (!profile || !appointment) {
     return <div className="text-center py-12 text-gray-500">Loading...</div>;
   }
+
+  const isCompleted = appointment.status === 'completed';
+  const isPast = new Date(appointment.scheduled_date) < new Date();
 
   return (
     <div className="space-y-6">
@@ -61,17 +84,37 @@ export default function VisitPrep() {
           </svg>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Visit Preparation</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isCompleted ? 'Visit Summary' : 'Visit Preparation'}
+          </h1>
           <p className="text-gray-500">
             {doctor?.name} • {new Date(appointment.scheduled_date).toLocaleDateString()}
           </p>
         </div>
+        {isPast && !isCompleted && (
+          <Button
+            size="sm"
+            onClick={() => updateAppointmentMutation.mutate({ status: 'completed' })}
+            disabled={updateAppointmentMutation.isPending}
+          >
+            Mark as Completed
+          </Button>
+        )}
       </div>
 
       {/* Appointment Info */}
       <Card>
         <CardHeader>
-          <h3 className="font-semibold text-gray-900">Appointment Details</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-gray-900">Appointment Details</h3>
+            <span className={`px-2 py-0.5 rounded-full text-xs ${
+              appointment.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
+              appointment.status === 'completed' ? 'bg-green-100 text-green-700' :
+              'bg-gray-100 text-gray-700'
+            }`}>
+              {appointment.status}
+            </span>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
@@ -94,8 +137,20 @@ export default function VisitPrep() {
         </CardContent>
       </Card>
 
-      {/* Generate Section */}
-      {!prep && (
+      {/* Pre-visit Notes */}
+      {appointment.prep_notes && (
+        <Card>
+          <CardHeader>
+            <h3 className="font-semibold text-gray-900">Pre-Visit Notes</h3>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-700">{appointment.prep_notes}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Generate Section - Only show if not completed */}
+      {!prep && !isCompleted && (
         <Card>
           <CardHeader>
             <h3 className="font-semibold text-gray-900">Generate AI-Powered Questions</h3>
@@ -125,7 +180,7 @@ export default function VisitPrep() {
                   Generating Questions...
                 </span>
               ) : (
-                '✨ Generate Questions with AI'
+                'Generate Questions with AI'
               )}
             </Button>
             {generateMutation.isError && (
@@ -178,17 +233,79 @@ export default function VisitPrep() {
             </div>
           )}
 
-          {/* Regenerate Button */}
-          <div className="flex justify-center">
-            <Button
-              variant="secondary"
-              onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? 'Regenerating...' : '🔄 Regenerate Questions'}
-            </Button>
-          </div>
+          {/* Regenerate Button - Only show if not completed */}
+          {!isCompleted && (
+            <div className="flex justify-center">
+              <Button
+                variant="secondary"
+                onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending}
+              >
+                {generateMutation.isPending ? 'Regenerating...' : 'Regenerate Questions'}
+              </Button>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Visit Notes Section - Show for completed or past appointments */}
+      {(isCompleted || isPast) && (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold text-gray-900">Visit Notes</h3>
+              {appointment.visit_notes && !isEditingNotes && (
+                <Button size="sm" variant="secondary" onClick={() => setIsEditingNotes(true)}>
+                  Edit
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isEditingNotes || !appointment.visit_notes ? (
+              <>
+                <p className="text-gray-600 text-sm">
+                  Record notes from your visit: what was discussed, recommendations, follow-ups, etc.
+                </p>
+                <Textarea
+                  label=""
+                  value={visitNotes}
+                  onChange={(e) => setVisitNotes(e.target.value)}
+                  placeholder="Enter notes from your visit..."
+                  rows={6}
+                />
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => updateAppointmentMutation.mutate({ visit_notes: visitNotes })}
+                    disabled={updateAppointmentMutation.isPending}
+                  >
+                    {updateAppointmentMutation.isPending ? 'Saving...' : 'Save Visit Notes'}
+                  </Button>
+                  {appointment.visit_notes && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setVisitNotes(appointment.visit_notes || '');
+                        setIsEditingNotes(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div>
+                <p className="text-gray-700 whitespace-pre-wrap">{appointment.visit_notes}</p>
+                {appointment.visit_notes_updated_at && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    Last updated: {new Date(appointment.visit_notes_updated_at).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

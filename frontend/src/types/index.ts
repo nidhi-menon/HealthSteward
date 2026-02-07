@@ -78,6 +78,7 @@ export interface Doctor {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  exclude_from_prep_context: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +90,7 @@ export interface DoctorCreate {
   phone?: string | null;
   email?: string | null;
   notes?: string | null;
+  exclude_from_prep_context?: boolean;
 }
 
 // Appointment
@@ -99,7 +101,9 @@ export interface Appointment {
   scheduled_date: string;
   purpose: string | null;
   status: string;
-  notes: string | null;
+  prep_notes: string | null;
+  visit_notes: string | null;
+  visit_notes_updated_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -109,7 +113,8 @@ export interface AppointmentCreate {
   scheduled_date: string;
   purpose?: string | null;
   status?: string;
-  notes?: string | null;
+  prep_notes?: string | null;
+  visit_notes?: string | null;
 }
 
 // Visit Prep
