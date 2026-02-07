@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { profiles } from '../api/client';
+import { formatDateString } from '../utils/date';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { Input } from '../components/Input';
+import { Input, DatePicker } from '../components/Input';
 import type { HealthProfileCreate } from '../types';
 
 export default function ProfileList() {
@@ -78,7 +79,7 @@ export default function ProfileList() {
                       )}
                       {profile.date_of_birth && (
                         <p className="text-sm text-gray-500">
-                          DOB: {new Date(profile.date_of_birth).toLocaleDateString()}
+                          DOB: {formatDateString(profile.date_of_birth)}
                         </p>
                       )}
                     </div>
@@ -99,11 +100,10 @@ export default function ProfileList() {
             placeholder="Enter full name"
             required
           />
-          <Input
+          <DatePicker
             label="Date of Birth"
-            type="date"
-            value={formData.date_of_birth || ''}
-            onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value || null })}
+            value={formData.date_of_birth || null}
+            onChange={(value) => setFormData({ ...formData, date_of_birth: value })}
           />
           <Input
             label="Blood Type"
