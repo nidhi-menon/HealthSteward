@@ -1,5 +1,7 @@
 """API routes for appointment CRUD operations."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,6 +127,10 @@ async def update_appointment(
     # If updating doctor_id, verify the new doctor exists
     if "doctor_id" in update_data and update_data["doctor_id"]:
         await verify_doctor_exists(update_data["doctor_id"], profile_id, db)
+
+    # Auto-update visit_notes_updated_at when visit_notes changes
+    if "visit_notes" in update_data and update_data["visit_notes"] != appointment.visit_notes:
+        update_data["visit_notes_updated_at"] = datetime.now(timezone.utc)
 
     for field, value in update_data.items():
         setattr(appointment, field, value)

@@ -19,10 +19,26 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "development"
 
-    # Anthropic API
+    # LLM Provider: "claude" or "ollama"
+    llm_provider: str = "claude"
+
+    # Anthropic API (used when llm_provider="claude")
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-sonnet-4-20250514"
     anthropic_max_tokens: int = 4096
+
+    # Ollama (used when llm_provider="ollama" or for local LLM scoring)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
+
+    # Anonymization
+    use_anonymization: bool = True  # Anonymize data before sending to LLM
+    use_ner_anonymization: bool = True  # Use spaCy NER for name detection
+
+    # Context Selection
+    context_stage2_threshold: int = 5  # Run LLM scoring if more than N visits
+    context_relevance_cutoff: float = 7.0  # Keep visits scoring >= this
+    context_max_tokens: int = 2000  # Max tokens for visit context
 
     # Database
     database_url: str = "sqlite+aiosqlite:///data/healthsteward.db"

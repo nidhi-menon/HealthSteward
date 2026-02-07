@@ -75,23 +75,33 @@ class BaseAgent:
         system: Optional[str] = None,
         input_tokens: Optional[int] = None,
         output_tokens: Optional[int] = None,
+        model: Optional[str] = None,
     ) -> None:
         """Log conversation to database for training data collection.
 
+        IMPORTANT: Per DEC-006, only anonymized content should be passed to this method.
+        The caller is responsible for anonymizing any PII before logging.
+
         Args:
-            messages: User messages sent to Claude
-            response: Claude's response
+            messages: User messages (should be anonymized)
+            response: LLM response
             system: System prompt used
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
+            model: Model used (defaults to anthropic_model from settings)
         """
         try:
+            model_name = model or self.settings.anthropic_model
+
             # Log user messages
             for msg in messages:
                 log_entry = ConversationLog(
                     role=msg["role"],
                     content=msg["content"],
-                    extra_data={"system": system} if system else None,
+                    extra_data={
+                        "system": system,
+                        "anonymized": True,  # Per DEC-006
+                    } if system else {"anonymized": True},
                 )
                 self.db.add(log_entry)
 
@@ -101,7 +111,8 @@ class BaseAgent:
                 content=response,
                 extra_data={
                     "system": system,
-                    "model": self.settings.anthropic_model,
+                    "model": model_name,
+                    "anonymized": True,  # Per DEC-006
                 },
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,

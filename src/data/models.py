@@ -139,6 +139,9 @@ class Doctor(Base):
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    exclude_from_prep_context: Mapped[bool] = mapped_column(
+        default=False
+    )  # Exclude this doctor's visits from prep context (e.g., sensitive specialties)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
@@ -172,7 +175,15 @@ class Appointment(Base):
     status: Mapped[str] = mapped_column(
         String(50), default="scheduled"
     )  # scheduled, completed, cancelled
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prep_notes: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Notes before the visit (concerns, questions to ask)
+    visit_notes: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Notes during/after the visit (what was discussed, outcomes)
+    visit_notes_updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )  # Timestamp when visit_notes was last updated
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )

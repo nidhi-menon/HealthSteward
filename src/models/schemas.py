@@ -153,6 +153,10 @@ class DoctorBase(BaseModel):
     phone: Optional[str] = Field(None, max_length=50)
     email: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
+    exclude_from_prep_context: bool = Field(
+        default=False,
+        description="Exclude this doctor's visits from prep context (e.g., sensitive specialties)"
+    )
 
 
 class DoctorCreate(DoctorBase):
@@ -170,6 +174,7 @@ class DoctorUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=50)
     email: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
+    exclude_from_prep_context: Optional[bool] = None
 
 
 class DoctorResponse(DoctorBase):
@@ -195,7 +200,12 @@ class AppointmentBase(BaseModel):
     scheduled_date: datetime
     purpose: Optional[str] = None
     status: str = Field(default="scheduled", max_length=50)
-    notes: Optional[str] = None
+    prep_notes: Optional[str] = Field(
+        None, description="Notes before the visit (concerns, questions to ask)"
+    )
+    visit_notes: Optional[str] = Field(
+        None, description="Notes during/after the visit (what was discussed, outcomes)"
+    )
 
 
 class AppointmentCreate(AppointmentBase):
@@ -211,7 +221,8 @@ class AppointmentUpdate(BaseModel):
     scheduled_date: Optional[datetime] = None
     purpose: Optional[str] = None
     status: Optional[str] = Field(None, max_length=50)
-    notes: Optional[str] = None
+    prep_notes: Optional[str] = None
+    visit_notes: Optional[str] = None
 
 
 class AppointmentResponse(AppointmentBase):
@@ -221,6 +232,7 @@ class AppointmentResponse(AppointmentBase):
 
     id: str
     profile_id: str
+    visit_notes_updated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
