@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { profiles, conditions, medications, doctors, appointments } from '../api/client';
+import { formatDateString } from '../utils/date';
 import { Card, CardHeader, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
-import { Modal } from '../components/Modal';
-import { Input, Textarea, Select } from '../components/Input';
+import { Modal, DeleteConfirmModal } from '../components/Modal';
+import { Input, Textarea, Select, MonthYearInput, DatePicker } from '../components/Input';
 import type { ConditionCreate, MedicationCreate, DoctorCreate, AppointmentCreate, Doctor } from '../types';
 
 type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments';
@@ -16,6 +17,7 @@ export default function ProfileDetail() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [modalType, setModalType] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Queries
   const { data: profile, isLoading: profileLoading } = useQuery({
@@ -86,11 +88,7 @@ export default function ProfileDetail() {
           <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>
           {profile.blood_type && <span className="text-gray-500">Blood Type: {profile.blood_type}</span>}
         </div>
-        <Button variant="danger" size="sm" onClick={() => {
-          if (confirm('Delete this profile and all associated data?')) {
-            deleteMutation.mutate();
-          }
-        }}>
+        <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)}>
           Delete Profile
         </Button>
       </div>
@@ -179,6 +177,15 @@ export default function ProfileDetail() {
         profileId={profileId!}
         doctors={doctorList || []}
       />
+      <DeleteConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        title="Delete Health Profile"
+        itemName={profile.name}
+        itemType="profile"
+        isDeleting={deleteMutation.isPending}
+      />
     </div>
   );
 }
@@ -193,7 +200,7 @@ function OverviewTab({ profile }: { profile: any }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <InfoRow label="Name" value={profile.name} />
-          <InfoRow label="Date of Birth" value={profile.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString() : '-'} />
+          <InfoRow label="Date of Birth" value={formatDateString(profile.date_of_birth)} />
           <InfoRow label="Blood Type" value={profile.blood_type || '-'} />
           <InfoRow label="Allergies" value={profile.allergies || 'None recorded'} />
         </CardContent>
@@ -222,7 +229,18 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 // Conditions Tab
-function ConditionsTab({ conditions: conditionList, onAdd }: { profileId: string; conditions: any[]; onAdd: () => void }) {
+function ConditionsTab({ profileId, conditions: conditionList, onAdd }: { profileId: string; conditions: any[]; onAdd: () => void }) {
+  const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (conditionId: string) => conditions.delete(profileId, conditionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
+      setDeleteTarget(null);
+    },
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -241,7 +259,7 @@ function ConditionsTab({ conditions: conditionList, onAdd }: { profileId: string
             <Card key={condition.id}>
               <CardContent>
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex-1">
                     <h4 className="font-medium text-gray-900">{condition.name}</h4>
                     <div className="flex gap-4 mt-1 text-sm text-gray-500">
                       {condition.severity && <span>Severity: {condition.severity}</span>}
@@ -255,18 +273,63 @@ function ConditionsTab({ conditions: conditionList, onAdd }: { profileId: string
                     </div>
                     {condition.notes && <p className="mt-2 text-sm text-gray-600">{condition.notes}</p>}
                   </div>
+                  <button
+                    onClick={() => setDeleteTarget({ id: condition.id, name: condition.name })}
+                    className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                    title="Delete condition"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Condition"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong>? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 // Medications Tab
-function MedicationsTab({ medications: medicationList, onAdd }: { profileId: string; medications: any[]; onAdd: () => void }) {
+function MedicationsTab({ profileId, medications: medicationList, onAdd }: { profileId: string; medications: any[]; onAdd: () => void }) {
+  const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (medicationId: string) => medications.delete(profileId, medicationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medications', profileId] });
+      setDeleteTarget(null);
+    },
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -285,7 +348,7 @@ function MedicationsTab({ medications: medicationList, onAdd }: { profileId: str
             <Card key={med.id}>
               <CardContent>
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex-1">
                     <h4 className="font-medium text-gray-900">{med.name}</h4>
                     <div className="flex gap-4 mt-1 text-sm text-gray-500">
                       {med.dosage && <span>{med.dosage}</span>}
@@ -293,18 +356,62 @@ function MedicationsTab({ medications: medicationList, onAdd }: { profileId: str
                     </div>
                     {med.purpose && <p className="mt-2 text-sm text-gray-600">Purpose: {med.purpose}</p>}
                   </div>
+                  <button
+                    onClick={() => setDeleteTarget({ id: med.id, name: med.name })}
+                    className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                    title="Delete medication"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Medication"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong>? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 // Doctors Tab
-function DoctorsTab({ doctors: doctorList, onAdd }: { profileId: string; doctors: any[]; onAdd: () => void }) {
+function DoctorsTab({ profileId, doctors: doctorList, onAdd }: { profileId: string; doctors: any[]; onAdd: () => void }) {
+  const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (doctorId: string) => doctors.delete(profileId, doctorId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['doctors', profileId] });
+      setDeleteTarget(null);
+    },
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -322,44 +429,92 @@ function DoctorsTab({ doctors: doctorList, onAdd }: { profileId: string; doctors
           {doctorList.map((doc: any) => (
             <Card key={doc.id}>
               <CardContent>
-                <h4 className="font-medium text-gray-900">{doc.name}</h4>
-                {doc.specialty && <p className="text-sm text-emerald-600">{doc.specialty}</p>}
-                {doc.clinic && <p className="text-sm text-gray-500 mt-1">{doc.clinic}</p>}
-                <div className="mt-2 space-y-1 text-sm text-gray-500">
-                  {doc.phone && <p>📞 {doc.phone}</p>}
-                  {doc.email && <p>✉️ {doc.email}</p>}
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">{doc.name}</h4>
+                    {doc.specialty && <p className="text-sm text-emerald-600">{doc.specialty}</p>}
+                    {doc.clinic && <p className="text-sm text-gray-500 mt-1">{doc.clinic}</p>}
+                    <div className="mt-2 space-y-1 text-sm text-gray-500">
+                      {doc.phone && <p>📞 {doc.phone}</p>}
+                      {doc.email && <p>✉️ {doc.email}</p>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setDeleteTarget({ id: doc.id, name: doc.name })}
+                    className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                    title="Delete doctor"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Doctor"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong>? This will also remove any appointments with this doctor.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 // Appointments Tab
-function AppointmentsTab({ profileId, appointments, doctors, onAdd }: { profileId: string; appointments: any[]; doctors: any[]; onAdd: () => void }) {
+function AppointmentsTab({ profileId, appointments: appointmentList, doctors: doctorList, onAdd }: { profileId: string; appointments: any[]; doctors: any[]; onAdd: () => void }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
   const getDoctorName = (doctorId: string) => {
-    const doc = doctors.find((d: any) => d.id === doctorId);
+    const doc = doctorList.find((d: any) => d.id === doctorId);
     return doc?.name || 'Unknown Doctor';
   };
+
+  const deleteMutation = useMutation({
+    mutationFn: (appointmentId: string) => appointments.delete(profileId, appointmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      setDeleteTarget(null);
+    },
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-900">Appointments</h3>
-        <Button size="sm" onClick={onAdd} disabled={doctors.length === 0}>
+        <Button size="sm" onClick={onAdd} disabled={doctorList.length === 0}>
           + Schedule Appointment
         </Button>
       </div>
-      {doctors.length === 0 && (
+      {doctorList.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
           Add a doctor first before scheduling appointments
         </div>
       )}
-      {appointments.length === 0 ? (
+      {appointmentList.length === 0 ? (
         <Card>
           <CardContent className="text-center py-8 text-gray-500">
             No appointments scheduled
@@ -367,7 +522,7 @@ function AppointmentsTab({ profileId, appointments, doctors, onAdd }: { profileI
         </Card>
       ) : (
         <div className="space-y-3">
-          {appointments.map((appt: any) => (
+          {appointmentList.map((appt: any) => (
             <Card key={appt.id} className="hover:border-emerald-300 transition-colors">
               <CardContent>
                 <div className="flex justify-between items-start">
@@ -397,19 +552,54 @@ function AppointmentsTab({ profileId, appointments, doctors, onAdd }: { profileI
                       </div>
                     )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => navigate(`/profiles/${profileId}/appointments/${appt.id}/prep`)}
-                  >
-                    {appt.status === 'completed' ? 'View Details' : 'Prepare Visit'}
-                  </Button>
+                  <div className="flex items-start gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => navigate(`/profiles/${profileId}/appointments/${appt.id}/prep`)}
+                    >
+                      {appt.status === 'completed' ? 'View Details' : 'Prepare Visit'}
+                    </Button>
+                    <button
+                      onClick={() => setDeleteTarget({ id: appt.id, name: `${getDoctorName(appt.doctor_id)} - ${new Date(appt.scheduled_date).toLocaleDateString()}` })}
+                      className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                      title="Delete appointment"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Appointment"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Are you sure you want to delete the appointment <strong>"{deleteTarget?.name}"</strong>? This will also remove any visit prep and notes.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -437,7 +627,7 @@ function ConditionModal({ isOpen, onClose, profileId }: { isOpen: boolean; onClo
     <Modal isOpen={isOpen} onClose={onClose} title="Add Condition">
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input label="Condition Name *" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-        <Input label="Diagnosed Date" type="date" value={formData.diagnosed_date || ''} onChange={(e) => setFormData({ ...formData, diagnosed_date: e.target.value || null })} />
+        <MonthYearInput label="Diagnosed (Month/Year)" value={formData.diagnosed_date || null} onChange={(value) => setFormData({ ...formData, diagnosed_date: value })} />
         <Select label="Severity" value={formData.severity || ''} onChange={(e) => setFormData({ ...formData, severity: e.target.value || null })} options={[{ value: '', label: 'Select severity' }, { value: 'mild', label: 'Mild' }, { value: 'moderate', label: 'Moderate' }, { value: 'severe', label: 'Severe' }]} />
         <Select label="Status" value={formData.status || 'active'} onChange={(e) => setFormData({ ...formData, status: e.target.value })} options={[{ value: 'active', label: 'Active' }, { value: 'managed', label: 'Managed' }, { value: 'resolved', label: 'Resolved' }]} />
         <Textarea label="Notes" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })} />
@@ -476,7 +666,7 @@ function MedicationModal({ isOpen, onClose, profileId }: { isOpen: boolean; onCl
         <Input label="Dosage" value={formData.dosage || ''} onChange={(e) => setFormData({ ...formData, dosage: e.target.value || null })} placeholder="e.g., 500mg" />
         <Input label="Frequency" value={formData.frequency || ''} onChange={(e) => setFormData({ ...formData, frequency: e.target.value || null })} placeholder="e.g., twice daily" />
         <Input label="Prescribing Doctor" value={formData.prescribing_doctor || ''} onChange={(e) => setFormData({ ...formData, prescribing_doctor: e.target.value || null })} />
-        <Input label="Start Date" type="date" value={formData.start_date || ''} onChange={(e) => setFormData({ ...formData, start_date: e.target.value || null })} />
+        <DatePicker label="Start Date" value={formData.start_date || null} onChange={(value) => setFormData({ ...formData, start_date: value })} />
         <Textarea label="Purpose" value={formData.purpose || ''} onChange={(e) => setFormData({ ...formData, purpose: e.target.value || null })} />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
