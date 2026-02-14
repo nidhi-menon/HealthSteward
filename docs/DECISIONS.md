@@ -360,6 +360,52 @@ Oncology → Relevant to all
 
 ---
 
+### DEC-009: Agentic Visit Prep Architecture
+
+**Date:** 2026-02-13
+
+**Topic:** Making the visit prep flow agentic — tool-using + conversational instead of single-shot prompt
+
+**Context:** Current visit prep is a single-shot call: stuff all context into a prompt, get questions back. User wants the agent to be able to reason through steps, use tools (drug interactions, medical guidelines, past visit lookup), and ask the user clarifying questions interactively before generating the final prep.
+
+**Scope:** Both tool-using and conversational agentic behavior.
+
+**Framework Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Claude API tool use (native)** | Already wired up, no new deps, simple loop | Manual orchestration |
+| **Anthropic Agent SDK** | Structured primitives, built for Claude | New dependency, learning curve |
+| **LangGraph** | Explicit state machine, good for complex flows | Heavy abstraction, overkill for single agent |
+
+**Decision:** Claude API native tool use
+
+**Reasoning:**
+- Claude API is already integrated in the project
+- No new dependencies to install or learn
+- Simple pattern: send message + tools → Claude calls tools or asks user → loop until done
+- Easy to upgrade to a framework later if needed (tools are reusable)
+- Single agent workflow doesn't warrant framework overhead
+
+**Local vs Cloud LLM Options Considered:**
+
+| Option | Feasibility | Quality | Cost |
+|--------|-------------|---------|------|
+| **Local Ollama (7-8B models)** | Tight on 8GB RAM M3 (4-5GB available after OS). Only 4-bit quantized models fit. | Tool use / function calling unreliable on small models — malformed JSON, wrong tool calls, loops | Free |
+| **Claude API (Sonnet)** | No constraints | Reliable tool use out of the box | ~$0.03-0.10 per visit prep (~$1/month for typical use) |
+
+**Decision:** Claude API (Sonnet) for the agentic loop
+
+**Reasoning:**
+- 8GB RAM M3 is too constrained for reliable agentic tool use with local models
+- Small local models (7-8B) produce unreliable function calling — the critical capability for agentic workflows
+- Claude API cost is negligible for personal use (~$1/month)
+- Ollama remains available for simpler tasks (context selection summarization per DEC-008)
+
+**Status:** Approved — ready for implementation planning
+
+---
+
 ## Template for New Decisions
 
 ```markdown
@@ -387,4 +433,4 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-13*
