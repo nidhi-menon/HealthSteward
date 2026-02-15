@@ -724,24 +724,32 @@ The sandbox experiment (SB-001, `avs-pdf-parser`) successfully demonstrated pars
 - `Condition` gained `icd_10` column for ICD-10-CM codes
 
 **Phase 3 — Backend API (`src/api/documents.py`):**
-- `POST /documents/` — upload PDF, save to `data/documents/{profile}/{doc_id}/`
-- `GET /documents/` — list documents for profile
+- `GET /documents/scan` — scan `data/avs/` directory, return PDF files with processing status
+- `POST /documents/parse-file` — create Document record for a scanned file
 - `GET /documents/{id}/parsed` — trigger parse (or return cached), runs via `run_in_executor`
 - `POST /documents/{id}/apply` — apply user-selected items to profile (deduplicates conditions, starts/stops medications, creates vitals/lab orders/referrals/follow-ups)
 
 **Phase 4 — Frontend:**
 - Documents tab (6th tab) in ProfileDetail
-- `FileUpload` component — drag-and-drop PDF uploader with validation
-- `DocumentCard` component — document row with status badge and action buttons
+- Scan-folder UI — shows PDFs from `data/avs/`, new files highlighted at top
+- `DocumentCard` component — file row with status badge (New/pending/completed/failed) and Parse/Review buttons
 - `ParsedItemsReview` component — checkboxes per extracted item, section select all/deselect, action badges (START/STOP/CHANGED), ICD-10 badges, confirm button
 - Polling spinner while parse runs (3s interval)
+
+**Refactor — Scan-folder pattern (same session):**
+- Removed file upload in favor of scanning `data/avs/` directory
+- User drops AVS PDFs into `data/avs/`, app lists them with processing status
+- No file duplication — backend reads PDFs in place
+- Removed `FileUpload` component and `python-multipart` dependency
 
 ### User Flow
 
 ```
-Upload PDF → Save to disk + create Document record (pending)
+Drop PDF in data/avs/ → Open Documents tab
      ↓
-Click "Parse" → Ollama extracts structured data via SectionRouter
+App scans folder → Shows new files with "New" badge
+     ↓
+Click "Parse" → Creates Document record + Ollama extracts structured data
      ↓
 Review screen → Checkboxes for each extracted item by category
      ↓
