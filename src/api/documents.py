@@ -261,10 +261,18 @@ async def apply_items(
         if existing_cond:
             # Only update if visit is newer than last update
             if _is_newer(visit_dt, existing_cond.updated_at):
-                if dx.icd_10 and not existing_cond.icd_10:
+                if dx.icd_10:
                     existing_cond.icd_10 = dx.icd_10
-                if not existing_cond.diagnosed_date and visit_dt:
+                if dx.severity:
+                    existing_cond.severity = dx.severity
+                if dx.status:
+                    existing_cond.status = dx.status
+                dx_date = _parse_date_string(dx.diagnosed_date)
+                if dx_date:
+                    existing_cond.diagnosed_date = dx_date
+                elif not existing_cond.diagnosed_date and visit_dt:
                     existing_cond.diagnosed_date = visit_dt.date()
+                counts["conditions"] += 1
             else:
                 skipped["conditions"] += 1
         else:
@@ -272,8 +280,9 @@ async def apply_items(
                 profile_id=profile_id,
                 name=dx.condition,
                 icd_10=dx.icd_10,
-                diagnosed_date=visit_dt.date() if visit_dt else None,
-                status="active",
+                severity=dx.severity,
+                diagnosed_date=_parse_date_string(dx.diagnosed_date) or (visit_dt.date() if visit_dt else None),
+                status=dx.status or "active",
             )
             db.add(cond)
             counts["conditions"] += 1

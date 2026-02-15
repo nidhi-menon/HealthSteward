@@ -165,6 +165,9 @@ export interface ParsedVitals {
 export interface ParsedDiagnosis {
   condition: string;
   icd_10: string | null;
+  severity: string | null;
+  diagnosed_date: string | null;
+  status: string | null;
 }
 
 export interface ParsedMedicationChange {
