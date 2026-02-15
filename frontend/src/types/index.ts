@@ -216,6 +216,7 @@ export interface ApplyItemsRequest {
   diagnoses: ParsedDiagnosis[];
   medication_starts: ParsedMedicationChange[];
   medication_stops: ParsedMedicationChange[];
+  medication_updates: ParsedMedicationChange[];
   vitals: ParsedVitals | null;
   lab_orders: ParsedLabOrder[];
   referrals: ParsedReferral[];
