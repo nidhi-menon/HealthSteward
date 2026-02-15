@@ -189,6 +189,36 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
                 placeholder="ICD-10"
                 className="font-mono text-xs px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded"
               />
+              <EditableField
+                value={dx.severity || ''}
+                edited={isEdited(`dx-${i}-severity`)}
+                onChange={(v) => {
+                  const next = [...diagnoses]; next[i] = { ...next[i], severity: v || null }; setDiagnoses(next);
+                  markEdit(`dx-${i}-severity`);
+                }}
+                placeholder="Severity"
+                className="text-gray-500 text-xs"
+              />
+              <EditableField
+                value={dx.status || ''}
+                edited={isEdited(`dx-${i}-status`)}
+                onChange={(v) => {
+                  const next = [...diagnoses]; next[i] = { ...next[i], status: v || null }; setDiagnoses(next);
+                  markEdit(`dx-${i}-status`);
+                }}
+                placeholder="Status"
+                className="text-gray-500 text-xs"
+              />
+              <EditableField
+                value={dx.diagnosed_date || ''}
+                edited={isEdited(`dx-${i}-date`)}
+                onChange={(v) => {
+                  const next = [...diagnoses]; next[i] = { ...next[i], diagnosed_date: v || null }; setDiagnoses(next);
+                  markEdit(`dx-${i}-date`);
+                }}
+                placeholder="Diagnosed date"
+                className="text-gray-400 text-xs"
+              />
             </RemovableRow>
           ))}
         </EditableSection>
@@ -450,8 +480,8 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
           <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm max-h-64 overflow-y-auto">
             {itemCounts.diagnoses > 0 && (
               <ConfirmLine label="Diagnoses" items={diagnoses.map((dx, i) => ({
-                text: `${dx.condition}${dx.icd_10 ? ` (${dx.icd_10})` : ''}`,
-                edited: isEdited(`dx-${i}-condition`) || isEdited(`dx-${i}-icd10`),
+                text: [dx.condition, dx.icd_10, dx.severity, dx.status, dx.diagnosed_date].filter(Boolean).join(' | '),
+                edited: isEdited(`dx-${i}-condition`) || isEdited(`dx-${i}-icd10`) || isEdited(`dx-${i}-severity`) || isEdited(`dx-${i}-status`) || isEdited(`dx-${i}-date`),
               }))} />
             )}
             {itemCounts.medStarts > 0 && (
