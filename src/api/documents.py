@@ -1,14 +1,15 @@
-"""Document upload, parsing, and review API endpoints."""
+"""Document scanning, parsing, and review API endpoints."""
 
 from __future__ import annotations
 
 import asyncio
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,69 +36,52 @@ from src.models.schemas import (
     ParsedMedicationChange,
     ParsedReferral,
     ParsedVitals,
+    ScannedFileResponse,
 )
 
 router = APIRouter(prefix="/api/profiles/{profile_id}/documents", tags=["documents"])
 
-MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB
 
-
-@router.post("/", response_model=DocumentResponse, status_code=201)
-async def upload_document(
+@router.get("/scan", response_model=list[ScannedFileResponse])
+async def scan_documents(
     profile_id: str,
-    file: UploadFile = File(...),
-    appointment_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a PDF document for a profile."""
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
-
-    # Read file content
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=400, detail="File exceeds 20 MB limit.")
-    if len(content) == 0:
-        raise HTTPException(status_code=400, detail="File is empty.")
-
-    # Create document record to get ID
-    doc = Document(
-        profile_id=profile_id,
-        appointment_id=appointment_id,
-        original_filename=file.filename,
-        file_path="",  # will update after save
-        file_size_bytes=len(content),
-        parse_status="pending",
-    )
-    db.add(doc)
-    await db.flush()  # get the ID
-
-    # Save file to disk
+    """Scan the AVS directory and return all PDF files with their processing status."""
     settings = get_settings()
-    doc_dir = Path(settings.documents_base_path) / profile_id / doc.id
-    doc_dir.mkdir(parents=True, exist_ok=True)
-    file_path = doc_dir / file.filename
-    file_path.write_bytes(content)
+    scan_dir = Path(settings.avs_scan_path)
+    scan_dir.mkdir(parents=True, exist_ok=True)
 
-    doc.file_path = str(file_path)
-    await db.flush()
-
-    logger.info(f"Uploaded document {doc.id}: {file.filename} ({len(content)} bytes)")
-    return doc
-
-
-@router.get("/", response_model=list[DocumentResponse])
-async def list_documents(
-    profile_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """List all documents for a profile."""
+    # Get all existing Document records for this profile
     result = await db.execute(
-        select(Document)
-        .where(Document.profile_id == profile_id)
-        .order_by(Document.created_at.desc())
+        select(Document).where(Document.profile_id == profile_id)
     )
-    return list(result.scalars().all())
+    existing_docs = {
+        (doc.original_filename, doc.file_size_bytes): doc
+        for doc in result.scalars().all()
+    }
+
+    scanned: list[ScannedFileResponse] = []
+    for entry in sorted(scan_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        if not entry.is_file() or not entry.name.lower().endswith(".pdf"):
+            continue
+
+        stat = entry.stat()
+        file_size = stat.st_size
+        modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+
+        # Check if we have a matching Document record
+        doc = existing_docs.get((entry.name, file_size))
+
+        scanned.append(ScannedFileResponse(
+            filename=entry.name,
+            file_size_bytes=file_size,
+            modified_date=modified,
+            status=doc.parse_status if doc else "new",
+            document_id=doc.id if doc else None,
+        ))
+
+    return scanned
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -111,29 +95,6 @@ async def get_document(
     if not doc or doc.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="Document not found.")
     return doc
-
-
-@router.delete("/{document_id}", status_code=204)
-async def delete_document(
-    profile_id: str,
-    document_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """Delete a document and its file on disk."""
-    doc = await db.get(Document, document_id)
-    if not doc or doc.profile_id != profile_id:
-        raise HTTPException(status_code=404, detail="Document not found.")
-
-    # Delete file from disk
-    file_path = Path(doc.file_path)
-    if file_path.exists():
-        file_path.unlink()
-        # Clean up empty directories
-        parent = file_path.parent
-        if parent.exists() and not any(parent.iterdir()):
-            parent.rmdir()
-
-    await db.delete(doc)
 
 
 @router.get("/{document_id}/parsed", response_model=ParsedItemsResponse)
@@ -194,6 +155,57 @@ async def get_parsed_items(
         await db.commit()
         logger.error(f"Failed to parse document {doc.id}: {e}")
         raise HTTPException(status_code=422, detail=f"Parsing failed: {e}")
+
+
+@router.post("/parse-file")
+async def parse_file(
+    profile_id: str,
+    filename: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a Document record for a scanned file and trigger parsing."""
+    settings = get_settings()
+    file_path = Path(settings.avs_scan_path) / filename
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found in scan directory.")
+
+    file_size = file_path.stat().st_size
+
+    # Check if document record already exists
+    result = await db.execute(
+        select(Document).where(
+            Document.profile_id == profile_id,
+            Document.original_filename == filename,
+            Document.file_size_bytes == file_size,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        # Re-parse if failed, otherwise return existing
+        if existing.parse_status == "failed":
+            existing.parse_status = "pending"
+            existing.parse_error = None
+            await db.flush()
+            await db.commit()
+            return {"document_id": existing.id, "status": "pending"}
+        return {"document_id": existing.id, "status": existing.parse_status}
+
+    # Create new Document record
+    doc = Document(
+        profile_id=profile_id,
+        original_filename=filename,
+        file_path=str(file_path),
+        file_size_bytes=file_size,
+        parse_status="pending",
+    )
+    db.add(doc)
+    await db.flush()
+    await db.commit()
+
+    logger.info(f"Created document record {doc.id} for {filename}")
+    return {"document_id": doc.id, "status": "pending"}
 
 
 @router.post("/{document_id}/apply", status_code=200)

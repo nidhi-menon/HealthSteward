@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # AVS PDF Parser
     avs_parser_model: str = "qwen2.5:7b"
-    documents_base_path: str = "data/documents"
+    avs_scan_path: str = "data/avs"
 
     # Anonymization
     use_anonymization: bool = True  # Anonymize data before sending to LLM

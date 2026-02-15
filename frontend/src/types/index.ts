@@ -127,6 +127,15 @@ export interface VisitPrep {
   updated_at: string;
 }
 
+// Scanned File (from data/avs/ directory)
+export interface ScannedFile {
+  filename: string;
+  file_size_bytes: number;
+  modified_date: string;
+  status: 'new' | 'pending' | 'parsing' | 'completed' | 'failed';
+  document_id: string | null;
+}
+
 // Document
 export interface Document {
   id: string;
