@@ -52,6 +52,11 @@ async def create_appointment(
 ) -> Appointment:
     """Create a new appointment for a health profile."""
     await verify_profile_exists(profile_id, db)
+    if not appointment.doctor_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="doctor_id is required when creating an appointment",
+        )
     await verify_doctor_exists(appointment.doctor_id, profile_id, db)
 
     db_appointment = Appointment(profile_id=profile_id, **appointment.model_dump())

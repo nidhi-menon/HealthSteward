@@ -198,7 +198,7 @@ class DoctorResponse(DoctorBase):
 class AppointmentBase(BaseModel):
     """Base schema for appointment data."""
 
-    doctor_id: str
+    doctor_id: Optional[str] = None
     scheduled_date: datetime
     purpose: Optional[str] = None
     status: str = Field(default="scheduled", max_length=50)
