@@ -71,6 +71,7 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
     lab_orders: labOrders,
     referrals,
     follow_ups: followUps,
+    appointments,
   });
 
   const handleConfirmApply = () => {
@@ -90,6 +91,7 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
     labOrders: labOrders.length,
     referrals: referrals.length,
     followUps: followUps.length,
+    appointments: appointments.length,
   };
   const totalItems = Object.values(itemCounts).reduce((a, b) => a + b, 0);
 
@@ -354,9 +356,9 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
         </EditableSection>
       )}
 
-      {/* Upcoming Appointments (editable, reference only) */}
+      {/* Upcoming Appointments */}
       {appointments.length > 0 && (
-        <EditableSection title="Upcoming Appointments" subtitle="For reference — not saved to profile">
+        <EditableSection title="Upcoming Appointments">
           {appointments.map((appt, i) => (
             <RemovableRow key={i} onRemove={() => removeItem(appointments, i, setAppointments)}>
               <EditableField
@@ -498,11 +500,17 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
                 edited: isEdited(`fu-${i}-desc`) || isEdited(`fu-${i}-timeframe`),
               }))} />
             )}
+            {itemCounts.appointments > 0 && (
+              <ConfirmLine label="Appointments" items={appointments.map((a, i) => ({
+                text: `${a.description}${a.date ? ` (${a.date})` : ''}`,
+                edited: isEdited(`appt-${i}-desc`) || isEdited(`appt-${i}-date`),
+              }))} />
+            )}
           </div>
 
-          {(appointments.length > 0 || notes.length > 0) && (
+          {notes.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-              <span className="font-medium">Reference items</span> (appointments, notes) are shown for your review but will not be saved to the profile.
+              <span className="font-medium">Notes & Instructions</span> are shown for your review but will not be saved to the profile.
             </div>
           )}
 
