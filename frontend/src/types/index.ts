@@ -98,7 +98,7 @@ export interface DoctorCreate {
 export interface Appointment {
   id: string;
   profile_id: string;
-  doctor_id: string;
+  doctor_id: string | null;
   scheduled_date: string;
   purpose: string | null;
   status: string;
