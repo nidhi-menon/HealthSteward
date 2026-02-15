@@ -728,6 +728,7 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
       queryClient.invalidateQueries({ queryKey: ['medications', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['doctors', profileId] });
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
       queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
       setParsedData(null);

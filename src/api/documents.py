@@ -437,7 +437,15 @@ async def apply_items(
             db.add(follow_up)
             counts["follow_ups"] += 1
 
-    # Appointments (match doctor by name, dedup by date)
+    # Create/match doctor from AVS provider info
+    if doc.provider_name:
+        provider_doctor_id = await _find_or_create_doctor(
+            db, profile_id, doc.provider_name, doc.facility_name
+        )
+        if provider_doctor_id:
+            counts.setdefault("doctors", 0)
+
+    # Appointments (find/create doctors, dedup by date)
     for appt in items.appointments:
         appt_date = _parse_date_string(appt.date)
         if not appt_date:
@@ -446,16 +454,12 @@ async def apply_items(
 
         appt_datetime = datetime.combine(appt_date, datetime.min.time())
 
-        # Try to match doctor by name
+        # Try to find or create a doctor for this appointment
         matched_doctor_id = None
         if appt.description:
-            result = await db.execute(
-                select(Doctor).where(Doctor.profile_id == profile_id)
+            matched_doctor_id = await _find_or_create_doctor(
+                db, profile_id, appt.description, appt.location
             )
-            for doc_record in result.scalars().all():
-                if doc_record.name.lower() in appt.description.lower() or appt.description.lower() in doc_record.name.lower():
-                    matched_doctor_id = doc_record.id
-                    break
 
         # Check for existing appointment on the same date
         from sqlalchemy import cast, Date
@@ -483,6 +487,41 @@ async def apply_items(
 
     logger.info(f"Applied items from document {doc.id}: counts={counts}, skipped={skipped}")
     return {"status": "applied", "counts": counts, "skipped": skipped}
+
+
+async def _find_or_create_doctor(
+    db: AsyncSession, profile_id: str, name_or_desc: str, clinic: str | None = None
+) -> str | None:
+    """Find an existing doctor by name match, or create a new one.
+
+    Returns the doctor's ID if found/created, or None if no meaningful name.
+    """
+    if not name_or_desc or len(name_or_desc.strip()) < 2:
+        return None
+
+    name_lower = name_or_desc.strip().lower()
+
+    # Check existing doctors for a fuzzy match
+    result = await db.execute(
+        select(Doctor).where(Doctor.profile_id == profile_id)
+    )
+    for doc_record in result.scalars().all():
+        doc_name_lower = doc_record.name.lower()
+        if doc_name_lower == name_lower or doc_name_lower in name_lower or name_lower in doc_name_lower:
+            # Update clinic if missing
+            if clinic and not doc_record.clinic:
+                doc_record.clinic = clinic
+            return doc_record.id
+
+    # Create new doctor
+    new_doctor = Doctor(
+        profile_id=profile_id,
+        name=name_or_desc.strip(),
+        clinic=clinic,
+    )
+    db.add(new_doctor)
+    await db.flush()
+    return new_doctor.id
 
 
 def _parse_visit_datetime(date_str: str | None) -> datetime | None:
