@@ -393,6 +393,7 @@ class ApplyItemsRequest(BaseModel):
     lab_orders: list[ParsedLabOrder] = []
     referrals: list[ParsedReferral] = []
     follow_ups: list[ParsedFollowUp] = []
+    appointments: list[ParsedAppointment] = []
 
 
 # ============================================================================

@@ -17,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import get_settings
 from src.data.database import get_db
 from src.data.models import (
+    Appointment,
     Condition,
+    Doctor,
     Document,
     FollowUp,
     LabOrder,
@@ -215,12 +217,15 @@ async def apply_items(
     items: ApplyItemsRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Apply user-selected parsed items to the profile."""
+    """Apply user-selected parsed items to the profile with date-based comparison."""
     doc = await db.get(Document, document_id)
     if not doc or doc.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="Document not found.")
     if doc.parse_status != "completed":
         raise HTTPException(status_code=400, detail="Document must be parsed first.")
+
+    # Parse visit date once for comparison
+    visit_dt = _parse_visit_datetime(doc.visit_date)
 
     counts = {
         "conditions": 0,
@@ -231,9 +236,20 @@ async def apply_items(
         "lab_orders": 0,
         "referrals": 0,
         "follow_ups": 0,
+        "appointments": 0,
+    }
+    skipped = {
+        "conditions": 0,
+        "medications_started": 0,
+        "medications_stopped": 0,
+        "medications_updated": 0,
+        "lab_orders": 0,
+        "referrals": 0,
+        "follow_ups": 0,
+        "appointments": 0,
     }
 
-    # Diagnoses -> Condition records (deduplicate by name)
+    # Diagnoses -> Condition records (deduplicate by name, date-guarded)
     for dx in items.diagnoses:
         existing = await db.execute(
             select(Condition).where(
@@ -243,34 +259,58 @@ async def apply_items(
         )
         existing_cond = existing.scalar_one_or_none()
         if existing_cond:
-            # Update ICD-10 if missing
-            if dx.icd_10 and not existing_cond.icd_10:
-                existing_cond.icd_10 = dx.icd_10
+            # Only update if visit is newer than last update
+            if _is_newer(visit_dt, existing_cond.updated_at):
+                if dx.icd_10 and not existing_cond.icd_10:
+                    existing_cond.icd_10 = dx.icd_10
+                if not existing_cond.diagnosed_date and visit_dt:
+                    existing_cond.diagnosed_date = visit_dt.date()
+            else:
+                skipped["conditions"] += 1
         else:
             cond = Condition(
                 profile_id=profile_id,
                 name=dx.condition,
                 icd_10=dx.icd_10,
+                diagnosed_date=visit_dt.date() if visit_dt else None,
                 status="active",
             )
             db.add(cond)
             counts["conditions"] += 1
 
-    # Medication starts -> new Medication records
+    # Medication starts -> new Medication records (dedup by name)
     for med in items.medication_starts:
-        medication = Medication(
-            profile_id=profile_id,
-            name=med.name,
-            dosage=med.strength,
-            frequency=med.instructions,
-            start_date=_parse_date_string(med.date),
+        clean_name = _clean_med_name(med.name)
+        result = await db.execute(
+            select(Medication).where(
+                Medication.profile_id == profile_id,
+                Medication.end_date.is_(None),
+            )
         )
-        db.add(medication)
-        counts["medications_started"] += 1
+        found = False
+        for existing_med in result.scalars().all():
+            if _fuzzy_med_match(_clean_med_name(existing_med.name), clean_name):
+                # Already exists and active — skip if not newer
+                if not _is_newer(visit_dt, existing_med.updated_at):
+                    skipped["medications_started"] += 1
+                    found = True
+                    break
+                found = True
+                break
+        if not found:
+            medication = Medication(
+                profile_id=profile_id,
+                name=med.name,
+                dosage=med.strength,
+                frequency=med.instructions,
+                start_date=_parse_date_string(med.date),
+            )
+            db.add(medication)
+            counts["medications_started"] += 1
 
-    # Medication stops -> set end_date on matching Medication
+    # Medication stops -> set end_date on matching Medication (date-guarded)
     for med in items.medication_stops:
-        clean_name = re.sub(r"\s*\(.*?\)", "", med.name).strip().lower()
+        clean_name = _clean_med_name(med.name)
         result = await db.execute(
             select(Medication).where(
                 Medication.profile_id == profile_id,
@@ -278,15 +318,17 @@ async def apply_items(
             )
         )
         for existing_med in result.scalars().all():
-            existing_clean = re.sub(r"\s*\(.*?\)", "", existing_med.name).strip().lower()
-            if existing_clean == clean_name or clean_name in existing_clean or existing_clean in clean_name:
-                existing_med.end_date = _parse_date_string(med.date)
-                counts["medications_stopped"] += 1
+            if _fuzzy_med_match(_clean_med_name(existing_med.name), clean_name):
+                if _is_newer(visit_dt, existing_med.updated_at):
+                    existing_med.end_date = _parse_date_string(med.date)
+                    counts["medications_stopped"] += 1
+                else:
+                    skipped["medications_stopped"] += 1
                 break
 
-    # Medication updates -> find existing, update dosage/instructions
+    # Medication updates -> find existing, update dosage/instructions (date-guarded)
     for med in items.medication_updates:
-        clean_name = re.sub(r"\s*\(.*?\)", "", med.name).strip().lower()
+        clean_name = _clean_med_name(med.name)
         result = await db.execute(
             select(Medication).where(
                 Medication.profile_id == profile_id,
@@ -294,13 +336,15 @@ async def apply_items(
             )
         )
         for existing_med in result.scalars().all():
-            existing_clean = re.sub(r"\s*\(.*?\)", "", existing_med.name).strip().lower()
-            if existing_clean == clean_name or clean_name in existing_clean or existing_clean in clean_name:
-                if med.strength:
-                    existing_med.dosage = med.strength
-                if med.instructions:
-                    existing_med.frequency = med.instructions
-                counts["medications_updated"] += 1
+            if _fuzzy_med_match(_clean_med_name(existing_med.name), clean_name):
+                if _is_newer(visit_dt, existing_med.updated_at):
+                    if med.strength:
+                        existing_med.dosage = med.strength
+                    if med.instructions:
+                        existing_med.frequency = med.instructions
+                    counts["medications_updated"] += 1
+                else:
+                    skipped["medications_updated"] += 1
                 break
 
     # Vitals -> create/update Vitals record for the document
@@ -320,45 +364,148 @@ async def apply_items(
             db.add(vitals)
             counts["vitals"] = 1
 
-    # Lab orders
+    # Lab orders (dedup by test_name + ordered_date)
     for lab in items.lab_orders:
-        order = LabOrder(
-            profile_id=profile_id,
-            document_id=document_id,
-            test_name=lab.test,
-            ordered_date=lab.ordered_date,
+        existing = await db.execute(
+            select(LabOrder).where(
+                LabOrder.profile_id == profile_id,
+                LabOrder.test_name == lab.test,
+                LabOrder.ordered_date == lab.ordered_date,
+            )
         )
-        db.add(order)
-        counts["lab_orders"] += 1
+        if existing.scalar_one_or_none():
+            skipped["lab_orders"] += 1
+        else:
+            order = LabOrder(
+                profile_id=profile_id,
+                document_id=document_id,
+                test_name=lab.test,
+                ordered_date=lab.ordered_date,
+            )
+            db.add(order)
+            counts["lab_orders"] += 1
 
-    # Referrals
+    # Referrals (dedup by specialty + document)
     for ref in items.referrals:
-        referral = Referral(
-            profile_id=profile_id,
-            document_id=document_id,
-            specialty=ref.specialty,
-            provider_name=ref.provider,
-            reason=ref.reason,
+        existing = await db.execute(
+            select(Referral).where(
+                Referral.profile_id == profile_id,
+                Referral.document_id == document_id,
+                Referral.specialty == ref.specialty,
+            )
         )
-        db.add(referral)
-        counts["referrals"] += 1
+        if existing.scalar_one_or_none():
+            skipped["referrals"] += 1
+        else:
+            referral = Referral(
+                profile_id=profile_id,
+                document_id=document_id,
+                specialty=ref.specialty,
+                provider_name=ref.provider,
+                reason=ref.reason,
+            )
+            db.add(referral)
+            counts["referrals"] += 1
 
-    # Follow-ups
+    # Follow-ups (dedup by description)
     for fu in items.follow_ups:
-        follow_up = FollowUp(
-            profile_id=profile_id,
-            document_id=document_id,
-            description=fu.description,
-            timeframe=fu.timeframe,
-            target_date=fu.target_date,
+        existing = await db.execute(
+            select(FollowUp).where(
+                FollowUp.profile_id == profile_id,
+                FollowUp.description == fu.description,
+            )
         )
-        db.add(follow_up)
-        counts["follow_ups"] += 1
+        if existing.scalar_one_or_none():
+            skipped["follow_ups"] += 1
+        else:
+            follow_up = FollowUp(
+                profile_id=profile_id,
+                document_id=document_id,
+                description=fu.description,
+                timeframe=fu.timeframe,
+                target_date=fu.target_date,
+            )
+            db.add(follow_up)
+            counts["follow_ups"] += 1
+
+    # Appointments (match doctor by name, dedup by date)
+    for appt in items.appointments:
+        appt_date = _parse_date_string(appt.date)
+        if not appt_date:
+            skipped["appointments"] += 1
+            continue
+
+        appt_datetime = datetime.combine(appt_date, datetime.min.time())
+
+        # Try to match doctor by name
+        matched_doctor_id = None
+        if appt.description:
+            result = await db.execute(
+                select(Doctor).where(Doctor.profile_id == profile_id)
+            )
+            for doc_record in result.scalars().all():
+                if doc_record.name.lower() in appt.description.lower() or appt.description.lower() in doc_record.name.lower():
+                    matched_doctor_id = doc_record.id
+                    break
+
+        # Check for existing appointment on the same date
+        from sqlalchemy import cast, Date
+        existing = await db.execute(
+            select(Appointment).where(
+                Appointment.profile_id == profile_id,
+                cast(Appointment.scheduled_date, Date) == appt_date,
+            )
+        )
+        if existing.scalar_one_or_none():
+            skipped["appointments"] += 1
+        else:
+            appointment = Appointment(
+                profile_id=profile_id,
+                doctor_id=matched_doctor_id,
+                scheduled_date=appt_datetime,
+                purpose=appt.description,
+                status="scheduled",
+            )
+            db.add(appointment)
+            counts["appointments"] += 1
 
     await db.flush()
 
-    logger.info(f"Applied items from document {doc.id}: {counts}")
-    return {"status": "applied", "counts": counts}
+    logger.info(f"Applied items from document {doc.id}: counts={counts}, skipped={skipped}")
+    return {"status": "applied", "counts": counts, "skipped": skipped}
+
+
+def _parse_visit_datetime(date_str: str | None) -> datetime | None:
+    """Parse a visit date string into a timezone-naive datetime for comparison."""
+    if not date_str:
+        return None
+    from datetime import datetime as dt
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%B %d, %Y", "%B %d %Y"):
+        try:
+            return dt.strptime(date_str.strip().rstrip(","), fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _is_newer(visit_dt: datetime | None, record_updated_at: datetime) -> bool:
+    """Check if the visit date is newer than a record's updated_at.
+
+    If visit_dt is None (unparseable), treat as newer to avoid losing data.
+    """
+    if visit_dt is None:
+        return True
+    return visit_dt >= record_updated_at
+
+
+def _clean_med_name(name: str) -> str:
+    """Normalize medication name for comparison."""
+    return re.sub(r"\s*\(.*?\)", "", name).strip().lower()
+
+
+def _fuzzy_med_match(name_a: str, name_b: str) -> bool:
+    """Bidirectional substring match for medication names."""
+    return name_a == name_b or name_a in name_b or name_b in name_a
 
 
 def _build_parsed_response(raw: dict) -> ParsedItemsResponse:
