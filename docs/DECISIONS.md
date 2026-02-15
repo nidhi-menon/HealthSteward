@@ -422,8 +422,8 @@ Oncology → Relevant to all
 | LLM calls | Local Ollama only (privacy: no PHI leaves machine) |
 | New models | Document, Vitals, LabOrder, Referral, FollowUp |
 | Existing model changes | Condition gains `icd_10` field |
-| File storage | `data/documents/{profile_id}/{document_id}/{filename}` (git-ignored) |
-| User flow | Upload PDF → Parse locally → Review extracted items → Confirm → Update profile |
+| File storage | `data/avs/` scan directory — PDFs read in place, no duplication (git-ignored) |
+| User flow | Drop PDF in `data/avs/` → Open Documents tab → Parse locally → Review → Confirm → Update profile |
 
 **Key Design Decisions:**
 - **Local-only parsing**: All LLM calls go through localhost Ollama, never external APIs. Safety check in `ollama_chat.py` blocks non-localhost URLs.

@@ -26,6 +26,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
 
+    # Ensure scan directories exist
+    from pathlib import Path
+    Path(settings.avs_scan_path).mkdir(parents=True, exist_ok=True)
+
     yield
 
     # Shutdown

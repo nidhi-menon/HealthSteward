@@ -10,7 +10,7 @@ import type {
   Appointment,
   AppointmentCreate,
   VisitPrep,
-  Document,
+  ScannedFile,
   ParsedItemsResponse,
   ApplyItemsRequest,
 } from '../types';
@@ -148,44 +148,14 @@ export const appointments = {
 };
 
 // Documents
-async function uploadFile<T>(
-  endpoint: string,
-  file: File,
-  extraFields?: Record<string, string>,
-): Promise<T> {
-  const formData = new FormData();
-  formData.append('file', file);
-  if (extraFields) {
-    for (const [key, value] of Object.entries(extraFields)) {
-      formData.append(key, value);
-    }
-  }
-
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Upload failed: ${response.status}`);
-  }
-
-  return response.json();
-}
-
 export const documents = {
-  list: (profileId: string) =>
-    request<Document[]>(`/profiles/${profileId}/documents/`),
-  get: (profileId: string, id: string) =>
-    request<Document>(`/profiles/${profileId}/documents/${id}`),
-  upload: (profileId: string, file: File, appointmentId?: string) =>
-    uploadFile<Document>(
-      `/profiles/${profileId}/documents/${appointmentId ? `?appointment_id=${appointmentId}` : ''}`,
-      file,
+  scan: (profileId: string) =>
+    request<ScannedFile[]>(`/profiles/${profileId}/documents/scan`),
+  parseFile: (profileId: string, filename: string) =>
+    request<{ document_id: string; status: string }>(
+      `/profiles/${profileId}/documents/parse-file?filename=${encodeURIComponent(filename)}`,
+      { method: 'POST' },
     ),
-  delete: (profileId: string, id: string) =>
-    request<void>(`/profiles/${profileId}/documents/${id}`, { method: 'DELETE' }),
   getParsed: (profileId: string, id: string) =>
     request<ParsedItemsResponse>(`/profiles/${profileId}/documents/${id}/parsed`),
   applyItems: (profileId: string, id: string, items: ApplyItemsRequest) =>
