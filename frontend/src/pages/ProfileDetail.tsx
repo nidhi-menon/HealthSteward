@@ -530,7 +530,8 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const getDoctorName = (doctorId: string) => {
+  const getDoctorName = (doctorId: string | null) => {
+    if (!doctorId) return null;
     const doc = doctorList.find((d: any) => d.id === doctorId);
     return doc?.name || 'Unknown Doctor';
   };
@@ -569,11 +570,15 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
               <CardContent>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{getDoctorName(appt.doctor_id)}</h4>
+                    <h4 className="font-medium text-gray-900">
+                      {getDoctorName(appt.doctor_id) || appt.purpose || 'Appointment'}
+                    </h4>
                     <p className="text-sm text-gray-500">
                       {new Date(appt.scheduled_date).toLocaleString()}
                     </p>
-                    {appt.purpose && <p className="mt-1 text-sm text-gray-600">{appt.purpose}</p>}
+                    {appt.purpose && getDoctorName(appt.doctor_id) && (
+                      <p className="mt-1 text-sm text-gray-600">{appt.purpose}</p>
+                    )}
                     <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs ${
                       appt.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
                       appt.status === 'completed' ? 'bg-green-100 text-green-700' :
@@ -603,7 +608,7 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
                       {appt.status === 'completed' ? 'View Details' : 'Prepare Visit'}
                     </Button>
                     <button
-                      onClick={() => setDeleteTarget({ id: appt.id, name: `${getDoctorName(appt.doctor_id)} - ${new Date(appt.scheduled_date).toLocaleDateString()}` })}
+                      onClick={() => setDeleteTarget({ id: appt.id, name: `${getDoctorName(appt.doctor_id) || appt.purpose || 'Appointment'} - ${new Date(appt.scheduled_date).toLocaleDateString()}` })}
                       className="text-gray-400 hover:text-red-600 transition-colors p-1"
                       title="Delete appointment"
                     >
