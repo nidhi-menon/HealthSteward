@@ -332,6 +332,9 @@ class ParsedVitals(BaseModel):
 class ParsedDiagnosis(BaseModel):
     condition: str
     icd_10: Optional[str] = None
+    severity: Optional[str] = None
+    diagnosed_date: Optional[str] = None
+    status: Optional[str] = None
 
 
 class ParsedMedicationChange(BaseModel):
