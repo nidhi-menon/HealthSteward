@@ -33,9 +33,50 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def init_db() -> None:
-    """Initialize database by creating all tables."""
+    """Initialize database by creating all tables and run migrations."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Migrations for existing tables (SQLite create_all doesn't ALTER)
+        await _run_migrations(conn)
+
+
+async def _run_migrations(conn) -> None:
+    """Run schema migrations that create_all can't handle."""
+    from sqlalchemy import text
+
+    # Migration: make appointments.doctor_id nullable
+    # SQLite doesn't support ALTER COLUMN, so we recreate the table
+    try:
+        result = await conn.execute(text("PRAGMA table_info(appointments)"))
+        columns = result.fetchall()
+        doctor_col = next((c for c in columns if c[1] == "doctor_id"), None)
+        if doctor_col and doctor_col[3] == 1:  # notnull=1, needs migration
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS appointments_new (
+                    id VARCHAR(36) PRIMARY KEY,
+                    profile_id VARCHAR(36) NOT NULL REFERENCES health_profiles(id),
+                    doctor_id VARCHAR(36) REFERENCES doctors(id),
+                    scheduled_date DATETIME NOT NULL,
+                    purpose TEXT,
+                    status VARCHAR(50) NOT NULL DEFAULT 'scheduled',
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    prep_notes TEXT,
+                    visit_notes TEXT,
+                    visit_notes_updated_at DATETIME
+                )
+            """))
+            await conn.execute(text("""
+                INSERT INTO appointments_new
+                SELECT id, profile_id, doctor_id, scheduled_date, purpose,
+                       status, created_at, updated_at, prep_notes,
+                       visit_notes, visit_notes_updated_at
+                FROM appointments
+            """))
+            await conn.execute(text("DROP TABLE appointments"))
+            await conn.execute(text("ALTER TABLE appointments_new RENAME TO appointments"))
+    except Exception:
+        pass  # Table might not exist yet, that's fine
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
