@@ -2,7 +2,7 @@
 
 This document captures the complete development conversation for the HealthSteward project, including questions, answers, options discussed, and decisions made.
 
-**Last Updated:** 2026-02-06
+**Last Updated:** 2026-02-14
 
 ---
 
@@ -696,6 +696,59 @@ After all discussions, the following was implemented:
 | DEC-006 | PII Anonymization | Implemented | Regex + NER, log anonymized only |
 | DEC-007 | Action Items Extraction | Planned | Phase 3 combined with PDF |
 | DEC-008 | Visit Notes + Context Selection | Implemented | 4-stage hybrid approach |
+| DEC-009 | Agentic Visit Prep Architecture | Approved | Claude API native tool use |
+| DEC-010 | AVS PDF Parser Integration | Implemented | Local Ollama section-routing parser |
+
+---
+
+## 12. AVS PDF Parser Integration (DEC-010)
+
+### Context
+
+The sandbox experiment (SB-001, `avs-pdf-parser`) successfully demonstrated parsing after-visit summary PDFs into structured medical data using a section-routing architecture. This session integrated that sandbox code into HealthSteward as a full feature.
+
+### What Was Built
+
+**Phase 1 — Parser Module (`src/parsers/`):**
+- Ported sandbox code into a proper Python package
+- `SectionRouter` processes each AVS section with the best strategy: deterministic for structured sections (patient info, med changes, follow-ups, appointments), LLM for unstructured (vitals, lab orders, notes, referrals)
+- All LLM calls go through local Ollama only — safety check blocks non-localhost URLs
+- Uses `pdfplumber` for text extraction
+
+**Phase 2 — New Database Models:**
+- `Document` — uploaded PDF metadata + parse status + cached parse result (JSON)
+- `Vitals` — weight, BMI, blood pressure, heart rate, temperature (linked to Document)
+- `LabOrder` — test name, ordered date, status
+- `Referral` — specialty, provider, reason, status
+- `FollowUp` — description, timeframe, target date, status
+- `Condition` gained `icd_10` column for ICD-10-CM codes
+
+**Phase 3 — Backend API (`src/api/documents.py`):**
+- `POST /documents/` — upload PDF, save to `data/documents/{profile}/{doc_id}/`
+- `GET /documents/` — list documents for profile
+- `GET /documents/{id}/parsed` — trigger parse (or return cached), runs via `run_in_executor`
+- `POST /documents/{id}/apply` — apply user-selected items to profile (deduplicates conditions, starts/stops medications, creates vitals/lab orders/referrals/follow-ups)
+
+**Phase 4 — Frontend:**
+- Documents tab (6th tab) in ProfileDetail
+- `FileUpload` component — drag-and-drop PDF uploader with validation
+- `DocumentCard` component — document row with status badge and action buttons
+- `ParsedItemsReview` component — checkboxes per extracted item, section select all/deselect, action badges (START/STOP/CHANGED), ICD-10 badges, confirm button
+- Polling spinner while parse runs (3s interval)
+
+### User Flow
+
+```
+Upload PDF → Save to disk + create Document record (pending)
+     ↓
+Click "Parse" → Ollama extracts structured data via SectionRouter
+     ↓
+Review screen → Checkboxes for each extracted item by category
+     ↓
+Click "Confirm" → Selected items applied to profile
+     ↓
+Profile updated with new conditions, meds, vitals, lab orders, referrals, follow-ups
+```
 
 ---
 
@@ -705,7 +758,7 @@ After all discussions, the following was implemented:
 |-------|---------|--------|
 | Phase 1 | Health Profile + Visit Prep | Complete |
 | Phase 2 | Multi-user / Family sharing | Pending DEC-001 |
-| Phase 3 | PDF processing + Action items | Planned |
+| Phase 3 | PDF processing + Action items | **Complete** (DEC-010) |
 | Phase 4 | RAG for health documents | Planned |
 | Phase 5 | Medication reminders | Planned |
 | Phase 6 | Local model distillation | Planned |
