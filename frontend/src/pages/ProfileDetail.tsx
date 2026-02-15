@@ -7,10 +7,9 @@ import { Card, CardHeader, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal, DeleteConfirmModal } from '../components/Modal';
 import { Input, Textarea, Select, MonthYearInput, DatePicker } from '../components/Input';
-import { FileUpload } from '../components/FileUpload';
 import { DocumentCard } from '../components/DocumentCard';
 import { ParsedItemsReview } from '../components/ParsedItemsReview';
-import type { ConditionCreate, MedicationCreate, DoctorCreate, AppointmentCreate, Doctor, Document as DocumentType, ParsedItemsResponse, ApplyItemsRequest } from '../types';
+import type { ConditionCreate, MedicationCreate, DoctorCreate, AppointmentCreate, Doctor, ScannedFile, ParsedItemsResponse, ApplyItemsRequest } from '../types';
 
 type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments' | 'documents';
 
@@ -53,9 +52,9 @@ export default function ProfileDetail() {
     enabled: !!profileId,
   });
 
-  const { data: documentList } = useQuery({
-    queryKey: ['documents', profileId],
-    queryFn: () => documents.list(profileId!),
+  const { data: scannedFiles } = useQuery({
+    queryKey: ['scannedFiles', profileId],
+    queryFn: () => documents.scan(profileId!),
     enabled: !!profileId,
   });
 
@@ -82,7 +81,7 @@ export default function ProfileDetail() {
     { id: 'medications', label: 'Medications', count: medicationList?.length },
     { id: 'doctors', label: 'Doctors', count: doctorList?.length },
     { id: 'appointments', label: 'Appointments', count: appointmentList?.length },
-    { id: 'documents', label: 'Documents', count: documentList?.length },
+    { id: 'documents', label: 'Documents', count: scannedFiles?.length },
   ];
 
   return (
@@ -168,7 +167,7 @@ export default function ProfileDetail() {
       {activeTab === 'documents' && (
         <DocumentsTab
           profileId={profileId!}
-          documents={documentList || []}
+          files={scannedFiles || []}
         />
       )}
 
@@ -622,51 +621,48 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
 }
 
 // Documents Tab
-type DocView = 'list' | 'upload' | 'review';
+type DocView = 'list' | 'review';
 
-function DocumentsTab({ profileId, documents: documentList }: { profileId: string; documents: DocumentType[] }) {
+function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedFile[] }) {
   const queryClient = useQueryClient();
   const [view, setView] = useState<DocView>('list');
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ParsedItemsResponse | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => documents.upload(profileId, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
-      setView('list');
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (docId: string) => documents.delete(profileId, docId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
-      setDeleteTarget(null);
-    },
-  });
-
   const [isParsing, setIsParsing] = useState(false);
+  const [parsingFilename, setParsingFilename] = useState<string | null>(null);
 
-  const handleParse = async (docId: string) => {
+  const handleParse = async (filename: string, documentId: string | null) => {
     setIsParsing(true);
     setParseError(null);
-    setActiveDocId(docId);
+    setParsingFilename(filename);
+
     try {
-      const result = await documents.getParsed(profileId, docId);
-      setParsedData(result);
+      // If no document record exists yet, create one
+      let docId = documentId;
+      if (!docId) {
+        const result = await documents.parseFile(profileId, filename);
+        docId = result.document_id;
+      }
+      setActiveDocId(docId);
+
+      // Trigger parse and get results
+      const parsed = await documents.getParsed(profileId, docId);
+      setParsedData(parsed);
       setView('review');
-      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      setIsParsing(false);
+      queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
     } catch (err: any) {
-      // If 202, it's still parsing — poll
       if (err.message?.includes('202') || err.message?.includes('Parsing in progress')) {
-        pollForParsed(docId);
+        // Need to poll — get the docId first if we don't have it
+        if (!activeDocId) {
+          // The parseFile call should have set it
+        }
+        pollForParsed(activeDocId!);
       } else {
         setParseError(err.message || 'Parsing failed');
         setIsParsing(false);
-        queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+        queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
       }
     }
   };
@@ -679,23 +675,20 @@ function DocumentsTab({ profileId, documents: documentList }: { profileId: strin
         setParsedData(result);
         setView('review');
         setIsParsing(false);
-        queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+        queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
       } catch (err: any) {
         if (!err.message?.includes('202') && !err.message?.includes('Parsing in progress')) {
           clearInterval(interval);
           setParseError(err.message || 'Parsing failed');
           setIsParsing(false);
-          queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+          queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
         }
       }
     }, 3000);
-    // Safety: stop after 5 minutes
     setTimeout(() => {
       clearInterval(interval);
-      if (isParsing) {
-        setParseError('Parsing timed out. Please try again.');
-        setIsParsing(false);
-      }
+      setParseError('Parsing timed out. Please try again.');
+      setIsParsing(false);
     }, 300000);
   };
 
@@ -704,32 +697,12 @@ function DocumentsTab({ profileId, documents: documentList }: { profileId: strin
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
       queryClient.invalidateQueries({ queryKey: ['medications', profileId] });
-      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
       setParsedData(null);
       setActiveDocId(null);
       setView('list');
     },
   });
-
-  if (view === 'upload') {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="font-semibold text-gray-900">Upload Document</h3>
-          <Button size="sm" variant="secondary" onClick={() => setView('list')}>Back</Button>
-        </div>
-        <FileUpload
-          onUpload={(file) => uploadMutation.mutate(file)}
-          isUploading={uploadMutation.isPending}
-        />
-        {uploadMutation.isError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-            {(uploadMutation.error as Error).message}
-          </div>
-        )}
-      </div>
-    );
-  }
 
   if (view === 'review' && parsedData) {
     return (
@@ -746,12 +719,18 @@ function DocumentsTab({ profileId, documents: documentList }: { profileId: strin
     );
   }
 
+  // Separate new files from processed ones
+  const newFiles = files.filter(f => f.status === 'new');
+  const processedFiles = files.filter(f => f.status !== 'new');
+
   // List view
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-900">Documents</h3>
-        <Button size="sm" onClick={() => setView('upload')}>+ Upload PDF</Button>
+        <span className="text-sm text-gray-500">
+          Scanning <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">data/avs/</code>
+        </span>
       </div>
 
       {isParsing && (
@@ -770,49 +749,45 @@ function DocumentsTab({ profileId, documents: documentList }: { profileId: strin
         </div>
       )}
 
-      {documentList.length === 0 ? (
+      {files.length === 0 ? (
         <Card>
           <CardContent className="text-center py-8 text-gray-500">
-            No documents uploaded
+            <p>No PDFs found in <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">data/avs/</code></p>
+            <p className="mt-2 text-sm">Drop your after-visit summary PDFs there to get started.</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {documentList.map((doc) => (
-            <DocumentCard
-              key={doc.id}
-              document={doc}
-              onParse={handleParse}
-              onDelete={(id) => setDeleteTarget({ id, name: doc.original_filename })}
-              isParsing={isParsing && activeDocId === doc.id}
-            />
-          ))}
+        <div className="space-y-4">
+          {newFiles.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-purple-700">New — ready to parse</h4>
+              {newFiles.map((file) => (
+                <DocumentCard
+                  key={file.filename}
+                  file={file}
+                  onParse={handleParse}
+                  isParsing={isParsing && parsingFilename === file.filename}
+                />
+              ))}
+            </div>
+          )}
+          {processedFiles.length > 0 && (
+            <div className="space-y-3">
+              {newFiles.length > 0 && (
+                <h4 className="text-sm font-medium text-gray-500">Previously processed</h4>
+              )}
+              {processedFiles.map((file) => (
+                <DocumentCard
+                  key={file.filename}
+                  file={file}
+                  onParse={handleParse}
+                  isParsing={isParsing && parsingFilename === file.filename}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
-
-      <Modal
-        isOpen={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        title="Delete Document"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-600">
-            Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong>? This will also remove any extracted data.
-          </p>
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

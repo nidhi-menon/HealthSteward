@@ -88,7 +88,7 @@ HealthSteward/
 │   │   ├── medications.py
 │   │   ├── doctors.py
 │   │   ├── appointments.py
-│   │   ├── documents.py     # PDF upload/parse/apply
+│   │   ├── documents.py     # PDF scan/parse/apply
 │   │   └── visits.py        # AI visit prep
 │   ├── data/
 │   │   ├── models.py        # SQLAlchemy ORM models
@@ -109,11 +109,11 @@ HealthSteward/
 ├── frontend/                # React + TypeScript + Tailwind
 │   └── src/
 │       ├── pages/           # ProfileList, ProfileDetail, VisitPrep
-│       ├── components/      # UI components + FileUpload, ParsedItemsReview
+│       ├── components/      # UI components + DocumentCard, ParsedItemsReview
 │       ├── api/client.ts    # Typed API client
 │       └── types/index.ts   # TypeScript interfaces
 ├── alembic/                 # Database migrations
-├── data/                    # SQLite DB + uploaded documents (git-ignored)
+├── data/                    # SQLite DB + AVS PDFs in data/avs/ (git-ignored)
 ├── docs/                    # Decision log, chat history, sandbox experiments
 └── requirements.txt
 ```
@@ -140,7 +140,7 @@ HealthSteward/
 ### PDF Parsing Flow
 
 ```
-Upload PDF → Parse locally (Ollama) → Review extracted items → Confirm → Update profile
+Drop PDF in data/avs/ → Open Documents tab → Parse locally (Ollama) → Review extracted items → Confirm → Update profile
 ```
 
 The parser uses a **section-routing architecture**:
@@ -165,7 +165,7 @@ Uses a 4-stage context selection pipeline:
 ## Data Privacy
 
 All health data stays local. The `.gitignore` protects:
-- `data/` (database + uploaded documents)
+- `data/` (database + AVS PDFs)
 - `.env` files
 - Log files
 

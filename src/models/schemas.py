@@ -287,6 +287,16 @@ class ConversationLogResponse(BaseModel):
 # ============================================================================
 
 
+class ScannedFileResponse(BaseModel):
+    """A PDF file found in the scan directory."""
+
+    filename: str
+    file_size_bytes: int
+    modified_date: datetime
+    status: str  # new, pending, parsing, completed, failed
+    document_id: Optional[str] = None
+
+
 class DocumentResponse(BaseModel):
     """Schema for document metadata response."""
 
