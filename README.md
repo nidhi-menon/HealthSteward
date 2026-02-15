@@ -1,284 +1,176 @@
 # HealthSteward
 
-Privacy-first AI agent system that centralizes your fragmented health information across multiple doctors and chronic conditions on your local machine.
+Privacy-first AI health coordination system that centralizes your fragmented health information across multiple doctors and chronic conditions. All data stays on your local machine.
 
-## Features
+## What It Does
 
-- Autonomous doctor visit preparation with personalized question lists
-- Periodic health check-ins based on your conditions
-- Medication and test tracking with automatic reminders
-- Multi-provider information coordination to flag contradictions
-- Calendar sync for appointments and reminders
-- Complete privacy - all health data stays on your local machine
+- **Health profile management** — conditions (with ICD-10 codes), medications, doctors, appointments
+- **AI visit preparation** — generates personalized questions for upcoming doctor visits using Claude API, with intelligent context selection from past visits
+- **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
+- **PII anonymization** — all data sent to external LLMs is anonymized (names, DOB, contact info removed)
+- **Complete privacy** — health data stays local; PDF parsing uses only local Ollama (no PHI leaves your machine)
 
-## Technology Evolution Path
+## Architecture
 
-### Phase 1: Claude API (Months 0-2)
-- Agentic AI powered by Claude API
-- Rapid prototyping and data collection
+| Layer | Technology |
+|-------|-----------|
+| Backend | FastAPI + SQLAlchemy (async) + SQLite |
+| Frontend | React 19 + TypeScript + Tailwind CSS + Vite |
+| AI (agentic) | Claude API (Sonnet) for visit prep |
+| AI (local) | Ollama (qwen2.5:7b) for PDF parsing |
+| Database | SQLite via aiosqlite, migrations via Alembic |
 
-### Phase 2: Model Distillation (Months 2-3)
-- Train 7B parameter model from Claude examples
-- Reduce costs from $0.05/visit to essentially free
-
-### Phase 3: Quantization (Month 3)
-- Compress model from 14GB to 4GB
-- Enable fast local inference
-
-### Phase 4: Fine-tuning (Months 3-4)
-- Domain-specific fine-tuning with LoRA
-- Customize for health domain
-
-### Phase 5: RAG Integration (Months 4-5)
-- Ground model in medical guidelines
-- Drug interaction databases
-- Build evaluation benchmarks
-
-### Phase 6: RLHF (Months 6-7, Optional)
-- Collect feedback on visit preparations
-- Train model to match personal preferences
-
-## Setup
+## Quick Start
 
 ### Prerequisites
 
-- macOS (tested on macOS 14+)
-- [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/)
-- [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)
-- [Anthropic API Key](https://console.anthropic.com/)
+- Python 3.11+ (conda or venv)
+- Node.js 18+ and pnpm
+- [Ollama](https://ollama.ai) (for PDF parsing)
+- [Anthropic API Key](https://console.anthropic.com/) (optional, for AI visit prep)
 
-### Option 1: Local Development with Conda (Recommended for Development)
+### Backend
 
-1. **Clone and navigate to the project:**
-   ```bash
-   cd /Users/menon/workspace/HealthSteward
-   ```
+```bash
+# Activate your Python environment
+conda activate healthsteward  # or your venv
 
-2. **Create the conda environment:**
-   ```bash
-   conda env create -f environment.yml
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-3. **Activate the environment:**
-   ```bash
-   conda activate healthsteward
-   ```
+# Run database migrations
+python -m alembic upgrade head
 
-4. **Create your environment file:**
-   ```bash
-   cp .env.example .env
-   ```
+# Start the API server
+python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-5. **Edit .env and add your API keys:**
-   ```bash
-   nano .env  # or use your preferred editor
-   ```
+### Frontend
 
-   At minimum, set:
-   - `ANTHROPIC_API_KEY=your_actual_api_key_here`
+```bash
+cd frontend
+pnpm install
+pnpm dev  # starts on http://localhost:3000
+```
 
-6. **Run the development server:**
-   ```bash
-   python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-   ```
+### Ollama (for PDF parsing)
 
-7. **Verify it's working:**
-   ```bash
-   curl http://localhost:8000/health
-   ```
+```bash
+ollama serve
+ollama pull qwen2.5:7b
+```
 
-### Option 2: Docker with Docker Compose (Recommended for Production)
+### Environment
 
-1. **Create your environment file:**
-   ```bash
-   cp .env.example .env
-   ```
+Create a `.env` file in the project root:
 
-2. **Edit .env and add your API keys:**
-   ```bash
-   nano .env
-   ```
+```env
+# Required for AI visit prep (optional if only using PDF parsing)
+ANTHROPIC_API_KEY=your_key_here
 
-3. **Build and start all services:**
-   ```bash
-   docker-compose up -d
-   ```
-
-   This starts:
-   - HealthSteward app (port 8000)
-   - PostgreSQL database (port 5432)
-   - Redis cache (port 6379)
-   - ChromaDB vector database (port 8001)
-
-4. **Check service status:**
-   ```bash
-   docker-compose ps
-   ```
-
-5. **View logs:**
-   ```bash
-   docker-compose logs -f app
-   ```
-
-6. **Stop all services:**
-   ```bash
-   docker-compose down
-   ```
-
-### Option 3: Hybrid (Local Development + Docker Services)
-
-Best of both worlds - develop with conda but use Docker for databases:
-
-1. **Start only the database services:**
-   ```bash
-   docker-compose up -d db redis chromadb
-   ```
-
-2. **Activate conda environment:**
-   ```bash
-   conda activate healthsteward
-   ```
-
-3. **Run the app locally:**
-   ```bash
-   python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-   ```
+# Defaults (override as needed)
+LLM_PROVIDER=claude
+OLLAMA_BASE_URL=http://localhost:11434
+AVS_PARSER_MODEL=qwen2.5:7b
+DATABASE_URL=sqlite+aiosqlite:///data/healthsteward.db
+```
 
 ## Project Structure
 
 ```
 HealthSteward/
 ├── src/
-│   ├── agents/          # AI agent logic
-│   ├── api/             # FastAPI endpoints
-│   ├── data/            # Data processing
-│   ├── models/          # ML model definitions
-│   └── utils/           # Utility functions
-├── data/
-│   ├── health_records/  # YOUR HEALTH DATA (never committed!)
-│   ├── models/          # Downloaded/trained models
-│   └── cache/           # Temporary cache
-├── config/              # Configuration files
-├── logs/                # Application logs
-├── tests/               # Unit and integration tests
-├── notebooks/           # Jupyter notebooks for experiments
-├── scripts/             # Utility scripts
-├── environment.yml      # Conda dependencies
-├── Dockerfile           # Docker image definition
-└── docker-compose.yml   # Multi-service orchestration
+│   ├── main.py              # FastAPI app entry point
+│   ├── config.py            # Pydantic Settings configuration
+│   ├── api/                 # API route handlers
+│   │   ├── health_profile.py
+│   │   ├── conditions.py
+│   │   ├── medications.py
+│   │   ├── doctors.py
+│   │   ├── appointments.py
+│   │   ├── documents.py     # PDF upload/parse/apply
+│   │   └── visits.py        # AI visit prep
+│   ├── data/
+│   │   ├── models.py        # SQLAlchemy ORM models
+│   │   └── database.py      # Async engine + session
+│   ├── models/
+│   │   └── schemas.py       # Pydantic request/response schemas
+│   ├── parsers/             # AVS PDF parser module
+│   │   ├── avs_parser.py    # SectionRouter (deterministic + LLM)
+│   │   ├── text_extraction.py
+│   │   ├── text_utils.py
+│   │   └── agent/           # Ollama chat, prompts, section splitter
+│   ├── agents/
+│   │   ├── visit_prep.py    # AI visit preparation agent
+│   │   └── ollama_client.py
+│   └── utils/
+│       ├── anonymization.py # PII removal for LLM calls
+│       └── context_selection.py
+├── frontend/                # React + TypeScript + Tailwind
+│   └── src/
+│       ├── pages/           # ProfileList, ProfileDetail, VisitPrep
+│       ├── components/      # UI components + FileUpload, ParsedItemsReview
+│       ├── api/client.ts    # Typed API client
+│       └── types/index.ts   # TypeScript interfaces
+├── alembic/                 # Database migrations
+├── data/                    # SQLite DB + uploaded documents (git-ignored)
+├── docs/                    # Decision log, chat history, sandbox experiments
+└── requirements.txt
 ```
 
-## Development Workflow
+## Database Models
 
-### Running Tests
-```bash
-pytest tests/
+| Model | Purpose |
+|-------|---------|
+| HealthProfile | User profile with personal info |
+| Condition | Medical conditions with ICD-10 codes |
+| Medication | Current and past medications |
+| Doctor | Healthcare providers |
+| Appointment | Scheduled visits with prep/visit notes |
+| Document | Uploaded PDFs with parse status |
+| Vitals | Weight, BMI, BP, HR, temp from parsed docs |
+| LabOrder | Lab tests ordered during visits |
+| Referral | Specialist referrals |
+| FollowUp | Follow-up recommendations |
+| VisitPrep | AI-generated visit preparation |
+| ConversationLog | Anonymized LLM conversation history |
+
+## Key Features in Detail
+
+### PDF Parsing Flow
+
+```
+Upload PDF → Parse locally (Ollama) → Review extracted items → Confirm → Update profile
 ```
 
-### Jupyter Notebooks
-```bash
-jupyter lab
-```
+The parser uses a **section-routing architecture**:
+- **Deterministic parsers** for structured sections (patient info, medication changes, follow-ups, appointments, diagnoses with ICD codes)
+- **Focused LLM calls** for unstructured sections (vitals, lab orders, notes, referrals)
+- All LLM calls go to localhost Ollama only — a safety check blocks non-localhost URLs
 
-### Code Formatting
-```bash
-black src/
-ruff check src/
-```
+### Visit Prep
 
-### Type Checking
-```bash
-mypy src/
-```
+Uses a 4-stage context selection pipeline:
+1. Rules-based filtering (same doctor, PCP visits, related specialties)
+2. Local LLM relevance scoring (Ollama, if >5 past visits)
+3. Token budget management
+4. Anonymize and send to Claude for question generation
 
-## Updating Dependencies
+## Documentation
 
-### Conda Environment
-```bash
-# Update environment.yml with new packages, then:
-conda env update -f environment.yml --prune
-```
-
-### Docker Image
-```bash
-# Rebuild after changing environment.yml:
-docker-compose build
-```
+- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-010)
+- `docs/CHAT_HISTORY.md` — development conversation history
+- `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
 
 ## Data Privacy
 
-**CRITICAL**: All health data stays local. Never commit:
-- `data/health_records/`
+All health data stays local. The `.gitignore` protects:
+- `data/` (database + uploaded documents)
 - `.env` files
-- Database files
-- Model checkpoints (unless you want to share them)
+- Log files
 
-The `.gitignore` is configured to protect your data, but always double-check before committing.
-
-## GPU Support
-
-### For Local Development (Mac with Apple Silicon)
-PyTorch with MPS (Metal Performance Shaders) is included in `environment.yml`.
-
-### For Docker with NVIDIA GPU
-Uncomment the GPU configuration in `docker-compose.yml`:
-```yaml
-deploy:
-  resources:
-    reservations:
-      devices:
-        - driver: nvidia
-          count: 1
-          capabilities: [gpu]
-```
-
-## Troubleshooting
-
-### Conda environment issues
-```bash
-# Remove and recreate
-conda env remove -n healthsteward
-conda env create -f environment.yml
-```
-
-### Docker build fails
-```bash
-# Clean rebuild
-docker-compose down -v
-docker-compose build --no-cache
-docker-compose up -d
-```
-
-### Port already in use
-```bash
-# Find what's using port 8000
-lsof -i :8000
-
-# Change port in docker-compose.yml or .env
-```
-
-### Database connection issues
-```bash
-# Check if database is running
-docker-compose ps db
-
-# View database logs
-docker-compose logs db
-```
-
-## Next Steps
-
-1. Set up your health data schema in `src/data/`
-2. Implement the Claude agent in `src/agents/`
-3. Create API endpoints for doctor visit prep
-4. Build the interview system
-5. Add calendar integration
-6. Start collecting training data for distillation
+PDF parsing uses only local Ollama — no PHI is sent to external services. Visit prep anonymizes all PII before sending to Claude API.
 
 ## License
 
-Private project - All rights reserved
-
-## Contributing
-
-This is a personal health project. Not accepting contributions at this time.
+Private project — All rights reserved
