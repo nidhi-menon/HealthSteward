@@ -406,6 +406,37 @@ Oncology → Relevant to all
 
 ---
 
+### DEC-010: AVS PDF Parser Integration
+
+**Date:** 2026-02-14
+
+**Topic:** Integrating the sandbox AVS PDF parser (SB-001) into HealthSteward as a full feature
+
+**Context:** The avs-pdf-parser sandbox project proved that after-visit summary PDFs can be parsed into structured medical data using a section-routing architecture (deterministic parsers + local Ollama LLM for unstructured sections). This integration brings that capability into the main app with: new database models, upload/parse/review API, and frontend UI.
+
+**Architecture:**
+
+| Component | Approach |
+|-----------|----------|
+| Parser module | `src/parsers/` package — `SectionRouter` with deterministic + LLM pipeline |
+| LLM calls | Local Ollama only (privacy: no PHI leaves machine) |
+| New models | Document, Vitals, LabOrder, Referral, FollowUp |
+| Existing model changes | Condition gains `icd_10` field |
+| File storage | `data/documents/{profile_id}/{document_id}/{filename}` (git-ignored) |
+| User flow | Upload PDF → Parse locally → Review extracted items → Confirm → Update profile |
+
+**Key Design Decisions:**
+- **Local-only parsing**: All LLM calls go through localhost Ollama, never external APIs. Safety check in `ollama_chat.py` blocks non-localhost URLs.
+- **Section routing**: Deterministic parsers handle patient info, medication changes, follow-ups, appointments, and diagnoses (when ICD codes present). LLM handles vitals, lab orders, notes, referrals, and diagnoses (when no structured Assessment section).
+- **Review before apply**: Parsed items are presented for user review with checkboxes per section. Nothing is auto-applied — user confirms each category.
+- **Deduplication**: Diagnoses are deduplicated by name when applied (existing conditions get ICD-10 updated if missing). Medication stops match by name.
+
+**Decision:** APPROVED and implemented
+
+**Status:** Complete
+
+---
+
 ## Template for New Decisions
 
 ```markdown
@@ -433,4 +464,4 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-02-13*
+*Last updated: 2026-02-14*

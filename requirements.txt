@@ -66,5 +66,11 @@ alembic==1.13.1
 # Anthropic SDK (for your health agent)
 anthropic>=0.40.0
 
+# PDF Parsing
+pdfplumber>=0.10.0
+
+# File Upload
+python-multipart>=0.0.6
+
 # Async Testing
 pytest-asyncio==0.23.3

@@ -78,7 +78,7 @@ patient_context = {
 **Decisions:** DEC-005 (After-Visit PDF Processing & Storage), DEC-007 (Action Items Extraction)
 **Goal:** Local medical document parser that extracts structured data from after-visit summary PDFs — no PHI leaves the machine.
 **Link:** [healthsteward-sandbox/avs-pdf-parser](https://github.com/nidhi-menon/healthsteward-sandbox/tree/main/avs-pdf-parser)
-**Status:** Done
+**Status:** Done — Integrated into HealthSteward (DEC-010, 2026-02-14)
 
 ### What it does
 
