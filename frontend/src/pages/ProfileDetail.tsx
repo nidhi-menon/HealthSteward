@@ -9,7 +9,7 @@ import { Modal, DeleteConfirmModal } from '../components/Modal';
 import { Input, Textarea, Select, MonthYearInput, DatePicker } from '../components/Input';
 import { DocumentCard } from '../components/DocumentCard';
 import { ParsedItemsReview } from '../components/ParsedItemsReview';
-import type { ConditionCreate, MedicationCreate, DoctorCreate, AppointmentCreate, Doctor, ScannedFile, ParsedItemsResponse, ApplyItemsRequest } from '../types';
+import type { Condition, ConditionCreate, MedicationCreate, DoctorCreate, AppointmentCreate, Doctor, ScannedFile, ParsedItemsResponse, ApplyItemsRequest } from '../types';
 
 type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments' | 'documents';
 
@@ -248,6 +248,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function ConditionsTab({ profileId, conditions: conditionList, onAdd }: { profileId: string; conditions: any[]; onAdd: () => void }) {
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<Condition | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: (conditionId: string) => conditions.delete(profileId, conditionId),
@@ -276,8 +277,14 @@ function ConditionsTab({ profileId, conditions: conditionList, onAdd }: { profil
               <CardContent>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{condition.name}</h4>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-medium text-gray-900">{condition.name}</h4>
+                      {condition.icd_10 && (
+                        <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-purple-50 text-purple-700">{condition.icd_10}</span>
+                      )}
+                    </div>
                     <div className="flex gap-4 mt-1 text-sm text-gray-500">
+                      {condition.diagnosed_date && <span>Diagnosed: {formatDateString(condition.diagnosed_date)}</span>}
                       {condition.severity && <span>Severity: {condition.severity}</span>}
                       <span className={`px-2 py-0.5 rounded-full text-xs ${
                         condition.status === 'active' ? 'bg-red-100 text-red-700' :
@@ -289,21 +296,40 @@ function ConditionsTab({ profileId, conditions: conditionList, onAdd }: { profil
                     </div>
                     {condition.notes && <p className="mt-2 text-sm text-gray-600">{condition.notes}</p>}
                   </div>
-                  <button
-                    onClick={() => setDeleteTarget({ id: condition.id, name: condition.name })}
-                    className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                    title="Delete condition"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setEditTarget(condition)}
+                      className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
+                      title="Edit condition"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget({ id: condition.id, name: condition.name })}
+                      className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                      title="Delete condition"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Edit Condition Modal */}
+      <ConditionModal
+        isOpen={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        profileId={profileId}
+        condition={editTarget ?? undefined}
+      />
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -792,38 +818,122 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
   );
 }
 
-// Condition Modal
-function ConditionModal({ isOpen, onClose, profileId }: { isOpen: boolean; onClose: () => void; profileId: string }) {
+// Condition Modal (supports both create and edit)
+function ConditionModal({ isOpen, onClose, profileId, condition }: { isOpen: boolean; onClose: () => void; profileId: string; condition?: Condition }) {
   const queryClient = useQueryClient();
+  const isEdit = !!condition;
   const [formData, setFormData] = useState<ConditionCreate>({ name: '', status: 'active' });
+  const [showConfirm, setShowConfirm] = useState(false);
 
-  const mutation = useMutation({
+  // Reset form when modal opens/condition changes
+  const resetKey = condition?.id ?? 'new';
+  const [lastResetKey, setLastResetKey] = useState(resetKey);
+  if (resetKey !== lastResetKey) {
+    setLastResetKey(resetKey);
+    if (condition) {
+      setFormData({
+        name: condition.name,
+        diagnosed_date: condition.diagnosed_date,
+        severity: condition.severity,
+        status: condition.status,
+        notes: condition.notes,
+      });
+    } else {
+      setFormData({ name: '', status: 'active' });
+    }
+    setShowConfirm(false);
+  }
+
+  const createMutation = useMutation({
     mutationFn: (data: ConditionCreate) => conditions.create(profileId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
-      onClose();
-      setFormData({ name: '', status: 'active' });
+      handleClose();
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    mutation.mutate(formData);
+  const updateMutation = useMutation({
+    mutationFn: (data: ConditionCreate) => conditions.update(profileId, condition!.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
+      handleClose();
+    },
+  });
+
+  const mutation = isEdit ? updateMutation : createMutation;
+
+  const handleClose = () => {
+    setFormData({ name: '', status: 'active' });
+    setShowConfirm(false);
+    onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isEdit) {
+      setShowConfirm(true);
+    } else {
+      createMutation.mutate(formData);
+    }
+  };
+
+  const handleConfirmEdit = () => {
+    updateMutation.mutate(formData);
+  };
+
+  // Build list of changed fields for confirmation
+  const changedFields: { label: string; from: string; to: string }[] = [];
+  if (isEdit && condition) {
+    if (formData.name !== condition.name) changedFields.push({ label: 'Name', from: condition.name, to: formData.name });
+    if ((formData.diagnosed_date || null) !== (condition.diagnosed_date || null)) changedFields.push({ label: 'Diagnosed', from: condition.diagnosed_date || '—', to: formData.diagnosed_date || '—' });
+    if ((formData.severity || null) !== (condition.severity || null)) changedFields.push({ label: 'Severity', from: condition.severity || '—', to: formData.severity || '—' });
+    if ((formData.status || 'active') !== condition.status) changedFields.push({ label: 'Status', from: condition.status, to: formData.status || 'active' });
+    if ((formData.notes || null) !== (condition.notes || null)) changedFields.push({ label: 'Notes', from: condition.notes || '—', to: formData.notes || '—' });
+  }
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Condition">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Input label="Condition Name *" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-        <MonthYearInput label="Diagnosed (Month/Year)" value={formData.diagnosed_date || null} onChange={(value) => setFormData({ ...formData, diagnosed_date: value })} />
-        <Select label="Severity" value={formData.severity || ''} onChange={(e) => setFormData({ ...formData, severity: e.target.value || null })} options={[{ value: '', label: 'Select severity' }, { value: 'mild', label: 'Mild' }, { value: 'moderate', label: 'Moderate' }, { value: 'severe', label: 'Severe' }]} />
-        <Select label="Status" value={formData.status || 'active'} onChange={(e) => setFormData({ ...formData, status: e.target.value })} options={[{ value: 'active', label: 'Active' }, { value: 'managed', label: 'Managed' }, { value: 'resolved', label: 'Resolved' }]} />
-        <Textarea label="Notes" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })} />
-        <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Adding...' : 'Add Condition'}</Button>
+    <Modal isOpen={isOpen} onClose={handleClose} title={isEdit ? 'Edit Condition' : 'Add Condition'}>
+      {showConfirm && isEdit ? (
+        <div className="space-y-4">
+          {changedFields.length === 0 ? (
+            <p className="text-gray-500">No changes made.</p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">Confirm the following changes to <strong>{condition!.name}</strong>:</p>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3 text-sm">
+                {changedFields.map((field, i) => (
+                  <div key={i}>
+                    <span className="font-medium text-gray-700">{field.label}:</span>
+                    <div className="ml-4 mt-0.5">
+                      <span className="text-red-600 line-through">{field.from}</span>
+                      <span className="mx-2 text-gray-400">&rarr;</span>
+                      <span className="text-emerald-600">{field.to}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setShowConfirm(false)}>Go Back</Button>
+            <Button onClick={handleConfirmEdit} disabled={updateMutation.isPending || changedFields.length === 0}>
+              {updateMutation.isPending ? 'Saving...' : 'Confirm Changes'}
+            </Button>
+          </div>
         </div>
-      </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input label="Condition Name *" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+          <MonthYearInput label="Diagnosed (Month/Year)" value={formData.diagnosed_date || null} onChange={(value) => setFormData({ ...formData, diagnosed_date: value })} />
+          <Select label="Severity" value={formData.severity || ''} onChange={(e) => setFormData({ ...formData, severity: e.target.value || null })} options={[{ value: '', label: 'Select severity' }, { value: 'mild', label: 'Mild' }, { value: 'moderate', label: 'Moderate' }, { value: 'severe', label: 'Severe' }]} />
+          <Select label="Status" value={formData.status || 'active'} onChange={(e) => setFormData({ ...formData, status: e.target.value })} options={[{ value: 'active', label: 'Active' }, { value: 'managed', label: 'Managed' }, { value: 'resolved', label: 'Resolved' }]} />
+          <Textarea label="Notes" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })} />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Condition'}</Button>
+          </div>
+        </form>
+      )}
     </Modal>
   );
 }

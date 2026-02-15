@@ -183,8 +183,8 @@ class Appointment(Base):
     profile_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("health_profiles.id"), nullable=False
     )
-    doctor_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("doctors.id"), nullable=False
+    doctor_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("doctors.id"), nullable=True
     )
     scheduled_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     purpose: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -209,7 +209,7 @@ class Appointment(Base):
 
     # Relationships
     profile: Mapped["HealthProfile"] = relationship(back_populates="appointments")
-    doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
+    doctor: Mapped[Optional["Doctor"]] = relationship(back_populates="appointments")
     visit_prep: Mapped[Optional["VisitPrep"]] = relationship(
         back_populates="appointment", uselist=False, cascade="all, delete-orphan"
     )

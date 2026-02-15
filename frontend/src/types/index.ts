@@ -25,6 +25,7 @@ export interface Condition {
   id: string;
   profile_id: string;
   name: string;
+  icd_10: string | null;
   diagnosed_date: string | null;
   severity: string | null;
   status: string;
@@ -221,4 +222,5 @@ export interface ApplyItemsRequest {
   lab_orders: ParsedLabOrder[];
   referrals: ParsedReferral[];
   follow_ups: ParsedFollowUp[];
+  appointments: ParsedAppointment[];
 }
