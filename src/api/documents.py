@@ -479,6 +479,7 @@ async def apply_items(
             counts["appointments"] += 1
 
     await db.flush()
+    await db.commit()
 
     logger.info(f"Applied items from document {doc.id}: counts={counts}, skipped={skipped}")
     return {"status": "applied", "counts": counts, "skipped": skipped}
