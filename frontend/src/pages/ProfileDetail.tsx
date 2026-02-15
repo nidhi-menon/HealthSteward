@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { profiles, conditions, medications, doctors, appointments } from '../api/client';
+import { profiles, conditions, medications, doctors, appointments, documents } from '../api/client';
 import { formatDateString } from '../utils/date';
 import { Card, CardHeader, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal, DeleteConfirmModal } from '../components/Modal';
 import { Input, Textarea, Select, MonthYearInput, DatePicker } from '../components/Input';
-import type { ConditionCreate, MedicationCreate, DoctorCreate, AppointmentCreate, Doctor } from '../types';
+import { FileUpload } from '../components/FileUpload';
+import { DocumentCard } from '../components/DocumentCard';
+import { ParsedItemsReview } from '../components/ParsedItemsReview';
+import type { ConditionCreate, MedicationCreate, DoctorCreate, AppointmentCreate, Doctor, Document as DocumentType, ParsedItemsResponse, ApplyItemsRequest } from '../types';
 
-type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments';
+type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments' | 'documents';
 
 export default function ProfileDetail() {
   const { profileId } = useParams<{ profileId: string }>();
@@ -50,6 +53,12 @@ export default function ProfileDetail() {
     enabled: !!profileId,
   });
 
+  const { data: documentList } = useQuery({
+    queryKey: ['documents', profileId],
+    queryFn: () => documents.list(profileId!),
+    enabled: !!profileId,
+  });
+
   // Delete profile mutation
   const deleteMutation = useMutation({
     mutationFn: () => profiles.delete(profileId!),
@@ -73,6 +82,7 @@ export default function ProfileDetail() {
     { id: 'medications', label: 'Medications', count: medicationList?.length },
     { id: 'doctors', label: 'Doctors', count: doctorList?.length },
     { id: 'appointments', label: 'Appointments', count: appointmentList?.length },
+    { id: 'documents', label: 'Documents', count: documentList?.length },
   ];
 
   return (
@@ -152,6 +162,13 @@ export default function ProfileDetail() {
           appointments={appointmentList || []}
           doctors={doctorList || []}
           onAdd={() => setModalType('appointment')}
+        />
+      )}
+
+      {activeTab === 'documents' && (
+        <DocumentsTab
+          profileId={profileId!}
+          documents={documentList || []}
         />
       )}
 
@@ -585,6 +602,202 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
         <div className="space-y-4">
           <p className="text-gray-600">
             Are you sure you want to delete the appointment <strong>"{deleteTarget?.name}"</strong>? This will also remove any visit prep and notes.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// Documents Tab
+type DocView = 'list' | 'upload' | 'review';
+
+function DocumentsTab({ profileId, documents: documentList }: { profileId: string; documents: DocumentType[] }) {
+  const queryClient = useQueryClient();
+  const [view, setView] = useState<DocView>('list');
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [parsedData, setParsedData] = useState<ParsedItemsResponse | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => documents.upload(profileId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      setView('list');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (docId: string) => documents.delete(profileId, docId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      setDeleteTarget(null);
+    },
+  });
+
+  const [isParsing, setIsParsing] = useState(false);
+
+  const handleParse = async (docId: string) => {
+    setIsParsing(true);
+    setParseError(null);
+    setActiveDocId(docId);
+    try {
+      const result = await documents.getParsed(profileId, docId);
+      setParsedData(result);
+      setView('review');
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+    } catch (err: any) {
+      // If 202, it's still parsing — poll
+      if (err.message?.includes('202') || err.message?.includes('Parsing in progress')) {
+        pollForParsed(docId);
+      } else {
+        setParseError(err.message || 'Parsing failed');
+        setIsParsing(false);
+        queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      }
+    }
+  };
+
+  const pollForParsed = (docId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const result = await documents.getParsed(profileId, docId);
+        clearInterval(interval);
+        setParsedData(result);
+        setView('review');
+        setIsParsing(false);
+        queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      } catch (err: any) {
+        if (!err.message?.includes('202') && !err.message?.includes('Parsing in progress')) {
+          clearInterval(interval);
+          setParseError(err.message || 'Parsing failed');
+          setIsParsing(false);
+          queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+        }
+      }
+    }, 3000);
+    // Safety: stop after 5 minutes
+    setTimeout(() => {
+      clearInterval(interval);
+      if (isParsing) {
+        setParseError('Parsing timed out. Please try again.');
+        setIsParsing(false);
+      }
+    }, 300000);
+  };
+
+  const applyMutation = useMutation({
+    mutationFn: (items: ApplyItemsRequest) => documents.applyItems(profileId, activeDocId!, items),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['medications', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['documents', profileId] });
+      setParsedData(null);
+      setActiveDocId(null);
+      setView('list');
+    },
+  });
+
+  if (view === 'upload') {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="font-semibold text-gray-900">Upload Document</h3>
+          <Button size="sm" variant="secondary" onClick={() => setView('list')}>Back</Button>
+        </div>
+        <FileUpload
+          onUpload={(file) => uploadMutation.mutate(file)}
+          isUploading={uploadMutation.isPending}
+        />
+        {uploadMutation.isError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            {(uploadMutation.error as Error).message}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (view === 'review' && parsedData) {
+    return (
+      <ParsedItemsReview
+        data={parsedData}
+        onApply={(items) => applyMutation.mutate(items)}
+        onBack={() => {
+          setView('list');
+          setParsedData(null);
+          setActiveDocId(null);
+        }}
+        isApplying={applyMutation.isPending}
+      />
+    );
+  }
+
+  // List view
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-gray-900">Documents</h3>
+        <Button size="sm" onClick={() => setView('upload')}>+ Upload PDF</Button>
+      </div>
+
+      {isParsing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+          <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-sm text-blue-700">Parsing document with local LLM... This may take a minute.</span>
+        </div>
+      )}
+
+      {parseError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+          {parseError}
+        </div>
+      )}
+
+      {documentList.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-8 text-gray-500">
+            No documents uploaded
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {documentList.map((doc) => (
+            <DocumentCard
+              key={doc.id}
+              document={doc}
+              onParse={handleParse}
+              onDelete={(id) => setDeleteTarget({ id, name: doc.original_filename })}
+              isParsing={isParsing && activeDocId === doc.id}
+            />
+          ))}
+        </div>
+      )}
+
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Document"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong>? This will also remove any extracted data.
           </p>
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setDeleteTarget(null)}>

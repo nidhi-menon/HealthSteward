@@ -126,3 +126,89 @@ export interface VisitPrep {
   created_at: string;
   updated_at: string;
 }
+
+// Document
+export interface Document {
+  id: string;
+  profile_id: string;
+  appointment_id: string | null;
+  original_filename: string;
+  file_size_bytes: number;
+  visit_date: string | null;
+  provider_name: string | null;
+  facility_name: string | null;
+  parse_status: 'pending' | 'parsing' | 'completed' | 'failed';
+  parse_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Parsed Items (from AVS PDF parsing)
+export interface ParsedVitals {
+  weight: string | null;
+  bmi: number | null;
+  blood_pressure: string | null;
+  heart_rate: string | null;
+  temperature: string | null;
+}
+
+export interface ParsedDiagnosis {
+  condition: string;
+  icd_10: string | null;
+}
+
+export interface ParsedMedicationChange {
+  name: string;
+  action: 'start' | 'stop' | 'changed';
+  strength: string | null;
+  instructions: string | null;
+  date: string | null;
+}
+
+export interface ParsedLabOrder {
+  test: string;
+  ordered_date: string | null;
+}
+
+export interface ParsedReferral {
+  specialty: string;
+  provider: string | null;
+  reason: string | null;
+}
+
+export interface ParsedFollowUp {
+  description: string;
+  timeframe: string | null;
+  target_date: string | null;
+}
+
+export interface ParsedAppointment {
+  description: string;
+  date: string | null;
+  time: string | null;
+  location: string | null;
+  phone: string | null;
+}
+
+export interface ParsedItemsResponse {
+  patient: Record<string, string | null>;
+  provider: Record<string, string | null>;
+  vitals: ParsedVitals;
+  diagnoses: ParsedDiagnosis[];
+  medication_changes: ParsedMedicationChange[];
+  lab_orders: ParsedLabOrder[];
+  referrals: ParsedReferral[];
+  follow_up_recommended: ParsedFollowUp[];
+  upcoming_appointments: ParsedAppointment[];
+  notes: string[];
+}
+
+export interface ApplyItemsRequest {
+  diagnoses: ParsedDiagnosis[];
+  medication_starts: ParsedMedicationChange[];
+  medication_stops: ParsedMedicationChange[];
+  vitals: ParsedVitals | null;
+  lab_orders: ParsedLabOrder[];
+  referrals: ParsedReferral[];
+  follow_ups: ParsedFollowUp[];
+}
