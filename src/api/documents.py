@@ -226,6 +226,7 @@ async def apply_items(
         "conditions": 0,
         "medications_started": 0,
         "medications_stopped": 0,
+        "medications_updated": 0,
         "vitals": 0,
         "lab_orders": 0,
         "referrals": 0,
@@ -281,6 +282,25 @@ async def apply_items(
             if existing_clean == clean_name or clean_name in existing_clean or existing_clean in clean_name:
                 existing_med.end_date = _parse_date_string(med.date)
                 counts["medications_stopped"] += 1
+                break
+
+    # Medication updates -> find existing, update dosage/instructions
+    for med in items.medication_updates:
+        clean_name = re.sub(r"\s*\(.*?\)", "", med.name).strip().lower()
+        result = await db.execute(
+            select(Medication).where(
+                Medication.profile_id == profile_id,
+                Medication.end_date.is_(None),
+            )
+        )
+        for existing_med in result.scalars().all():
+            existing_clean = re.sub(r"\s*\(.*?\)", "", existing_med.name).strip().lower()
+            if existing_clean == clean_name or clean_name in existing_clean or existing_clean in clean_name:
+                if med.strength:
+                    existing_med.dosage = med.strength
+                if med.instructions:
+                    existing_med.frequency = med.instructions
+                counts["medications_updated"] += 1
                 break
 
     # Vitals -> create/update Vitals record for the document
