@@ -388,6 +388,7 @@ class ApplyItemsRequest(BaseModel):
     diagnoses: list[ParsedDiagnosis] = []
     medication_starts: list[ParsedMedicationChange] = []
     medication_stops: list[ParsedMedicationChange] = []
+    medication_updates: list[ParsedMedicationChange] = []
     vitals: Optional[ParsedVitals] = None
     lab_orders: list[ParsedLabOrder] = []
     referrals: list[ParsedReferral] = []
