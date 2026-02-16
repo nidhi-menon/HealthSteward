@@ -275,7 +275,7 @@ Compare with profile → User confirms → Update profile + archive PDF
 
 **Topic:** Extracting actionable items (follow-ups, labs, referrals) from visit notes and PDFs
 
-**Context:** After appointments, users have notes like "Follow up in 3 months", "Order HbA1c lab". These should become trackable action items.
+**Context:** After appointments, users have notes like "Follow up in 3 months", "Order blood panel". These should become trackable action items.
 
 **Feature Scope:**
 - Parse `visit_notes` field for action items
@@ -468,15 +468,15 @@ Oncology → Relevant to all
 
 **Topic:** Making visit prep questions relevant to the appointment's specialty
 
-**Context:** Visit prep was generating irrelevant questions — e.g., suggesting a patient discuss dermatology medications (fluocinonide, ketoconazole) with their endocrinologist. At the same time, it was missing useful cross-specialty context like how PCOS, Hashimoto's, endometriosis, and adenomyosis interact hormonally. Lab results (TSH, baseline labs) and vitals trends (significant weight change) were also absent from the context.
+**Context:** Visit prep was generating irrelevant questions — e.g., suggesting a patient discuss dermatology medications (topical creams) with their cardiologist. At the same time, it was missing useful cross-specialty context like how related conditions across specialties interact. Lab results and vitals trends were also absent from the context.
 
 **Decision:** Enrich the visit prep context and make the system prompt specialty-aware:
 
 1. **Specialty-focused system prompt** — template with `{specialty}` that explicitly tells the LLM to only generate questions relevant to this specialist, not unrelated ones
-2. **ICD-10 → specialty mapping** — tag each condition with which specialties typically manage it (E06→Endocrinology, N80→Gynecology, L70→Dermatology, E28→Endocrinology+Gynecology)
+2. **ICD-10 → specialty mapping** — tag each condition with which specialties typically manage it (e.g., E11→Endocrinology, I10→Cardiology, L40→Dermatology)
 3. **Medication specialty tags** — match prescribing_doctor to Doctor records to tag meds with the prescribing specialty (e.g., `[prescribed for Dermatology]`)
 4. **Clinical data enrichment** — include lab orders, vitals trends, pending follow-ups, and active referrals in the LLM context
-5. **Clinic-name specialty inference** — fallback when `doctor.specialty` is null but clinic name contains the specialty (e.g., "Sutter Endocrinology" → Endocrinology)
+5. **Clinic-name specialty inference** — fallback when `doctor.specialty` is null but clinic name contains the specialty (e.g., "Valley Cardiology Associates" → Cardiology)
 6. **Expanded specialty mapping** — added Gynecology ↔ Endocrinology cross-relevance
 
 **Reasoning:** The LLM needs explicit guidance about what's relevant to the specific specialty being visited. Without it, it treats all conditions and medications equally. The ICD-10 and medication tags give the LLM the context to make relevance judgments itself, while the system prompt sets the filtering rules.
