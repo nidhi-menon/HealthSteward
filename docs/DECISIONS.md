@@ -462,6 +462,27 @@ Oncology → Relevant to all
 **Status:** Decided / Deferred / Revisit
 ```
 
+### DEC-011: Specialty-Aware Visit Prep Context
+
+**Date:** 2026-02-15
+
+**Topic:** Making visit prep questions relevant to the appointment's specialty
+
+**Context:** Visit prep was generating irrelevant questions — e.g., suggesting a patient discuss dermatology medications (fluocinonide, ketoconazole) with their endocrinologist. At the same time, it was missing useful cross-specialty context like how PCOS, Hashimoto's, endometriosis, and adenomyosis interact hormonally. Lab results (TSH, baseline labs) and vitals trends (significant weight change) were also absent from the context.
+
+**Decision:** Enrich the visit prep context and make the system prompt specialty-aware:
+
+1. **Specialty-focused system prompt** — template with `{specialty}` that explicitly tells the LLM to only generate questions relevant to this specialist, not unrelated ones
+2. **ICD-10 → specialty mapping** — tag each condition with which specialties typically manage it (E06→Endocrinology, N80→Gynecology, L70→Dermatology, E28→Endocrinology+Gynecology)
+3. **Medication specialty tags** — match prescribing_doctor to Doctor records to tag meds with the prescribing specialty (e.g., `[prescribed for Dermatology]`)
+4. **Clinical data enrichment** — include lab orders, vitals trends, pending follow-ups, and active referrals in the LLM context
+5. **Clinic-name specialty inference** — fallback when `doctor.specialty` is null but clinic name contains the specialty (e.g., "Sutter Endocrinology" → Endocrinology)
+6. **Expanded specialty mapping** — added Gynecology ↔ Endocrinology cross-relevance
+
+**Reasoning:** The LLM needs explicit guidance about what's relevant to the specific specialty being visited. Without it, it treats all conditions and medications equally. The ICD-10 and medication tags give the LLM the context to make relevance judgments itself, while the system prompt sets the filtering rules.
+
+**Status:** Decided
+
 ---
 
-*Last updated: 2026-02-14*
+*Last updated: 2026-02-15*
