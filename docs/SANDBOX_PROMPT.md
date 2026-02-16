@@ -89,8 +89,8 @@ Parses after-visit summary PDFs and extracts structured items: instructions, med
 - **Focused single-turn LLM calls** (Qwen 2.5 7B via Ollama) handle: vitals, lab orders, referrals, notes
 
 **Supported formats:**
-- Standard health system AVS formats
-- Clinical notes (various EHR systems)
+- Sutter Health AVS
+- Tebra clinical notes
 
 **Privacy:** All processing runs locally — no PHI leaves the machine. Uses Ollama with Qwen 2.5 7B for the LLM portions.
 
