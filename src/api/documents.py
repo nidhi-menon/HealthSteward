@@ -249,15 +249,22 @@ async def apply_items(
         "appointments": 0,
     }
 
-    # Diagnoses -> Condition records (deduplicate by name, date-guarded)
+    # Diagnoses -> Condition records (fuzzy dedup by name, date-guarded)
     for dx in items.diagnoses:
-        existing = await db.execute(
-            select(Condition).where(
-                Condition.profile_id == profile_id,
-                Condition.name == dx.condition,
-            )
+        # Fuzzy match: check all conditions for this profile
+        result = await db.execute(
+            select(Condition).where(Condition.profile_id == profile_id)
         )
-        existing_cond = existing.scalar_one_or_none()
+        existing_cond = None
+        dx_clean = dx.condition.strip().lower()
+        for cond in result.scalars().all():
+            cond_clean = cond.name.strip().lower()
+            if (cond_clean == dx_clean
+                    or cond_clean in dx_clean
+                    or dx_clean in cond_clean
+                    or (dx.icd_10 and cond.icd_10 and dx.icd_10 == cond.icd_10)):
+                existing_cond = cond
+                break
         if existing_cond:
             # Only update if visit is newer than last update
             if _is_newer(visit_dt, existing_cond.updated_at):
@@ -287,24 +294,26 @@ async def apply_items(
             db.add(cond)
             counts["conditions"] += 1
 
-    # Medication starts -> new Medication records (dedup by name)
+    # Medication starts -> new Medication records (dedup by name against all meds)
     for med in items.medication_starts:
         clean_name = _clean_med_name(med.name)
         result = await db.execute(
             select(Medication).where(
                 Medication.profile_id == profile_id,
-                Medication.end_date.is_(None),
             )
         )
         found = False
         for existing_med in result.scalars().all():
             if _fuzzy_med_match(_clean_med_name(existing_med.name), clean_name):
-                # Already exists and active — skip if not newer
-                if not _is_newer(visit_dt, existing_med.updated_at):
-                    skipped["medications_started"] += 1
-                    found = True
-                    break
                 found = True
+                # Update dosage/frequency if visit is newer and med is active
+                if existing_med.end_date is None and _is_newer(visit_dt, existing_med.updated_at):
+                    if med.strength and med.strength != existing_med.dosage:
+                        existing_med.dosage = med.strength
+                    if med.instructions and med.instructions != existing_med.frequency:
+                        existing_med.frequency = med.instructions
+                else:
+                    skipped["medications_started"] += 1
                 break
         if not found:
             medication = Medication(
@@ -456,9 +465,10 @@ async def apply_items(
 
         # Try to find or create a doctor for this appointment
         matched_doctor_id = None
-        if appt.description:
+        doctor_name = _extract_doctor_name(appt.description) if appt.description else None
+        if doctor_name:
             matched_doctor_id = await _find_or_create_doctor(
-                db, profile_id, appt.description, appt.location
+                db, profile_id, doctor_name, appt.location
             )
 
         # Check for existing appointment on the same date
@@ -489,17 +499,46 @@ async def apply_items(
     return {"status": "applied", "counts": counts, "skipped": skipped}
 
 
+def _extract_doctor_name(text: str) -> str | None:
+    """Extract a doctor name from text like 'Video Visit with D.M. Antoniucci, MD'.
+
+    Looks for patterns with MD, M.D., DO, D.O., NP, PA suffixes or
+    'Dr.' / 'with' prefixes. Returns None if no doctor name found.
+    """
+    if not text:
+        return None
+
+    # Pattern: "with <Name>, MD" or "with <Name> MD" or "with Dr. <Name>"
+    import re
+    # Match "with <name>, MD/M.D./DO" etc
+    m = re.search(r'(?:with|by)\s+(.+?(?:,?\s*(?:M\.?D\.?|D\.?O\.?|N\.?P\.?|P\.?A\.?))\s*)$', text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().rstrip(',')
+
+    # Match "Dr. <name>" anywhere
+    m = re.search(r'Dr\.?\s+(\S.+?)(?:\s*[-,]|$)', text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().rstrip(',')
+
+    # If the whole text looks like a doctor name (contains MD/DO suffix)
+    if re.search(r'(?:M\.?D\.?|D\.?O\.?)\s*$', text.strip(), re.IGNORECASE):
+        return text.strip()
+
+    return None
+
+
 async def _find_or_create_doctor(
-    db: AsyncSession, profile_id: str, name_or_desc: str, clinic: str | None = None
+    db: AsyncSession, profile_id: str, name: str, clinic: str | None = None
 ) -> str | None:
     """Find an existing doctor by name match, or create a new one.
 
     Returns the doctor's ID if found/created, or None if no meaningful name.
     """
-    if not name_or_desc or len(name_or_desc.strip()) < 2:
+    if not name or len(name.strip()) < 2:
         return None
 
-    name_lower = name_or_desc.strip().lower()
+    name_clean = name.strip()
+    name_lower = name_clean.lower()
 
     # Check existing doctors for a fuzzy match
     result = await db.execute(
@@ -516,7 +555,7 @@ async def _find_or_create_doctor(
     # Create new doctor
     new_doctor = Doctor(
         profile_id=profile_id,
-        name=name_or_desc.strip(),
+        name=name_clean,
         clinic=clinic,
     )
     db.add(new_doctor)
