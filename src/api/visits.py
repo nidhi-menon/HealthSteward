@@ -29,6 +29,7 @@ async def prepare_visit(
             selectinload(Appointment.doctor),
             selectinload(Appointment.profile).selectinload(HealthProfile.conditions),
             selectinload(Appointment.profile).selectinload(HealthProfile.medications),
+            selectinload(Appointment.profile).selectinload(HealthProfile.doctors),
         )
         .where(Appointment.id == appointment_id)
     )
