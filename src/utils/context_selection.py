@@ -43,7 +43,8 @@ SPECIALTY_MAPPING: dict[str, set[str]] = {
 
     "Endocrinology": {
         "Cardiology", "Nephrology", "Ophthalmology",
-        "Podiatry", "Neurology", "Vascular Surgery"
+        "Podiatry", "Neurology", "Vascular Surgery",
+        "Obstetrics and Gynecology", "Gynecology",
     },
     "Cardiology": {
         "Endocrinology", "Nephrology", "Pulmonology",
@@ -68,6 +69,15 @@ SPECIALTY_MAPPING: dict[str, set[str]] = {
     },
     "Rheumatology": {
         "Orthopedics", "Dermatology", "Internal Medicine"
+    },
+    "Obstetrics and Gynecology": {
+        "Endocrinology", "Urology", "Oncology",
+    },
+    "Gynecology": {
+        "Endocrinology", "Urology", "Oncology",
+    },
+    "Dermatology": {
+        "Rheumatology", "Allergy",
     },
 }
 
@@ -125,6 +135,13 @@ def normalize_specialty(specialty: Optional[str]) -> Optional[str]:
         "ent": "Otolaryngology",
         "ob/gyn": "Obstetrics and Gynecology",
         "obgyn": "Obstetrics and Gynecology",
+        "gynecology": "Gynecology",
+        "ob-gyn": "Obstetrics and Gynecology",
+        "gyn": "Gynecology",
+        "dermatology": "Dermatology",
+        "derm": "Dermatology",
+        "endocrinology": "Endocrinology",
+        "endo": "Endocrinology",
     }
 
     lower = specialty.lower()
