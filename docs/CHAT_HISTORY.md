@@ -520,7 +520,7 @@ After clicking "Add Visit Notes":
 │ Visit Notes:                            │
 │ ┌─────────────────────────────────────┐ │
 │ │ - Increase Metformin to 1000mg      │ │
-│ │ - Schedule HbA1c lab                │ │
+│ │ - Schedule blood panel              │ │
 │ │ - Follow up in 3 months             │ │
 │ └─────────────────────────────────────┘ │
 │                                         │
@@ -768,7 +768,7 @@ Profile updated with new conditions, meds, vitals, lab orders, referrals, follow
 
 ### Problem
 
-Visit prep was generating irrelevant questions. For example, asking an endocrinologist about dermatology medications (fluocinonide, ketoconazole). Meanwhile, useful cross-specialty context was being missed — the interconnection between PCOS, Hashimoto's, endometriosis, and adenomyosis, plus lab results and vitals trends.
+Visit prep was generating irrelevant questions. For example, asking a cardiologist about dermatology medications (topical creams). Meanwhile, useful cross-specialty context was being missed — the interconnection between related conditions across specialties, plus lab results and vitals trends.
 
 ### Root Causes
 
@@ -781,16 +781,16 @@ Visit prep was generating irrelevant questions. For example, asking an endocrino
 ### Changes Made
 
 - **Specialty-focused system prompt** — explicitly tells LLM to focus on this specialty, avoid unrelated meds
-- **ICD-10 → specialty tags** on conditions (E06.3→Endocrinology, N80.9→Gynecology, L70.0→Dermatology)
+- **ICD-10 → specialty tags** on conditions (e.g., E11→Endocrinology, I10→Cardiology, L40→Dermatology)
 - **Medication prescriber tags** — `[prescribed for Dermatology]` when we can match prescribing doctor
 - **Clinical data sections** — lab orders, vitals trend, pending follow-ups, active referrals
-- **Clinic-name specialty inference** — "Sutter Endocrinology" → Endocrinology when doctor.specialty is null
+- **Clinic-name specialty inference** — e.g., "Valley Cardiology Associates" → Cardiology when doctor.specialty is null
 - **Expanded specialty mapping** — Gynecology ↔ Endocrinology bidirectional relevance
 - **Merged feature/avs-pdf-parser-integration into main**
 
 ### Result
 
-Endocrinology visit prep now generates questions about Hashimoto's, PCOS, TSH lab results, weight/BMI trends — no mention of dermatology medications.
+Visit prep now generates questions relevant to the target specialty — lab results, condition management, vitals trends — with no mention of unrelated medications from other specialists.
 
 ---
 
