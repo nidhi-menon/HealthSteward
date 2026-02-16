@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -57,6 +57,21 @@ class HealthProfile(Base):
     appointments: Mapped[list["Appointment"]] = relationship(
         back_populates="profile", cascade="all, delete-orphan"
     )
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+    vitals: Mapped[list["Vitals"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+    lab_orders: Mapped[list["LabOrder"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+    referrals: Mapped[list["Referral"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+    follow_ups: Mapped[list["FollowUp"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
 
 
 class Condition(Base):
@@ -71,6 +86,7 @@ class Condition(Base):
         String(36), ForeignKey("health_profiles.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    icd_10: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     diagnosed_date: Mapped[Optional[date]] = mapped_column(nullable=True)
     severity: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
@@ -167,8 +183,8 @@ class Appointment(Base):
     profile_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("health_profiles.id"), nullable=False
     )
-    doctor_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("doctors.id"), nullable=False
+    doctor_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("doctors.id"), nullable=True
     )
     scheduled_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     purpose: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -193,9 +209,12 @@ class Appointment(Base):
 
     # Relationships
     profile: Mapped["HealthProfile"] = relationship(back_populates="appointments")
-    doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
+    doctor: Mapped[Optional["Doctor"]] = relationship(back_populates="appointments")
     visit_prep: Mapped[Optional["VisitPrep"]] = relationship(
         back_populates="appointment", uselist=False, cascade="all, delete-orphan"
+    )
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="appointment", cascade="all, delete-orphan"
     )
 
 
@@ -239,3 +258,161 @@ class ConversationLog(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
+
+
+class Document(Base):
+    """Uploaded document (e.g. after-visit summary PDF) for a health profile."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("health_profiles.id"), nullable=False
+    )
+    appointment_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("appointments.id"), nullable=True
+    )
+    original_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    visit_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    provider_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    facility_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    parse_status: Mapped[str] = mapped_column(
+        String(50), default="pending"
+    )  # pending, parsing, completed, failed
+    parse_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    raw_parse_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Relationships
+    profile: Mapped["HealthProfile"] = relationship(back_populates="documents")
+    appointment: Mapped[Optional["Appointment"]] = relationship(back_populates="documents")
+    vitals: Mapped[Optional["Vitals"]] = relationship(
+        back_populates="document", uselist=False, cascade="all, delete-orphan"
+    )
+    lab_orders: Mapped[list["LabOrder"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    referrals: Mapped[list["Referral"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    follow_ups: Mapped[list["FollowUp"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+
+
+class Vitals(Base):
+    """Vitals measured during a visit, linked to a document."""
+
+    __tablename__ = "vitals"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("health_profiles.id"), nullable=False
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("documents.id"), unique=True, nullable=False
+    )
+    weight: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    bmi: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    blood_pressure: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    heart_rate: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    temperature: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    measured_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+
+    # Relationships
+    profile: Mapped["HealthProfile"] = relationship(back_populates="vitals")
+    document: Mapped["Document"] = relationship(back_populates="vitals")
+
+
+class LabOrder(Base):
+    """Lab test ordered during a visit."""
+
+    __tablename__ = "lab_orders"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("health_profiles.id"), nullable=False
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("documents.id"), nullable=False
+    )
+    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    ordered_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="ordered")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+
+    # Relationships
+    profile: Mapped["HealthProfile"] = relationship(back_populates="lab_orders")
+    document: Mapped["Document"] = relationship(back_populates="lab_orders")
+
+
+class Referral(Base):
+    """Referral to a specialist from a visit."""
+
+    __tablename__ = "referrals"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("health_profiles.id"), nullable=False
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("documents.id"), nullable=False
+    )
+    specialty: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+
+    # Relationships
+    profile: Mapped["HealthProfile"] = relationship(back_populates="referrals")
+    document: Mapped["Document"] = relationship(back_populates="referrals")
+
+
+class FollowUp(Base):
+    """Follow-up recommendation from a visit."""
+
+    __tablename__ = "follow_ups"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("health_profiles.id"), nullable=False
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("documents.id"), nullable=False
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    timeframe: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    target_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+
+    # Relationships
+    profile: Mapped["HealthProfile"] = relationship(back_populates="follow_ups")
+    document: Mapped["Document"] = relationship(back_populates="follow_ups")

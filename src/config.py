@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
 
+    # AVS PDF Parser
+    avs_parser_model: str = "qwen2.5:7b"
+    avs_scan_path: str = "data/avs"
+
     # Anonymization
     use_anonymization: bool = True  # Anonymize data before sending to LLM
     use_ner_anonymization: bool = True  # Use spaCy NER for name detection

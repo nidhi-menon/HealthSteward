@@ -10,6 +10,9 @@ import type {
   Appointment,
   AppointmentCreate,
   VisitPrep,
+  ScannedFile,
+  ParsedItemsResponse,
+  ApplyItemsRequest,
 } from '../types';
 
 const API_BASE = '/api';
@@ -142,6 +145,27 @@ export const appointments = {
     request<void>(`/profiles/${profileId}/appointments/${id}`, {
       method: 'DELETE',
     }),
+};
+
+// Documents
+export const documents = {
+  scan: (profileId: string) =>
+    request<ScannedFile[]>(`/profiles/${profileId}/documents/scan`),
+  parseFile: (profileId: string, filename: string) =>
+    request<{ document_id: string; status: string }>(
+      `/profiles/${profileId}/documents/parse-file?filename=${encodeURIComponent(filename)}`,
+      { method: 'POST' },
+    ),
+  getParsed: (profileId: string, id: string) =>
+    request<ParsedItemsResponse>(`/profiles/${profileId}/documents/${id}/parsed`),
+  applyItems: (profileId: string, id: string, items: ApplyItemsRequest) =>
+    request<{ status: string; counts: Record<string, number> }>(
+      `/profiles/${profileId}/documents/${id}/apply`,
+      {
+        method: 'POST',
+        body: JSON.stringify(items),
+      },
+    ),
 };
 
 // Visit Prep
