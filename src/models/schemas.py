@@ -58,6 +58,7 @@ class ConditionBase(BaseModel):
     """Base schema for condition data."""
 
     name: str = Field(..., min_length=1, max_length=255)
+    icd_10: Optional[str] = Field(None, max_length=20)
     diagnosed_date: Optional[date] = None
     severity: Optional[str] = Field(None, max_length=50)
     status: str = Field(default="active", max_length=50)
@@ -74,6 +75,7 @@ class ConditionUpdate(BaseModel):
     """Schema for updating a condition."""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
+    icd_10: Optional[str] = Field(None, max_length=20)
     diagnosed_date: Optional[date] = None
     severity: Optional[str] = Field(None, max_length=50)
     status: Optional[str] = Field(None, max_length=50)
@@ -196,7 +198,7 @@ class DoctorResponse(DoctorBase):
 class AppointmentBase(BaseModel):
     """Base schema for appointment data."""
 
-    doctor_id: str
+    doctor_id: Optional[str] = None
     scheduled_date: datetime
     purpose: Optional[str] = None
     status: str = Field(default="scheduled", max_length=50)
@@ -278,3 +280,178 @@ class ConversationLogResponse(BaseModel):
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     timestamp: datetime
+
+
+# ============================================================================
+# Document Schemas
+# ============================================================================
+
+
+class ScannedFileResponse(BaseModel):
+    """A PDF file found in the scan directory."""
+
+    filename: str
+    file_size_bytes: int
+    modified_date: datetime
+    status: str  # new, pending, parsing, completed, failed
+    document_id: Optional[str] = None
+
+
+class DocumentResponse(BaseModel):
+    """Schema for document metadata response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    profile_id: str
+    appointment_id: Optional[str] = None
+    original_filename: str
+    file_size_bytes: int
+    visit_date: Optional[str] = None
+    provider_name: Optional[str] = None
+    facility_name: Optional[str] = None
+    parse_status: str
+    parse_error: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# ============================================================================
+# Parsed Items Schemas (for review screen)
+# ============================================================================
+
+
+class ParsedVitals(BaseModel):
+    weight: Optional[str] = None
+    bmi: Optional[float] = None
+    blood_pressure: Optional[str] = None
+    heart_rate: Optional[str] = None
+    temperature: Optional[str] = None
+
+
+class ParsedDiagnosis(BaseModel):
+    condition: str
+    icd_10: Optional[str] = None
+    severity: Optional[str] = None
+    diagnosed_date: Optional[str] = None
+    status: Optional[str] = None
+
+
+class ParsedMedicationChange(BaseModel):
+    name: str
+    action: str  # start, stop, changed
+    strength: Optional[str] = None
+    instructions: Optional[str] = None
+    date: Optional[str] = None
+
+
+class ParsedLabOrder(BaseModel):
+    test: str
+    ordered_date: Optional[str] = None
+
+
+class ParsedReferral(BaseModel):
+    specialty: str
+    provider: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class ParsedFollowUp(BaseModel):
+    description: str
+    timeframe: Optional[str] = None
+    target_date: Optional[str] = None
+
+
+class ParsedAppointment(BaseModel):
+    description: str
+    date: Optional[str] = None
+    time: Optional[str] = None
+    location: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class ParsedItemsResponse(BaseModel):
+    """Full parsed output for the review screen."""
+
+    patient: dict = {}
+    provider: dict = {}
+    vitals: ParsedVitals = ParsedVitals()
+    diagnoses: list[ParsedDiagnosis] = []
+    medication_changes: list[ParsedMedicationChange] = []
+    lab_orders: list[ParsedLabOrder] = []
+    referrals: list[ParsedReferral] = []
+    follow_up_recommended: list[ParsedFollowUp] = []
+    upcoming_appointments: list[ParsedAppointment] = []
+    notes: list[str] = []
+
+
+class ApplyItemsRequest(BaseModel):
+    """User's selections of which parsed items to accept."""
+
+    diagnoses: list[ParsedDiagnosis] = []
+    medication_starts: list[ParsedMedicationChange] = []
+    medication_stops: list[ParsedMedicationChange] = []
+    medication_updates: list[ParsedMedicationChange] = []
+    vitals: Optional[ParsedVitals] = None
+    lab_orders: list[ParsedLabOrder] = []
+    referrals: list[ParsedReferral] = []
+    follow_ups: list[ParsedFollowUp] = []
+    appointments: list[ParsedAppointment] = []
+
+
+# ============================================================================
+# New Model Response Schemas
+# ============================================================================
+
+
+class VitalsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    profile_id: str
+    document_id: str
+    weight: Optional[str] = None
+    bmi: Optional[float] = None
+    blood_pressure: Optional[str] = None
+    heart_rate: Optional[str] = None
+    temperature: Optional[str] = None
+    measured_date: Optional[str] = None
+    created_at: datetime
+
+
+class LabOrderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    profile_id: str
+    document_id: str
+    test_name: str
+    ordered_date: Optional[str] = None
+    status: str
+    created_at: datetime
+
+
+class ReferralResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    profile_id: str
+    document_id: str
+    specialty: str
+    provider_name: Optional[str] = None
+    reason: Optional[str] = None
+    status: str
+    created_at: datetime
+
+
+class FollowUpResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    profile_id: str
+    document_id: str
+    description: str
+    timeframe: Optional[str] = None
+    target_date: Optional[str] = None
+    status: str
+    created_at: datetime
