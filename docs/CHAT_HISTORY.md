@@ -2,7 +2,7 @@
 
 This document captures the complete development conversation for the HealthSteward project, including questions, answers, options discussed, and decisions made.
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-15
 
 ---
 
@@ -18,6 +18,8 @@ This document captures the complete development conversation for the HealthStewa
 8. [Privacy and Anonymization (DEC-006)](#8-privacy-and-anonymization-dec-006)
 9. [Visit Notes Structure (DEC-008)](#9-visit-notes-structure-dec-008)
 10. [Intelligent Context Selection](#10-intelligent-context-selection)
+11. [AVS PDF Parser Integration (DEC-010)](#11-avs-pdf-parser-integration-dec-010)
+12. [Specialty-Aware Visit Prep (DEC-011)](#12-specialty-aware-visit-prep-dec-011)
 11. [Implementation Summary](#11-implementation-summary)
 
 ---
@@ -518,7 +520,7 @@ After clicking "Add Visit Notes":
 │ Visit Notes:                            │
 │ ┌─────────────────────────────────────┐ │
 │ │ - Increase Metformin to 1000mg      │ │
-│ │ - Schedule HbA1c lab                │ │
+│ │ - Schedule blood panel              │ │
 │ │ - Follow up in 3 months             │ │
 │ └─────────────────────────────────────┘ │
 │                                         │
@@ -757,6 +759,38 @@ Click "Confirm" → Selected items applied to profile
      ↓
 Profile updated with new conditions, meds, vitals, lab orders, referrals, follow-ups
 ```
+
+---
+
+## 12. Specialty-Aware Visit Prep (DEC-011)
+
+**Date:** 2026-02-15
+
+### Problem
+
+Visit prep was generating irrelevant questions. For example, asking a cardiologist about dermatology medications (topical creams). Meanwhile, useful cross-specialty context was being missed — the interconnection between related conditions across specialties, plus lab results and vitals trends.
+
+### Root Causes
+
+1. System prompt was generic — "Generate 5-10 questions" with no specialty guidance
+2. All medications dumped into context without indicating which specialty prescribed them
+3. No lab orders, vitals, follow-ups, or referrals included in context
+4. No ICD-10 to specialty mapping to help LLM understand condition relevance
+5. Doctor specialty field was null (populated from AVS without specialty), but clinic name contained it
+
+### Changes Made
+
+- **Specialty-focused system prompt** — explicitly tells LLM to focus on this specialty, avoid unrelated meds
+- **ICD-10 → specialty tags** on conditions (e.g., E11→Endocrinology, I10→Cardiology, L40→Dermatology)
+- **Medication prescriber tags** — `[prescribed for Dermatology]` when we can match prescribing doctor
+- **Clinical data sections** — lab orders, vitals trend, pending follow-ups, active referrals
+- **Clinic-name specialty inference** — e.g., "Valley Cardiology Associates" → Cardiology when doctor.specialty is null
+- **Expanded specialty mapping** — Gynecology ↔ Endocrinology bidirectional relevance
+- **Merged feature/avs-pdf-parser-integration into main**
+
+### Result
+
+Visit prep now generates questions relevant to the target specialty — lab results, condition management, vitals trends — with no mention of unrelated medications from other specialists.
 
 ---
 
