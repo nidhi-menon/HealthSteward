@@ -2,11 +2,15 @@
 # CRITICAL: HEALTH DATA PROTECTION
 # ===============================================
 # NEVER commit health records or personal data!
-data/health_records/
-data/patient_data/
+data/
 *.db
 *.sqlite
 *.sqlite3
+
+# ===============================================
+# PRIVATE DOCS
+# ===============================================
+docs/PATENT_ANALYSIS.md
 
 # ===============================================
 # SECRETS & API KEYS
@@ -25,11 +29,6 @@ config/secrets.yml
 # ML MODELS & CHECKPOINTS
 # ===============================================
 # Large model files - use Git LFS or external storage
-data/models/*.bin
-data/models/*.pt
-data/models/*.pth
-data/models/*.safetensors
-data/models/*.onnx
 models/*.bin
 models/*.pt
 models/*.pth
@@ -40,8 +39,6 @@ wandb/
 mlruns/
 
 # Keep model configs and metadata
-!data/models/*.json
-!data/models/*.yaml
 !models/*.json
 !models/*.yaml
 
@@ -135,7 +132,6 @@ temp/
 # ===============================================
 # DATA & CACHE
 # ===============================================
-data/cache/
 .cache/
 *.parquet
 *.arrow
