@@ -173,4 +173,6 @@ PDF parsing uses only local Ollama — no PHI is sent to external services. Visi
 
 ## License
 
-Private project — All rights reserved
+Copyright (C) 2025 Nidhi Menon
+
+This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
