@@ -99,13 +99,15 @@ HealthSteward/
 │   │   ├── avs_parser.py    # SectionRouter (deterministic + LLM)
 │   │   ├── text_extraction.py
 │   │   ├── text_utils.py
-│   │   └── agent/           # Ollama chat, prompts, section splitter
+│   │   └── agent/           # Ollama chat, prompts, section splitter, deterministic tools
 │   ├── agents/
+│   │   ├── base.py          # BaseAgent with Claude API + conversation logging
 │   │   ├── visit_prep.py    # AI visit preparation agent
 │   │   └── ollama_client.py
 │   └── utils/
 │       ├── anonymization.py # PII removal for LLM calls
-│       └── context_selection.py
+│       ├── context_selection.py
+│       └── logging.py
 ├── frontend/                # React + TypeScript + Tailwind
 │   └── src/
 │       ├── pages/           # ProfileList, ProfileDetail, VisitPrep
@@ -158,7 +160,7 @@ Uses a 4-stage context selection pipeline:
 
 ## Documentation
 
-- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-010)
+- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-011)
 - `docs/CHAT_HISTORY.md` — development conversation history
 - `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
 
