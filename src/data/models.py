@@ -355,6 +355,8 @@ class LabOrder(Base):
     test_name: Mapped[str] = mapped_column(String(255), nullable=False)
     ordered_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="ordered")
+    snoozed_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
@@ -382,6 +384,8 @@ class Referral(Base):
     provider_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending")
+    snoozed_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
@@ -409,6 +413,8 @@ class FollowUp(Base):
     timeframe: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     target_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending")
+    snoozed_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
@@ -416,3 +422,21 @@ class FollowUp(Base):
     # Relationships
     profile: Mapped["HealthProfile"] = relationship(back_populates="follow_ups")
     document: Mapped["Document"] = relationship(back_populates="follow_ups")
+
+
+class NudgeState(Base):
+    """Snooze state for computed nudges that have no persistent DB row (appointment-based)."""
+
+    __tablename__ = "nudge_states"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("health_profiles.id"), nullable=False
+    )
+    nudge_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    item_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    snoozed_until: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
