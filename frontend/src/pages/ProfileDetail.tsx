@@ -58,6 +58,7 @@ export default function ProfileDetail() {
     queryKey: ['scannedFiles', profileId],
     queryFn: () => documents.scan(profileId!),
     enabled: !!profileId,
+    refetchInterval: 30_000,
   });
 
   // Delete profile mutation
@@ -162,6 +163,7 @@ export default function ProfileDetail() {
           profileId={profileId!}
           appointments={appointmentList || []}
           doctors={doctorList || []}
+          scannedFiles={scannedFiles || []}
           onAdd={() => setModalType('appointment')}
         />
       )}
@@ -569,7 +571,7 @@ function DoctorsTab({ profileId, doctors: doctorList, onAdd }: { profileId: stri
 }
 
 // Appointments Tab
-function AppointmentsTab({ profileId, appointments: appointmentList, doctors: doctorList, onAdd }: { profileId: string; appointments: any[]; doctors: any[]; onAdd: () => void }) {
+function AppointmentsTab({ profileId, appointments: appointmentList, doctors: doctorList, scannedFiles, onAdd }: { profileId: string; appointments: any[]; doctors: any[]; scannedFiles: ScannedFile[]; onAdd: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
@@ -589,8 +591,25 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
     },
   });
 
+  const now = new Date();
+  const upcomingIn30Days = appointmentList.filter(a => {
+    if (a.status !== 'scheduled') return false;
+    const d = new Date(a.scheduled_date);
+    const diffDays = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 30;
+  });
+  const unprocessedFiles = scannedFiles.filter(f => f.status === 'new');
+  const showAvsNudge = upcomingIn30Days.length > 0 && unprocessedFiles.length > 0;
+
   return (
     <div className="space-y-4">
+      {showAvsNudge && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+          <span className="font-medium">Heads up:</span> You have {upcomingIn30Days.length === 1 ? 'an appointment' : `${upcomingIn30Days.length} appointments`} in the next 30 days and{' '}
+          {unprocessedFiles.length === 1 ? '1 unprocessed document' : `${unprocessedFiles.length} unprocessed documents`} in your AVS folder.
+          {' '}<span className="font-medium">Process them now</span> to keep your profile current before your visit.
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-900">Appointments</h3>
         <Button size="sm" onClick={onAdd} disabled={doctorList.length === 0}>
@@ -844,6 +863,7 @@ function DocumentsTab({ profileId, files, appointments: appointmentList }: { pro
         <h3 className="font-semibold text-gray-900">Documents</h3>
         <span className="text-sm text-gray-500">
           Scanning <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">data/avs/</code>
+          <span className="ml-2 text-xs text-gray-400">· auto-refreshes every 30s</span>
         </span>
       </div>
 
