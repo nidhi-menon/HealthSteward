@@ -17,6 +17,7 @@ import type {
   LabOrder,
   Referral,
   ActionItems,
+  VitalsAlert,
 } from '../types';
 
 const API_BASE = '/api';
@@ -197,6 +198,10 @@ export const actionItems = {
     }),
   upcomingWithoutPrep: (profileId: string) =>
     request<Appointment[]>(`/profiles/${profileId}/upcoming-without-prep`),
+  vitalsAlerts: (profileId: string) =>
+    request<VitalsAlert[]>(`/profiles/${profileId}/vitals-alerts`),
+  completedWithoutAvs: (profileId: string) =>
+    request<Appointment[]>(`/profiles/${profileId}/completed-without-avs`),
 };
 
 // Visit Prep

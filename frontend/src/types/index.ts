@@ -249,6 +249,15 @@ export interface Referral {
   created_at: string;
 }
 
+export interface VitalsAlert {
+  metric: string;
+  message: string;
+  direction: 'up' | 'down';
+  oldest_value: string;
+  newest_value: string;
+  visit_count: number;
+}
+
 export interface ActionItems {
   follow_ups: FollowUp[];
   lab_orders: LabOrder[];
