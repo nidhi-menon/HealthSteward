@@ -512,6 +512,13 @@ Oncology → Relevant to all
 
 **Reasoning:** The post-AVS panel is the highest-leverage nudge because it fires when the patient is already engaged. The overview section catches items that accumulated from past visits. Both are pure additions on top of existing data — no new schema, no scheduler. The snooze/action-completed loop and scheduled notifications are the right long-term direction but require new infrastructure; deferred to a follow-up iteration.
 
-**Status:** Decided (simple phase implemented)
+**Status:** Decided (simple phase complete; medium phase — snooze/completion — implemented 2026-07-05)
+
+**Medium Phase (2026-07-05):** Implemented snooze and completion state:
+
+- **`snoozed_until` + `completed_at`** added to `FollowUp`, `LabOrder`, `Referral` — with Alembic migration
+- **`NudgeState` table** — persists snooze state for computed nudges (upcoming-without-prep, past-due appointments, completed-without-avs, vitals alerts) that have no row to attach state to
+- **Backend filtering** — list endpoints now exclude completed and actively-snoozed items by default; PATCH endpoints auto-stamp `completed_at` on status transition
+- **Frontend** — all action items now have a "Snooze 1w" secondary button alongside the existing primary action button; `ActionItemsSection` queries no longer pass explicit status filters (the backend handles it)
 
 *Last updated: 2026-07-05*
