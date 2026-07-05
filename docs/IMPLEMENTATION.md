@@ -7,6 +7,8 @@ This document tracks implementation details, architectural decisions, and how co
 ## Table of Contents
 - [Project Overview](#project-overview)
 - [Phase 1: Health Profile + Visit Prep](#phase-1-health-profile--visit-prep)
+- [Phase 2: AVS PDF Processing](#phase-2-avs-pdf-processing)
+- [Phase 3: Proactive Action Items](#phase-3-proactive-action-items)
 - [Architecture](#architecture)
 - [Component Deep Dives](#component-deep-dives)
 - [API Reference](#api-reference)
@@ -92,6 +94,95 @@ docs/
 | **Profile-nested routes** | `/api/profiles/{id}/conditions/` naturally enforces data ownership |
 | **Conversation logging** | Every Claude call logged with token counts for future model distillation |
 | **JSON response parsing with fallback** | Robust handling: direct parse → code block extraction → raw text |
+
+---
+
+## Phase 2: AVS PDF Processing
+
+**Completed:** 2026-06 (see DEC-010)
+
+### What Was Built
+
+Local-first processing of After-Visit Summary PDFs:
+1. Drop PDFs into `data/avs/` and scan for new files via API
+2. Parse with Ollama (local LLM) — deterministic section routing for structured sections, LLM for unstructured
+3. Review parsed results and selectively apply to the health profile
+4. Extracted models: Vitals, LabOrder, Referral, FollowUp (persisted to DB)
+
+### Files Added
+
+```
+src/
+├── utils/
+│   ├── anonymization.py      # Three-layer PII scrubbing before external LLM calls
+│   └── context_selection.py  # Four-stage context selection for visit prep
+├── api/
+│   └── documents.py          # /api/profiles/{id}/documents/* — scan, parse, apply
+├── parsers/
+│   ├── __init__.py
+│   ├── avs_parser.py         # Orchestrator: section routing → structured + LLM parsers
+│   ├── structured_sections.py# Deterministic extractors for vitals, meds, diagnoses
+│   ├── llm_sections.py       # Ollama-backed extractors for free-text sections
+│   └── agent/
+│       ├── ollama_chat.py    # Ollama HTTP client with localhost safety check
+│       └── tools.py          # Structured output tool definitions
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Section-routing parser** | Deterministic for structured fields (vitals, ICD codes), Ollama only where needed |
+| **Localhost safety check** | `_check_localhost()` blocks any non-localhost Ollama URL — PHI never leaves the machine |
+| **Selective apply** | User reviews and approves each parsed item before it's written to the profile |
+| **Apply returns action items** | Apply endpoint returns extracted FollowUp/LabOrder/Referral inline — avoids a second fetch |
+
+---
+
+## Phase 3: Proactive Action Items
+
+**Completed:** 2026-07 (see DEC-012)
+
+### What Was Built
+
+Proactive nudges surfaced from existing profile data — no new data entry required:
+1. **Post-AVS panel** — shown immediately after applying an AVS; lists extracted follow-ups, lab orders, referrals with one-click confirmation
+2. **Overview action items section** — always-visible dashboard on the Overview tab
+
+### Nudge Types
+
+| Nudge | Trigger | Aging |
+|-------|---------|-------|
+| Visit prep needed | Scheduled appointment in next 30 days, no VisitPrep record | Days until appointment |
+| Appointments to close out | Past appointment still in `scheduled` status | Days since appointment |
+| Missing AVS | Completed appointment, no Document within 14-day window | — |
+| Vitals trends | ≥2 Vitals records; thresholds: weight ≥5 lbs, BMI ≥1.5, BP ≥10 mmHg, HR ≥10 bpm | Visit count |
+| Follow-up appointments | FollowUp records in `pending` status | Fraction of timeframe elapsed; red if overdue |
+| Lab orders | LabOrder records in `ordered` status | Stale after 21 days; warning if next appt ≤21 days |
+| Referrals | Referral records in `pending` status | Stale after 60 days |
+
+### Files Added
+
+```
+src/
+├── api/
+│   └── action_items.py       # GET/PATCH endpoints for follow-ups, lab orders, referrals,
+│                             # vitals alerts, upcoming-without-prep, completed-without-avs
+
+frontend/src/
+├── components/
+│   ├── PostAvsActionPanel.tsx # Amber panel shown after AVS apply; quick-confirm buttons
+│   └── ActionItemsSection.tsx # Overview tab dashboard; all nudge types with badge counts
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Client-side past-due computation** | Past appointments with `scheduled` status computed from appointment list — no extra endpoint |
+| **`timeframeToDays()` heuristic** | Parses free-text timeframes ("6 weeks", "3 months") to days for aging calculations |
+| **14-day proximity window** | Matches completed appointments to documents by visit_date proximity since the FK isn't always populated |
+| **`refetchInterval: 30_000`** | Documents tab auto-polls so scan results appear without manual refresh |
 
 ---
 
@@ -193,7 +284,11 @@ Seven tables with relationships:
 HealthProfile (1) ─────┬──── (*) Condition
                        ├──── (*) Medication
                        ├──── (*) Doctor ──── (*) Appointment
-                       └──── (*) Appointment ──── (1) VisitPrep
+                       ├──── (*) Appointment ──── (1) VisitPrep
+                       ├──── (*) Document ──── (*) Vitals
+                       │                  ──── (*) LabOrder
+                       │                  ──── (*) Referral
+                       └──── (*) FollowUp
 
 ConversationLog (standalone - for AI training data)
 ```
@@ -308,6 +403,27 @@ Expected Claude response format:
 | POST | `/api/visits/{appt_id}/prepare` | Generate visit prep (calls Claude) |
 | GET | `/api/visits/{appt_id}/prep` | Get existing visit prep |
 
+### Documents
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/profiles/{id}/documents/scan` | Scan `data/avs/` for new PDFs |
+| POST | `/api/profiles/{id}/documents/parse-file` | Parse a PDF with Ollama |
+| GET | `/api/profiles/{id}/documents/{doc_id}/parsed` | Get parsed items |
+| POST | `/api/profiles/{id}/documents/{doc_id}/apply` | Apply selected items to profile |
+
+### Action Items
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/profiles/{id}/follow-ups` | List follow-ups (optional `?status=`) |
+| PATCH | `/api/profiles/{id}/follow-ups/{fid}` | Update follow-up status |
+| GET | `/api/profiles/{id}/lab-orders` | List lab orders |
+| PATCH | `/api/profiles/{id}/lab-orders/{lid}` | Update lab order status |
+| GET | `/api/profiles/{id}/referrals` | List referrals |
+| PATCH | `/api/profiles/{id}/referrals/{rid}` | Update referral status |
+| GET | `/api/profiles/{id}/upcoming-without-prep` | Appointments in next 30 days with no VisitPrep |
+| GET | `/api/profiles/{id}/vitals-alerts` | Trend alerts across Vitals records |
+| GET | `/api/profiles/{id}/completed-without-avs` | Completed appointments missing a document |
+
 ---
 
 ## Testing Strategy
@@ -341,30 +457,27 @@ pytest tests/ -v -k visit  # Only visit prep tests
 
 ## Future Phases
 
-### Phase 2: Calendar Integration
+### Next: Action Item Persistence (medium complexity, deferred — see DEC-012)
+- Snooze / mark-completed state for nudges (new DB model + migration)
+- Scheduled/repeated nudges via APScheduler
+- 6-month lookahead for appointment scheduling from free-text timeframes
+
+### Calendar Integration
 - Google Calendar sync
 - Apple Calendar support (macOS)
 - Appointment reminders
 
-### Phase 3: After-Visit PDF Processing
-- Upload PDFs from patient portals
-- Extract text (pdfplumber / Claude Vision / OCR)
-- LLM parses: new conditions, medication changes, vitals, lab results
-- User reviews & confirms before adding to profile
-- Encrypted PDF storage (local or cloud)
-- See DEC-005 in DECISIONS.md for full details
-
-### Phase 4: RAG for Health Documents
+### RAG for Health Documents
 - ChromaDB vector store
 - Search across all uploaded documents
 - Context-aware health queries
 
-### Phase 5: Medication Reminders
+### Medication Reminders
 - Redis for task queue
 - Scheduled reminder notifications
 - Medication interaction checks
 
-### Phase 6: Local Model Distillation
+### Local Model Distillation
 - Use ConversationLog data for fine-tuning
 - Deploy smaller local model
 - Reduce API costs
@@ -440,20 +553,22 @@ pytest tests/ -v -k visit  # Only visit prep tests
 frontend/
 ├── src/
 │   ├── api/
-│   │   └── client.ts         # API client with typed methods
+│   │   └── client.ts              # API client with typed methods
 │   ├── components/
-│   │   ├── Layout.tsx        # App shell with nav
-│   │   ├── Button.tsx        # Reusable button variants
-│   │   ├── Card.tsx          # Card components
-│   │   ├── Input.tsx         # Form inputs
-│   │   └── Modal.tsx         # Modal dialog
+│   │   ├── Layout.tsx             # App shell with nav
+│   │   ├── Button.tsx             # Reusable button variants
+│   │   ├── Card.tsx               # Card components
+│   │   ├── Input.tsx              # Form inputs
+│   │   ├── Modal.tsx              # Modal dialog
+│   │   ├── PostAvsActionPanel.tsx # Post-apply panel: extracted follow-ups/labs/referrals
+│   │   └── ActionItemsSection.tsx # Overview tab: all proactive nudge types
 │   ├── pages/
-│   │   ├── ProfileList.tsx   # List/create profiles
-│   │   ├── ProfileDetail.tsx # Profile with tabs for health data
-│   │   └── VisitPrep.tsx     # AI visit preparation
+│   │   ├── ProfileList.tsx        # List/create profiles
+│   │   ├── ProfileDetail.tsx      # Profile with tabs for health data
+│   │   └── VisitPrep.tsx          # AI visit preparation
 │   ├── types/
-│   │   └── index.ts          # TypeScript interfaces
-│   ├── App.tsx               # Routes and providers
+│   │   └── index.ts               # TypeScript interfaces
+│   ├── App.tsx                    # Routes and providers
 │   └── index.css             # Tailwind import
 ├── vite.config.ts            # Vite + Tailwind + proxy config
 └── package.json
@@ -547,4 +662,4 @@ Then open http://localhost:3000
 
 ---
 
-*Last updated: 2026-02-05 (Phase 1 + Frontend complete)*
+*Last updated: 2026-07-05 (Phase 3: Proactive Action Items complete)*
