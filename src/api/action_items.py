@@ -2,18 +2,44 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.database import get_db
 from pydantic import BaseModel
 
-from src.data.models import Appointment, Document, FollowUp, LabOrder, Referral, VisitPrep, Vitals
-from src.models.schemas import AppointmentResponse, FollowUpResponse, LabOrderResponse, ReferralResponse
+from src.data.models import Appointment, Document, FollowUp, LabOrder, NudgeState, Referral, VisitPrep, Vitals
+from src.models.schemas import (
+    AppointmentResponse,
+    FollowUpResponse,
+    LabOrderResponse,
+    NudgeStateCreate,
+    NudgeStateResponse,
+    ReferralResponse,
+)
 
 router = APIRouter(prefix="/api/profiles/{profile_id}", tags=["action-items"])
 
+# Statuses that mean the item is resolved (exclude from active lists)
+_COMPLETED_STATUSES = {"completed", "booked", "scheduled", "done", "cancelled"}
+
+
+def _is_active(item) -> bool:
+    """True if item should appear in the action items list."""
+    if item.status in _COMPLETED_STATUSES:
+        return False
+    now = datetime.now(timezone.utc)
+    if item.snoozed_until:
+        snoozed = item.snoozed_until
+        if snoozed.tzinfo is None:
+            snoozed = snoozed.replace(tzinfo=timezone.utc)
+        if snoozed > now:
+            return False
+    return True
+
+
+# ── Follow-ups ────────────────────────────────────────────────────────────────
 
 @router.get("/follow-ups", response_model=list[FollowUpResponse])
 async def list_follow_ups(
@@ -26,11 +52,14 @@ async def list_follow_ups(
         query = query.where(FollowUp.status == status)
     query = query.order_by(FollowUp.created_at.desc())
     result = await db.execute(query)
-    return result.scalars().all()
+    items = result.scalars().all()
+    if not status:
+        items = [i for i in items if _is_active(i)]
+    return items
 
 
 @router.patch("/follow-ups/{follow_up_id}", response_model=FollowUpResponse)
-async def update_follow_up_status(
+async def update_follow_up(
     profile_id: str,
     follow_up_id: str,
     body: dict,
@@ -39,16 +68,23 @@ async def update_follow_up_status(
     result = await db.execute(
         select(FollowUp).where(FollowUp.id == follow_up_id, FollowUp.profile_id == profile_id)
     )
-    follow_up = result.scalar_one_or_none()
-    if not follow_up:
-        from fastapi import HTTPException
+    item = result.scalar_one_or_none()
+    if not item:
         raise HTTPException(status_code=404, detail="Follow-up not found")
-    if "status" in body:
-        follow_up.status = body["status"]
-    await db.commit()
-    await db.refresh(follow_up)
-    return follow_up
 
+    if "status" in body:
+        item.status = body["status"]
+        if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
+            item.completed_at = datetime.now(timezone.utc)
+    if "snoozed_until" in body:
+        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"]) if body["snoozed_until"] else None
+
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+# ── Lab orders ────────────────────────────────────────────────────────────────
 
 @router.get("/lab-orders", response_model=list[LabOrderResponse])
 async def list_lab_orders(
@@ -61,11 +97,14 @@ async def list_lab_orders(
         query = query.where(LabOrder.status == status)
     query = query.order_by(LabOrder.created_at.desc())
     result = await db.execute(query)
-    return result.scalars().all()
+    items = result.scalars().all()
+    if not status:
+        items = [i for i in items if _is_active(i)]
+    return items
 
 
 @router.patch("/lab-orders/{lab_order_id}", response_model=LabOrderResponse)
-async def update_lab_order_status(
+async def update_lab_order(
     profile_id: str,
     lab_order_id: str,
     body: dict,
@@ -74,16 +113,23 @@ async def update_lab_order_status(
     result = await db.execute(
         select(LabOrder).where(LabOrder.id == lab_order_id, LabOrder.profile_id == profile_id)
     )
-    lab_order = result.scalar_one_or_none()
-    if not lab_order:
-        from fastapi import HTTPException
+    item = result.scalar_one_or_none()
+    if not item:
         raise HTTPException(status_code=404, detail="Lab order not found")
-    if "status" in body:
-        lab_order.status = body["status"]
-    await db.commit()
-    await db.refresh(lab_order)
-    return lab_order
 
+    if "status" in body:
+        item.status = body["status"]
+        if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
+            item.completed_at = datetime.now(timezone.utc)
+    if "snoozed_until" in body:
+        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"]) if body["snoozed_until"] else None
+
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+# ── Referrals ─────────────────────────────────────────────────────────────────
 
 @router.get("/referrals", response_model=list[ReferralResponse])
 async def list_referrals(
@@ -96,11 +142,14 @@ async def list_referrals(
         query = query.where(Referral.status == status)
     query = query.order_by(Referral.created_at.desc())
     result = await db.execute(query)
-    return result.scalars().all()
+    items = result.scalars().all()
+    if not status:
+        items = [i for i in items if _is_active(i)]
+    return items
 
 
 @router.patch("/referrals/{referral_id}", response_model=ReferralResponse)
-async def update_referral_status(
+async def update_referral(
     profile_id: str,
     referral_id: str,
     body: dict,
@@ -109,16 +158,68 @@ async def update_referral_status(
     result = await db.execute(
         select(Referral).where(Referral.id == referral_id, Referral.profile_id == profile_id)
     )
-    referral = result.scalar_one_or_none()
-    if not referral:
-        from fastapi import HTTPException
+    item = result.scalar_one_or_none()
+    if not item:
         raise HTTPException(status_code=404, detail="Referral not found")
-    if "status" in body:
-        referral.status = body["status"]
-    await db.commit()
-    await db.refresh(referral)
-    return referral
 
+    if "status" in body:
+        item.status = body["status"]
+        if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
+            item.completed_at = datetime.now(timezone.utc)
+    if "snoozed_until" in body:
+        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"]) if body["snoozed_until"] else None
+
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+# ── Nudge states (snooze for computed nudges) ─────────────────────────────────
+
+@router.post("/nudge-states", response_model=NudgeStateResponse, status_code=200)
+async def upsert_nudge_state(
+    profile_id: str,
+    body: NudgeStateCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Upsert a snooze record for a computed nudge (appointment-based, vitals alerts)."""
+    result = await db.execute(
+        select(NudgeState).where(
+            NudgeState.profile_id == profile_id,
+            NudgeState.nudge_type == body.nudge_type,
+            NudgeState.item_id == body.item_id,
+        )
+    )
+    state = result.scalar_one_or_none()
+    if state:
+        state.snoozed_until = body.snoozed_until
+    else:
+        state = NudgeState(
+            profile_id=profile_id,
+            nudge_type=body.nudge_type,
+            item_id=body.item_id,
+            snoozed_until=body.snoozed_until,
+        )
+        db.add(state)
+    await db.commit()
+    await db.refresh(state)
+    return state
+
+
+async def _snoozed_item_ids(db: AsyncSession, profile_id: str, nudge_type: str) -> set[str]:
+    """Return item_ids that are currently snoozed for this nudge_type."""
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(NudgeState).where(
+            NudgeState.profile_id == profile_id,
+            NudgeState.nudge_type == nudge_type,
+            NudgeState.snoozed_until > now,
+        )
+    )
+    return {s.item_id for s in result.scalars().all()}
+
+
+# ── Upcoming appointments without prep ────────────────────────────────────────
 
 @router.get("/upcoming-without-prep", response_model=list[AppointmentResponse])
 async def upcoming_appointments_without_prep(
@@ -140,8 +241,12 @@ async def upcoming_appointments_without_prep(
     )
     upcoming = appt_result.scalars().all()
 
+    snoozed = await _snoozed_item_ids(db, profile_id, "upcoming_without_prep")
+
     without_prep = []
     for appt in upcoming:
+        if appt.id in snoozed:
+            continue
         prep_result = await db.execute(
             select(VisitPrep).where(VisitPrep.appointment_id == appt.id)
         )
@@ -187,10 +292,14 @@ async def vitals_alerts(
     if len(all_vitals) < 2:
         return []
 
+    snoozed = await _snoozed_item_ids(db, profile_id, "vitals_alert")
+
     alerts: list[VitalsAlert] = []
 
     def check_metric(label: str, values: list[tuple[float, str]]) -> None:
         if len(values) < 2:
+            return
+        if label in snoozed:
             return
         oldest_val, oldest_raw = values[0]
         newest_val, newest_raw = values[-1]
@@ -274,17 +383,16 @@ async def completed_appointments_without_avs(
         )
     )
     parsed_docs = doc_result.scalars().all()
+    snoozed = await _snoozed_item_ids(db, profile_id, "completed_without_avs")
 
     without_avs = []
     for appt in completed:
+        if appt.id in snoozed:
+            continue
         appt_date = appt.scheduled_date.date() if appt.scheduled_date else None
         if not appt_date:
             continue
-        # Look for any parsed document within 14 days of the appointment
-        has_doc = any(
-            _doc_near_appointment(doc, appt_date)
-            for doc in parsed_docs
-        )
+        has_doc = any(_doc_near_appointment(doc, appt_date) for doc in parsed_docs)
         if not has_doc:
             without_avs.append(appt)
 
@@ -295,7 +403,6 @@ def _parse_date_flexible(date_str: str | None):
     """Try common date formats, return date or None."""
     if not date_str:
         return None
-    from datetime import date as date_type
     for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y"):
         try:
             return datetime.strptime(date_str.strip(), fmt).date()

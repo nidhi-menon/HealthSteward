@@ -9,8 +9,6 @@ interface Props {
   onDismiss: () => void;
 }
 
-// Parse a free-text timeframe like "3 months", "6 weeks", "1 year" into days.
-// Returns null if unparseable.
 function timeframeToDays(timeframe: string): number | null {
   const t = timeframe.toLowerCase();
   const match = t.match(/(\d+)\s*(day|week|month|year)/);
@@ -24,7 +22,6 @@ function timeframeToDays(timeframe: string): number | null {
   return null;
 }
 
-// Returns true if the follow-up timeframe is within 6 months.
 function isUrgentFollowUp(fu: FollowUp): boolean {
   if (fu.timeframe) {
     const days = timeframeToDays(fu.timeframe);
@@ -33,7 +30,6 @@ function isUrgentFollowUp(fu: FollowUp): boolean {
   return false;
 }
 
-// Find the soonest upcoming appointment (future, scheduled status).
 function soonestUpcomingAppointment(appointments: Appointment[]): Appointment | null {
   const now = new Date();
   const future = appointments
@@ -42,10 +38,14 @@ function soonestUpcomingAppointment(appointments: Appointment[]): Appointment | 
   return future[0] ?? null;
 }
 
-// Days until a date string.
 function daysUntil(dateStr: string): number {
-  const diff = new Date(dateStr).getTime() - Date.now();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function snoozeDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString();
 }
 
 export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointments, onDismiss }: Props) {
@@ -53,22 +53,28 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
   const nextAppt = soonestUpcomingAppointment(upcomingAppointments);
   const daysToAppt = nextAppt ? daysUntil(nextAppt.scheduled_date) : null;
 
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
+  };
+
   const followUpMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      actionItemsApi.updateFollowUp(profileId, id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['followUps', profileId] }),
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof actionItemsApi.updateFollowUp>[2] }) =>
+      actionItemsApi.updateFollowUp(profileId, id, body),
+    onSuccess: invalidate,
   });
 
   const labMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      actionItemsApi.updateLabOrder(profileId, id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] }),
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof actionItemsApi.updateLabOrder>[2] }) =>
+      actionItemsApi.updateLabOrder(profileId, id, body),
+    onSuccess: invalidate,
   });
 
   const referralMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      actionItemsApi.updateReferral(profileId, id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['referrals', profileId] }),
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof actionItemsApi.updateReferral>[2] }) =>
+      actionItemsApi.updateReferral(profileId, id, body),
+    onSuccess: invalidate,
   });
 
   const pendingFollowUps = actionItems.follow_ups.filter(f => f.status === 'pending');
@@ -96,7 +102,7 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
         <div className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-800">Follow-up appointments</h4>
           {pendingFollowUps.map(fu => (
-            <div key={fu.id} className="flex items-start justify-between gap-3 bg-white rounded border border-amber-100 px-3 py-2">
+            <div key={fu.id} className="flex items-start justify-between gap-2 bg-white rounded border border-amber-100 px-3 py-2">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-800">{fu.description}</p>
                 {fu.timeframe && (
@@ -106,13 +112,22 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
                   </p>
                 )}
               </div>
-              <button
-                onClick={() => followUpMutation.mutate({ id: fu.id, status: 'booked' })}
-                disabled={followUpMutation.isPending}
-                className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 flex-shrink-0"
-              >
-                Booked
-              </button>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => followUpMutation.mutate({ id: fu.id, body: { snoozed_until: snoozeDate() } })}
+                  disabled={followUpMutation.isPending}
+                  className="text-xs px-2 py-1 text-gray-500 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Snooze 1w
+                </button>
+                <button
+                  onClick={() => followUpMutation.mutate({ id: fu.id, body: { status: 'booked' } })}
+                  disabled={followUpMutation.isPending}
+                  className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Booked
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -130,20 +145,29 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
             )}
           </h4>
           {pendingLabs.map(lab => (
-            <div key={lab.id} className="flex items-center justify-between gap-3 bg-white rounded border border-amber-100 px-3 py-2">
+            <div key={lab.id} className="flex items-center justify-between gap-2 bg-white rounded border border-amber-100 px-3 py-2">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-800">{lab.test_name}</p>
                 {lab.ordered_date && (
                   <p className="text-xs text-gray-500 mt-0.5">Ordered {lab.ordered_date}</p>
                 )}
               </div>
-              <button
-                onClick={() => labMutation.mutate({ id: lab.id, status: 'completed' })}
-                disabled={labMutation.isPending}
-                className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 flex-shrink-0"
-              >
-                Done
-              </button>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => labMutation.mutate({ id: lab.id, body: { snoozed_until: snoozeDate() } })}
+                  disabled={labMutation.isPending}
+                  className="text-xs px-2 py-1 text-gray-500 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Snooze 1w
+                </button>
+                <button
+                  onClick={() => labMutation.mutate({ id: lab.id, body: { status: 'completed' } })}
+                  disabled={labMutation.isPending}
+                  className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -154,18 +178,27 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
         <div className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-800">Referrals to schedule</h4>
           {pendingReferrals.map(ref => (
-            <div key={ref.id} className="flex items-start justify-between gap-3 bg-white rounded border border-amber-100 px-3 py-2">
+            <div key={ref.id} className="flex items-start justify-between gap-2 bg-white rounded border border-amber-100 px-3 py-2">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-800">{ref.specialty}{ref.provider_name ? ` — ${ref.provider_name}` : ''}</p>
                 {ref.reason && <p className="text-xs text-gray-500 mt-0.5">{ref.reason}</p>}
               </div>
-              <button
-                onClick={() => referralMutation.mutate({ id: ref.id, status: 'scheduled' })}
-                disabled={referralMutation.isPending}
-                className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 flex-shrink-0"
-              >
-                Scheduled
-              </button>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => referralMutation.mutate({ id: ref.id, body: { snoozed_until: snoozeDate() } })}
+                  disabled={referralMutation.isPending}
+                  className="text-xs px-2 py-1 text-gray-500 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Snooze 1w
+                </button>
+                <button
+                  onClick={() => referralMutation.mutate({ id: ref.id, body: { status: 'scheduled' } })}
+                  disabled={referralMutation.isPending}
+                  className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Scheduled
+                </button>
+              </div>
             </div>
           ))}
         </div>

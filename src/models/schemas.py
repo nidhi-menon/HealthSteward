@@ -428,6 +428,8 @@ class LabOrderResponse(BaseModel):
     test_name: str
     ordered_date: Optional[str] = None
     status: str
+    snoozed_until: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     created_at: datetime
 
 
@@ -441,6 +443,8 @@ class ReferralResponse(BaseModel):
     provider_name: Optional[str] = None
     reason: Optional[str] = None
     status: str
+    snoozed_until: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     created_at: datetime
 
 
@@ -454,4 +458,22 @@ class FollowUpResponse(BaseModel):
     timeframe: Optional[str] = None
     target_date: Optional[str] = None
     status: str
+    snoozed_until: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     created_at: datetime
+
+
+class NudgeStateCreate(BaseModel):
+    nudge_type: str
+    item_id: str
+    snoozed_until: datetime
+
+
+class NudgeStateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    profile_id: str
+    nudge_type: str
+    item_id: str
+    snoozed_until: datetime
