@@ -1,11 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { actionItems as actionItemsApi } from '../api/client';
 import { Card, CardHeader, CardContent } from './Card';
-import type { Appointment } from '../types';
+import { useNavigate } from 'react-router-dom';
+import type { Appointment, Doctor } from '../types';
 
 interface Props {
   profileId: string;
   appointments: Appointment[];
+  doctors: Doctor[];
 }
 
 function daysUntil(dateStr: string): number {
@@ -20,7 +22,8 @@ function soonestUpcomingAppointment(appointments: Appointment[]): Appointment | 
   return future[0] ?? null;
 }
 
-export function ActionItemsSection({ profileId, appointments }: Props) {
+export function ActionItemsSection({ profileId, appointments, doctors }: Props) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: followUps = [] } = useQuery({
@@ -38,6 +41,12 @@ export function ActionItemsSection({ profileId, appointments }: Props) {
   const { data: referrals = [] } = useQuery({
     queryKey: ['referrals', profileId],
     queryFn: () => actionItemsApi.listReferrals(profileId, 'pending'),
+    enabled: !!profileId,
+  });
+
+  const { data: unpreparedAppointments = [] } = useQuery({
+    queryKey: ['upcomingWithoutPrep', profileId],
+    queryFn: () => actionItemsApi.upcomingWithoutPrep(profileId),
     enabled: !!profileId,
   });
 
@@ -59,7 +68,7 @@ export function ActionItemsSection({ profileId, appointments }: Props) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['referrals', profileId] }),
   });
 
-  const total = followUps.length + labOrders.length + referrals.length;
+  const total = followUps.length + labOrders.length + referrals.length + unpreparedAppointments.length;
   if (total === 0) return null;
 
   const nextAppt = soonestUpcomingAppointment(appointments);
@@ -74,6 +83,33 @@ export function ActionItemsSection({ profileId, appointments }: Props) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+
+        {unpreparedAppointments.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-800">Visit prep needed</p>
+            {unpreparedAppointments.map(appt => {
+              const doctor = doctors.find(d => d.id === appt.doctor_id);
+              const label = doctor ? doctor.name : appt.purpose || 'Appointment';
+              const days = daysUntil(appt.scheduled_date);
+              return (
+                <div key={appt.id} className="flex items-center justify-between gap-3 bg-white rounded border border-orange-100 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800">{label}</p>
+                    <p className="text-xs text-orange-600 font-medium mt-0.5">
+                      in {days} day{days !== 1 ? 's' : ''} — no prep generated yet
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/profiles/${profileId}/appointments/${appt.id}/prep`)}
+                    className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex-shrink-0"
+                  >
+                    Prepare
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {followUps.length > 0 && (
           <div className="space-y-2">

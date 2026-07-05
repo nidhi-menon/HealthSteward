@@ -51,6 +51,7 @@ export default function VisitPrep() {
     mutationFn: () => visitPrep.prepare(appointmentId!, additionalConcerns || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['visitPrep', appointmentId] });
+      queryClient.invalidateQueries({ queryKey: ['upcomingWithoutPrep', profileId] });
     },
   });
 
