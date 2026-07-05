@@ -131,7 +131,7 @@ export default function ProfileDetail() {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <OverviewTab profile={profile} profileId={profileId!} />
+        <OverviewTab profile={profile} profileId={profileId!} appointments={appointmentList || []} />
       )}
 
       {activeTab === 'conditions' && (
@@ -212,10 +212,10 @@ export default function ProfileDetail() {
 }
 
 // Overview Tab
-function OverviewTab({ profile, profileId }: { profile: any; profileId: string }) {
+function OverviewTab({ profile, profileId, appointments }: { profile: any; profileId: string; appointments: Appointment[] }) {
   return (
     <div className="space-y-6">
-    <ActionItemsSection profileId={profileId} />
+    <ActionItemsSection profileId={profileId} appointments={appointments} />
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
         <CardHeader>
