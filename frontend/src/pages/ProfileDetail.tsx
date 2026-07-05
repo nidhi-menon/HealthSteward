@@ -9,7 +9,9 @@ import { Modal, DeleteConfirmModal } from '../components/Modal';
 import { Input, Textarea, Select, MonthYearInput, DatePicker } from '../components/Input';
 import { DocumentCard } from '../components/DocumentCard';
 import { ParsedItemsReview } from '../components/ParsedItemsReview';
-import type { Condition, ConditionCreate, Medication, MedicationCreate, Doctor, DoctorCreate, Appointment, AppointmentCreate, ScannedFile, ParsedItemsResponse, ApplyItemsRequest } from '../types';
+import { PostAvsActionPanel } from '../components/PostAvsActionPanel';
+import { ActionItemsSection } from '../components/ActionItemsSection';
+import type { Condition, ConditionCreate, Medication, MedicationCreate, Doctor, DoctorCreate, Appointment, AppointmentCreate, ScannedFile, ParsedItemsResponse, ApplyItemsRequest, ActionItems } from '../types';
 
 type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments' | 'documents';
 
@@ -128,7 +130,7 @@ export default function ProfileDetail() {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <OverviewTab profile={profile} />
+        <OverviewTab profile={profile} profileId={profileId!} />
       )}
 
       {activeTab === 'conditions' && (
@@ -168,6 +170,7 @@ export default function ProfileDetail() {
         <DocumentsTab
           profileId={profileId!}
           files={scannedFiles || []}
+          appointments={appointmentList || []}
         />
       )}
 
@@ -207,8 +210,10 @@ export default function ProfileDetail() {
 }
 
 // Overview Tab
-function OverviewTab({ profile }: { profile: any }) {
+function OverviewTab({ profile, profileId }: { profile: any; profileId: string }) {
   return (
+    <div className="space-y-6">
+    <ActionItemsSection profileId={profileId} />
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
         <CardHeader>
@@ -231,6 +236,7 @@ function OverviewTab({ profile }: { profile: any }) {
           <InfoRow label="Phone" value={profile.emergency_contact_phone || '-'} />
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
@@ -710,7 +716,7 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
 // Documents Tab
 type DocView = 'list' | 'review';
 
-function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedFile[] }) {
+function DocumentsTab({ profileId, files, appointments: appointmentList }: { profileId: string; files: ScannedFile[]; appointments: Appointment[] }) {
   const queryClient = useQueryClient();
   const [view, setView] = useState<DocView>('list');
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
@@ -718,6 +724,7 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
   const [parseError, setParseError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parsingFilename, setParsingFilename] = useState<string | null>(null);
+  const [postAvsItems, setPostAvsItems] = useState<ActionItems | null>(null);
 
   const handleParse = async (filename: string, documentId: string | null) => {
     setIsParsing(true);
@@ -781,15 +788,24 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
 
   const applyMutation = useMutation({
     mutationFn: (items: ApplyItemsRequest) => documents.applyItems(profileId, activeDocId!, items),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
       queryClient.invalidateQueries({ queryKey: ['medications', profileId] });
       queryClient.invalidateQueries({ queryKey: ['doctors', profileId] });
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
       queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
       setParsedData(null);
       setActiveDocId(null);
       setView('list');
+      if (result.action_items) {
+        const { follow_ups, lab_orders, referrals } = result.action_items;
+        if (follow_ups.length || lab_orders.length || referrals.length) {
+          setPostAvsItems(result.action_items);
+        }
+      }
     },
   });
 
@@ -815,6 +831,15 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
   // List view
   return (
     <div className="space-y-4">
+      {postAvsItems && (
+        <PostAvsActionPanel
+          profileId={profileId}
+          actionItems={postAvsItems}
+          upcomingAppointments={appointmentList}
+          onDismiss={() => setPostAvsItems(null)}
+        />
+      )}
+
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-900">Documents</h3>
         <span className="text-sm text-gray-500">

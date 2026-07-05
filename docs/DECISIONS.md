@@ -485,4 +485,33 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-02-15*
+---
+
+### DEC-012: Patient Disengagement — Proactive Action Item Surfacing
+
+**Date:** 2026-07-05
+
+**Topic:** Addressing patient disengagement through timely nudges from parsed AVS data
+
+**Context:** HealthSteward assumes an engaged patient. Once data is in the system, pending follow-ups, lab orders, and referrals are stored in the database but never surfaced proactively — they only appear if the patient navigates to them. The system needed to close the loop between "document parsed" and "patient acts on what the doctor ordered."
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A. Post-AVS action panel (simple)** | Shown at moment of engagement, no new infra | Requires patient to be in the app |
+| **B. Persistent overview section (simple)** | Always visible, cross-visit accumulation | Passive — still requires patient to notice |
+| **C. Scheduled push notifications (medium)** | Genuinely proactive, reaches disengaged patient | Requires scheduler, conflicts with local-first arch |
+| **D. Snooze/action-completed nudge loop (medium)** | Best UX, persistent until resolved | New state model + migrations needed |
+
+**Decision:** Implement A and B first as the foundation. C and D deferred.
+
+- **Post-AVS action panel** — after the patient confirms parsed items, show a summary of what needs action: follow-ups to book (nudging immediately if timeframe ≤ 6 months), lab orders to get done (with reminder if an upcoming appointment exists), referrals to schedule. This surfaces nudges at the highest-engagement moment.
+- **Overview tab action items** — a persistent "Needs Attention" section showing pending follow-ups, lab orders, and referrals across all documents parsed for the profile.
+- **Backend API** — new endpoints for listing and updating status of follow-ups, lab orders, and referrals (previously stored but never queryable).
+
+**Reasoning:** The post-AVS panel is the highest-leverage nudge because it fires when the patient is already engaged. The overview section catches items that accumulated from past visits. Both are pure additions on top of existing data — no new schema, no scheduler. The snooze/action-completed loop and scheduled notifications are the right long-term direction but require new infrastructure; deferred to a follow-up iteration.
+
+**Status:** Decided (simple phase implemented)
+
+*Last updated: 2026-07-05*
