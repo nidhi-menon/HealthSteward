@@ -7,7 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.database import get_db
-from src.data.models import Appointment, FollowUp, LabOrder, Referral, VisitPrep
+from pydantic import BaseModel
+
+from src.data.models import Appointment, Document, FollowUp, LabOrder, Referral, VisitPrep, Vitals
 from src.models.schemas import AppointmentResponse, FollowUpResponse, LabOrderResponse, ReferralResponse
 
 router = APIRouter(prefix="/api/profiles/{profile_id}", tags=["action-items"])
@@ -147,3 +149,164 @@ async def upcoming_appointments_without_prep(
             without_prep.append(appt)
 
     return without_prep
+
+
+# ── Vitals alerts ─────────────────────────────────────────────────────────────
+
+class VitalsAlert(BaseModel):
+    metric: str
+    message: str
+    direction: str   # "up" | "down"
+    oldest_value: str
+    newest_value: str
+    visit_count: int
+
+
+def _parse_numeric(value: str | None) -> float | None:
+    """Extract first numeric token from a string like '182 lbs' or '120/80'."""
+    if not value:
+        return None
+    try:
+        return float(value.split("/")[0].split()[0].replace(",", ""))
+    except (ValueError, IndexError):
+        return None
+
+
+@router.get("/vitals-alerts", response_model=list[VitalsAlert])
+async def vitals_alerts(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return alerts for meaningful trends in vitals across visits."""
+    result = await db.execute(
+        select(Vitals)
+        .where(Vitals.profile_id == profile_id)
+        .order_by(Vitals.measured_date)
+    )
+    all_vitals = result.scalars().all()
+    if len(all_vitals) < 2:
+        return []
+
+    alerts: list[VitalsAlert] = []
+
+    def check_metric(label: str, values: list[tuple[float, str]]) -> None:
+        if len(values) < 2:
+            return
+        oldest_val, oldest_raw = values[0]
+        newest_val, newest_raw = values[-1]
+        change = newest_val - oldest_val
+        pct = abs(change) / oldest_val * 100 if oldest_val else 0
+
+        if label == "Weight" and abs(change) >= 5:
+            direction = "up" if change > 0 else "down"
+            alerts.append(VitalsAlert(
+                metric=label,
+                message=f"Weight has {'increased' if change > 0 else 'decreased'} by {abs(change):.1f} lbs across {len(values)} visits",
+                direction=direction,
+                oldest_value=oldest_raw,
+                newest_value=newest_raw,
+                visit_count=len(values),
+            ))
+        elif label == "BMI" and abs(change) >= 1.5:
+            direction = "up" if change > 0 else "down"
+            alerts.append(VitalsAlert(
+                metric=label,
+                message=f"BMI has {'increased' if change > 0 else 'decreased'} by {abs(change):.1f} across {len(values)} visits",
+                direction=direction,
+                oldest_value=oldest_raw,
+                newest_value=newest_raw,
+                visit_count=len(values),
+            ))
+        elif label == "Systolic BP" and abs(change) >= 10:
+            direction = "up" if change > 0 else "down"
+            alerts.append(VitalsAlert(
+                metric=label,
+                message=f"Blood pressure has {'risen' if change > 0 else 'dropped'} by {abs(change):.0f} mmHg across {len(values)} visits",
+                direction=direction,
+                oldest_value=oldest_raw,
+                newest_value=newest_raw,
+                visit_count=len(values),
+            ))
+        elif label == "Heart Rate" and abs(change) >= 10:
+            direction = "up" if change > 0 else "down"
+            alerts.append(VitalsAlert(
+                metric=label,
+                message=f"Resting heart rate has {'increased' if change > 0 else 'decreased'} by {abs(change):.0f} bpm across {len(values)} visits",
+                direction=direction,
+                oldest_value=oldest_raw,
+                newest_value=newest_raw,
+                visit_count=len(values),
+            ))
+
+    weight_vals = [(n, v.weight) for v in all_vitals if (n := _parse_numeric(v.weight)) is not None]
+    bmi_vals = [(v.bmi, str(round(v.bmi, 1))) for v in all_vitals if v.bmi is not None]
+    bp_vals = [(n, v.blood_pressure) for v in all_vitals if (n := _parse_numeric(v.blood_pressure)) is not None]
+    hr_vals = [(n, v.heart_rate) for v in all_vitals if (n := _parse_numeric(v.heart_rate)) is not None]
+
+    check_metric("Weight", weight_vals)
+    check_metric("BMI", bmi_vals)
+    check_metric("Systolic BP", bp_vals)
+    check_metric("Heart Rate", hr_vals)
+
+    return alerts
+
+
+# ── Completed appointments without AVS ────────────────────────────────────────
+
+@router.get("/completed-without-avs", response_model=list[AppointmentResponse])
+async def completed_appointments_without_avs(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return completed appointments that have no parsed document near their visit date."""
+    appt_result = await db.execute(
+        select(Appointment).where(
+            Appointment.profile_id == profile_id,
+            Appointment.status == "completed",
+        ).order_by(Appointment.scheduled_date.desc())
+    )
+    completed = appt_result.scalars().all()
+
+    doc_result = await db.execute(
+        select(Document).where(
+            Document.profile_id == profile_id,
+            Document.parse_status == "completed",
+        )
+    )
+    parsed_docs = doc_result.scalars().all()
+
+    without_avs = []
+    for appt in completed:
+        appt_date = appt.scheduled_date.date() if appt.scheduled_date else None
+        if not appt_date:
+            continue
+        # Look for any parsed document within 14 days of the appointment
+        has_doc = any(
+            _doc_near_appointment(doc, appt_date)
+            for doc in parsed_docs
+        )
+        if not has_doc:
+            without_avs.append(appt)
+
+    return without_avs
+
+
+def _parse_date_flexible(date_str: str | None):
+    """Try common date formats, return date or None."""
+    if not date_str:
+        return None
+    from datetime import date as date_type
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.strptime(date_str.strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _doc_near_appointment(doc: Document, appt_date) -> bool:
+    """True if the document's visit_date is within 14 days of the appointment date."""
+    doc_date = _parse_date_flexible(doc.visit_date)
+    if not doc_date:
+        return False
+    return abs((doc_date - appt_date).days) <= 14
