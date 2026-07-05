@@ -1,12 +1,14 @@
-"""API endpoints for pending action items: follow-ups, lab orders, referrals."""
+"""API endpoints for pending action items: follow-ups, lab orders, referrals, prep nudges."""
+
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.database import get_db
-from src.data.models import FollowUp, LabOrder, Referral
-from src.models.schemas import FollowUpResponse, LabOrderResponse, ReferralResponse
+from src.data.models import Appointment, FollowUp, LabOrder, Referral, VisitPrep
+from src.models.schemas import AppointmentResponse, FollowUpResponse, LabOrderResponse, ReferralResponse
 
 router = APIRouter(prefix="/api/profiles/{profile_id}", tags=["action-items"])
 
@@ -114,3 +116,34 @@ async def update_referral_status(
     await db.commit()
     await db.refresh(referral)
     return referral
+
+
+@router.get("/upcoming-without-prep", response_model=list[AppointmentResponse])
+async def upcoming_appointments_without_prep(
+    profile_id: str,
+    days_ahead: int = 30,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return upcoming scheduled appointments that have no visit prep generated."""
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=days_ahead)
+
+    appt_result = await db.execute(
+        select(Appointment).where(
+            Appointment.profile_id == profile_id,
+            Appointment.status == "scheduled",
+            Appointment.scheduled_date >= now,
+            Appointment.scheduled_date <= cutoff,
+        ).order_by(Appointment.scheduled_date)
+    )
+    upcoming = appt_result.scalars().all()
+
+    without_prep = []
+    for appt in upcoming:
+        prep_result = await db.execute(
+            select(VisitPrep).where(VisitPrep.appointment_id == appt.id)
+        )
+        if prep_result.scalar_one_or_none() is None:
+            without_prep.append(appt)
+
+    return without_prep
