@@ -1,12 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { actionItems as actionItemsApi } from '../api/client';
 import { Card, CardHeader, CardContent } from './Card';
+import type { Appointment } from '../types';
 
 interface Props {
   profileId: string;
+  appointments: Appointment[];
 }
 
-export function ActionItemsSection({ profileId }: Props) {
+function daysUntil(dateStr: string): number {
+  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function soonestUpcomingAppointment(appointments: Appointment[]): Appointment | null {
+  const now = new Date();
+  const future = appointments
+    .filter(a => a.status === 'scheduled' && new Date(a.scheduled_date) > now)
+    .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
+  return future[0] ?? null;
+}
+
+export function ActionItemsSection({ profileId, appointments }: Props) {
   const queryClient = useQueryClient();
 
   const { data: followUps = [] } = useQuery({
@@ -48,6 +62,9 @@ export function ActionItemsSection({ profileId }: Props) {
   const total = followUps.length + labOrders.length + referrals.length;
   if (total === 0) return null;
 
+  const nextAppt = soonestUpcomingAppointment(appointments);
+  const daysToAppt = nextAppt ? daysUntil(nextAppt.scheduled_date) : null;
+
   return (
     <Card className="border-orange-200 bg-orange-50">
       <CardHeader>
@@ -81,7 +98,14 @@ export function ActionItemsSection({ profileId }: Props) {
 
         {labOrders.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-orange-800">Lab tests ordered</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-800">
+              Lab tests ordered
+              {daysToAppt !== null && daysToAppt <= 21 && (
+                <span className="ml-2 font-normal normal-case text-orange-600">
+                  — get done before your appointment in {daysToAppt} days
+                </span>
+              )}
+            </p>
             {labOrders.map(lab => (
               <div key={lab.id} className="flex items-center justify-between gap-3 bg-white rounded border border-orange-100 px-3 py-2">
                 <div className="flex-1 min-w-0">
