@@ -495,8 +495,30 @@ async def apply_items(
     await db.flush()
     await db.commit()
 
+    # Fetch newly created action items from this document for the post-AVS panel
+    fu_result = await db.execute(
+        select(FollowUp).where(FollowUp.document_id == document_id)
+    )
+    lab_result = await db.execute(
+        select(LabOrder).where(LabOrder.document_id == document_id)
+    )
+    ref_result = await db.execute(
+        select(Referral).where(Referral.document_id == document_id)
+    )
+
+    from src.models.schemas import FollowUpResponse, LabOrderResponse, ReferralResponse
+
     logger.info(f"Applied items from document {doc.id}: counts={counts}, skipped={skipped}")
-    return {"status": "applied", "counts": counts, "skipped": skipped}
+    return {
+        "status": "applied",
+        "counts": counts,
+        "skipped": skipped,
+        "action_items": {
+            "follow_ups": [FollowUpResponse.model_validate(fu).model_dump() for fu in fu_result.scalars().all()],
+            "lab_orders": [LabOrderResponse.model_validate(lab).model_dump() for lab in lab_result.scalars().all()],
+            "referrals": [ReferralResponse.model_validate(ref).model_dump() for ref in ref_result.scalars().all()],
+        },
+    }
 
 
 def _extract_doctor_name(text: str) -> str | None:

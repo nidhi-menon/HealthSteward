@@ -7,6 +7,7 @@ Privacy-first AI health coordination system that centralizes your fragmented hea
 - **Health profile management** — conditions (with ICD-10 codes), medications, doctors, appointments
 - **AI visit preparation** — generates personalized questions for upcoming doctor visits using Claude API, with intelligent context selection from past visits
 - **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
+- **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab
 - **PII anonymization** — all data sent to external LLMs is anonymized (names, DOB, contact info removed)
 - **Complete privacy** — health data stays local; PDF parsing uses only local Ollama (no PHI leaves your machine)
 
@@ -89,7 +90,8 @@ HealthSteward/
 │   │   ├── doctors.py
 │   │   ├── appointments.py
 │   │   ├── documents.py     # PDF scan/parse/apply
-│   │   └── visits.py        # AI visit prep
+│   │   ├── visits.py        # AI visit prep
+│   │   └── action_items.py  # Follow-ups, lab orders, referrals CRUD
 │   ├── data/
 │   │   ├── models.py        # SQLAlchemy ORM models
 │   │   └── database.py      # Async engine + session
@@ -111,7 +113,7 @@ HealthSteward/
 ├── frontend/                # React + TypeScript + Tailwind
 │   └── src/
 │       ├── pages/           # ProfileList, ProfileDetail, VisitPrep
-│       ├── components/      # UI components + DocumentCard, ParsedItemsReview
+│       ├── components/      # UI components + DocumentCard, ParsedItemsReview, PostAvsActionPanel, ActionItemsSection
 │       ├── api/client.ts    # Typed API client
 │       └── types/index.ts   # TypeScript interfaces
 ├── alembic/                 # Database migrations
@@ -160,7 +162,7 @@ Uses a 4-stage context selection pipeline:
 
 ## Documentation
 
-- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-011)
+- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-012)
 - `docs/CHAT_HISTORY.md` — development conversation history
 - `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
 
