@@ -9,7 +9,9 @@ import { Modal, DeleteConfirmModal } from '../components/Modal';
 import { Input, Textarea, Select, MonthYearInput, DatePicker } from '../components/Input';
 import { DocumentCard } from '../components/DocumentCard';
 import { ParsedItemsReview } from '../components/ParsedItemsReview';
-import type { Condition, ConditionCreate, Medication, MedicationCreate, Doctor, DoctorCreate, Appointment, AppointmentCreate, ScannedFile, ParsedItemsResponse, ApplyItemsRequest } from '../types';
+import { PostAvsActionPanel } from '../components/PostAvsActionPanel';
+import { ActionItemsSection } from '../components/ActionItemsSection';
+import type { Condition, ConditionCreate, Medication, MedicationCreate, Doctor, DoctorCreate, Appointment, AppointmentCreate, ScannedFile, ParsedItemsResponse, ApplyItemsRequest, ActionItems } from '../types';
 
 type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments' | 'documents';
 
@@ -56,6 +58,7 @@ export default function ProfileDetail() {
     queryKey: ['scannedFiles', profileId],
     queryFn: () => documents.scan(profileId!),
     enabled: !!profileId,
+    refetchInterval: 30_000,
   });
 
   // Delete profile mutation
@@ -128,7 +131,7 @@ export default function ProfileDetail() {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <OverviewTab profile={profile} />
+        <OverviewTab profile={profile} profileId={profileId!} appointments={appointmentList || []} doctors={doctorList || []} />
       )}
 
       {activeTab === 'conditions' && (
@@ -160,6 +163,7 @@ export default function ProfileDetail() {
           profileId={profileId!}
           appointments={appointmentList || []}
           doctors={doctorList || []}
+          scannedFiles={scannedFiles || []}
           onAdd={() => setModalType('appointment')}
         />
       )}
@@ -168,6 +172,7 @@ export default function ProfileDetail() {
         <DocumentsTab
           profileId={profileId!}
           files={scannedFiles || []}
+          appointments={appointmentList || []}
         />
       )}
 
@@ -207,8 +212,10 @@ export default function ProfileDetail() {
 }
 
 // Overview Tab
-function OverviewTab({ profile }: { profile: any }) {
+function OverviewTab({ profile, profileId, appointments, doctors }: { profile: any; profileId: string; appointments: Appointment[]; doctors: Doctor[] }) {
   return (
+    <div className="space-y-6">
+    <ActionItemsSection profileId={profileId} appointments={appointments} doctors={doctors} />
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
         <CardHeader>
@@ -231,6 +238,7 @@ function OverviewTab({ profile }: { profile: any }) {
           <InfoRow label="Phone" value={profile.emergency_contact_phone || '-'} />
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
@@ -563,7 +571,7 @@ function DoctorsTab({ profileId, doctors: doctorList, onAdd }: { profileId: stri
 }
 
 // Appointments Tab
-function AppointmentsTab({ profileId, appointments: appointmentList, doctors: doctorList, onAdd }: { profileId: string; appointments: any[]; doctors: any[]; onAdd: () => void }) {
+function AppointmentsTab({ profileId, appointments: appointmentList, doctors: doctorList, scannedFiles, onAdd }: { profileId: string; appointments: any[]; doctors: any[]; scannedFiles: ScannedFile[]; onAdd: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
@@ -583,8 +591,25 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
     },
   });
 
+  const now = new Date();
+  const upcomingIn30Days = appointmentList.filter(a => {
+    if (a.status !== 'scheduled') return false;
+    const d = new Date(a.scheduled_date);
+    const diffDays = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 30;
+  });
+  const unprocessedFiles = scannedFiles.filter(f => f.status === 'new');
+  const showAvsNudge = upcomingIn30Days.length > 0 && unprocessedFiles.length > 0;
+
   return (
     <div className="space-y-4">
+      {showAvsNudge && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+          <span className="font-medium">Heads up:</span> You have {upcomingIn30Days.length === 1 ? 'an appointment' : `${upcomingIn30Days.length} appointments`} in the next 30 days and{' '}
+          {unprocessedFiles.length === 1 ? '1 unprocessed document' : `${unprocessedFiles.length} unprocessed documents`} in your AVS folder.
+          {' '}<span className="font-medium">Process them now</span> to keep your profile current before your visit.
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-900">Appointments</h3>
         <Button size="sm" onClick={onAdd} disabled={doctorList.length === 0}>
@@ -710,7 +735,7 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
 // Documents Tab
 type DocView = 'list' | 'review';
 
-function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedFile[] }) {
+function DocumentsTab({ profileId, files, appointments: appointmentList }: { profileId: string; files: ScannedFile[]; appointments: Appointment[] }) {
   const queryClient = useQueryClient();
   const [view, setView] = useState<DocView>('list');
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
@@ -718,6 +743,7 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
   const [parseError, setParseError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parsingFilename, setParsingFilename] = useState<string | null>(null);
+  const [postAvsItems, setPostAvsItems] = useState<ActionItems | null>(null);
 
   const handleParse = async (filename: string, documentId: string | null) => {
     setIsParsing(true);
@@ -781,15 +807,24 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
 
   const applyMutation = useMutation({
     mutationFn: (items: ApplyItemsRequest) => documents.applyItems(profileId, activeDocId!, items),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['conditions', profileId] });
       queryClient.invalidateQueries({ queryKey: ['medications', profileId] });
       queryClient.invalidateQueries({ queryKey: ['doctors', profileId] });
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
       queryClient.invalidateQueries({ queryKey: ['scannedFiles', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
       setParsedData(null);
       setActiveDocId(null);
       setView('list');
+      if (result.action_items) {
+        const { follow_ups, lab_orders, referrals } = result.action_items;
+        if (follow_ups.length || lab_orders.length || referrals.length) {
+          setPostAvsItems(result.action_items);
+        }
+      }
     },
   });
 
@@ -815,10 +850,20 @@ function DocumentsTab({ profileId, files }: { profileId: string; files: ScannedF
   // List view
   return (
     <div className="space-y-4">
+      {postAvsItems && (
+        <PostAvsActionPanel
+          profileId={profileId}
+          actionItems={postAvsItems}
+          upcomingAppointments={appointmentList}
+          onDismiss={() => setPostAvsItems(null)}
+        />
+      )}
+
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-900">Documents</h3>
         <span className="text-sm text-gray-500">
           Scanning <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">data/avs/</code>
+          <span className="ml-2 text-xs text-gray-400">· auto-refreshes every 30s</span>
         </span>
       </div>
 
