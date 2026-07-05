@@ -18,6 +18,7 @@ import type {
   Referral,
   ActionItems,
   VitalsAlert,
+  NudgeState,
 } from '../types';
 
 const API_BASE = '/api';
@@ -177,24 +178,24 @@ export const documents = {
 export const actionItems = {
   listFollowUps: (profileId: string, status?: string) =>
     request<FollowUp[]>(`/profiles/${profileId}/follow-ups${status ? `?status=${status}` : ''}`),
-  updateFollowUp: (profileId: string, id: string, status: string) =>
+  updateFollowUp: (profileId: string, id: string, body: { status?: string; snoozed_until?: string | null }) =>
     request<FollowUp>(`/profiles/${profileId}/follow-ups/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(body),
     }),
   listLabOrders: (profileId: string, status?: string) =>
     request<LabOrder[]>(`/profiles/${profileId}/lab-orders${status ? `?status=${status}` : ''}`),
-  updateLabOrder: (profileId: string, id: string, status: string) =>
+  updateLabOrder: (profileId: string, id: string, body: { status?: string; snoozed_until?: string | null }) =>
     request<LabOrder>(`/profiles/${profileId}/lab-orders/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(body),
     }),
   listReferrals: (profileId: string, status?: string) =>
     request<Referral[]>(`/profiles/${profileId}/referrals${status ? `?status=${status}` : ''}`),
-  updateReferral: (profileId: string, id: string, status: string) =>
+  updateReferral: (profileId: string, id: string, body: { status?: string; snoozed_until?: string | null }) =>
     request<Referral>(`/profiles/${profileId}/referrals/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(body),
     }),
   upcomingWithoutPrep: (profileId: string) =>
     request<Appointment[]>(`/profiles/${profileId}/upcoming-without-prep`),
@@ -202,6 +203,11 @@ export const actionItems = {
     request<VitalsAlert[]>(`/profiles/${profileId}/vitals-alerts`),
   completedWithoutAvs: (profileId: string) =>
     request<Appointment[]>(`/profiles/${profileId}/completed-without-avs`),
+  snoozeNudge: (profileId: string, nudgeType: string, itemId: string, snoozedUntil: string) =>
+    request<NudgeState>(`/profiles/${profileId}/nudge-states`, {
+      method: 'POST',
+      body: JSON.stringify({ nudge_type: nudgeType, item_id: itemId, snoozed_until: snoozedUntil }),
+    }),
 };
 
 // Visit Prep
