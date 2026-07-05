@@ -216,6 +216,45 @@ export interface ParsedItemsResponse {
   notes: string[];
 }
 
+// Action Items (from parsed AVS documents)
+export interface FollowUp {
+  id: string;
+  profile_id: string;
+  document_id: string;
+  description: string;
+  timeframe: string | null;
+  target_date: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface LabOrder {
+  id: string;
+  profile_id: string;
+  document_id: string;
+  test_name: string;
+  ordered_date: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface Referral {
+  id: string;
+  profile_id: string;
+  document_id: string;
+  specialty: string;
+  provider_name: string | null;
+  reason: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface ActionItems {
+  follow_ups: FollowUp[];
+  lab_orders: LabOrder[];
+  referrals: Referral[];
+}
+
 export interface ApplyItemsRequest {
   diagnoses: ParsedDiagnosis[];
   medication_starts: ParsedMedicationChange[];

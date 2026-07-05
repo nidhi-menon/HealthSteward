@@ -13,6 +13,10 @@ import type {
   ScannedFile,
   ParsedItemsResponse,
   ApplyItemsRequest,
+  FollowUp,
+  LabOrder,
+  Referral,
+  ActionItems,
 } from '../types';
 
 const API_BASE = '/api';
@@ -159,13 +163,38 @@ export const documents = {
   getParsed: (profileId: string, id: string) =>
     request<ParsedItemsResponse>(`/profiles/${profileId}/documents/${id}/parsed`),
   applyItems: (profileId: string, id: string, items: ApplyItemsRequest) =>
-    request<{ status: string; counts: Record<string, number> }>(
+    request<{ status: string; counts: Record<string, number>; action_items: ActionItems }>(
       `/profiles/${profileId}/documents/${id}/apply`,
       {
         method: 'POST',
         body: JSON.stringify(items),
       },
     ),
+};
+
+// Action Items
+export const actionItems = {
+  listFollowUps: (profileId: string, status?: string) =>
+    request<FollowUp[]>(`/profiles/${profileId}/follow-ups${status ? `?status=${status}` : ''}`),
+  updateFollowUp: (profileId: string, id: string, status: string) =>
+    request<FollowUp>(`/profiles/${profileId}/follow-ups/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  listLabOrders: (profileId: string, status?: string) =>
+    request<LabOrder[]>(`/profiles/${profileId}/lab-orders${status ? `?status=${status}` : ''}`),
+  updateLabOrder: (profileId: string, id: string, status: string) =>
+    request<LabOrder>(`/profiles/${profileId}/lab-orders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  listReferrals: (profileId: string, status?: string) =>
+    request<Referral[]>(`/profiles/${profileId}/referrals${status ? `?status=${status}` : ''}`),
+  updateReferral: (profileId: string, id: string, status: string) =>
+    request<Referral>(`/profiles/${profileId}/referrals/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
 };
 
 // Visit Prep

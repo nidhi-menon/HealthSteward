@@ -700,6 +700,8 @@ After all discussions, the following was implemented:
 | DEC-008 | Visit Notes + Context Selection | Implemented | 4-stage hybrid approach |
 | DEC-009 | Agentic Visit Prep Architecture | Approved | Claude API native tool use |
 | DEC-010 | AVS PDF Parser Integration | Implemented | Local Ollama section-routing parser |
+| DEC-011 | Specialty-Aware Visit Prep | Implemented | ICD-10 specialty tags, specialty-focused prompt |
+| DEC-012 | Patient Disengagement / Action Items | Implemented (simple phase) | Post-AVS panel + overview section |
 
 ---
 
@@ -794,13 +796,58 @@ Visit prep now generates questions relevant to the target specialty — lab resu
 
 ---
 
-## Phase Roadmap
+## 13. Patient Disengagement & Action Items (DEC-012)
+
+**Date:** 2026-07-05
+
+### Problem Identified
+
+HealthSteward assumes an engaged patient. The system was great at storing what the doctor ordered (follow-ups, lab orders, referrals) but never reminded the patient to act on them. The data existed but was invisible unless the patient actively navigated to it.
+
+### Discussion
+
+**User:** Proposed a specific nudge model: after an AVS is uploaded, detect ordered tests and future appointments to be scheduled, and nudge the patient contextually — book a follow-up immediately if timeframe is short, remind about labs 1-2 weeks before an upcoming appointment, repeat nudges with snooze/action-completed buttons.
+
+**What the system was missing:**
+- No proactive surfacing of pending follow-ups, lab orders, referrals
+- No API endpoints to query these records (they were stored but never exposed)
+- No moment in the UX where the patient was told "here's what you need to do next"
+
+### Complexity Assessment
+
+| Feature | Complexity | Reason |
+|---------|------------|--------|
+| Post-AVS action panel | Simple | Fires at moment of engagement, logic on existing data |
+| Overview "Needs Attention" section | Simple | Query existing records, no new schema |
+| Backend API for follow-ups/lab orders/referrals | Simple | Response schemas existed, just no router |
+| Snooze / action-completed buttons | Medium | New nudge state model + migrations |
+| Scheduled/repeated nudges | Medium | Requires APScheduler or cron |
+| 6-month lookahead from free-text timeframe | Medium | Timeframe is free text, needs parsing |
+
+### Decision
+
+Implement the simple ones first (DEC-012):
+1. New API endpoints: `GET/PATCH /follow-ups`, `/lab-orders`, `/referrals`
+2. Post-AVS action panel shown after apply completes
+3. Overview tab "Needs Attention" section
+
+Snooze/action-completed loop and scheduled notifications deferred.
+
+### Architecture Notes
+
+- The localhost safety check on Ollama (`_check_localhost`) means the nudge logic must stay on the local machine — no external notification service can be called with raw medical data
+- `FollowUp.timeframe` is free text — nudge logic uses heuristic parsing (look for month/week numbers)
+- Post-AVS nudges fire at the highest-engagement moment: right after the patient has just reviewed and confirmed their parsed document
+
+---
+
+
 
 | Phase | Feature | Status |
 |-------|---------|--------|
 | Phase 1 | Health Profile + Visit Prep | Complete |
 | Phase 2 | Multi-user / Family sharing | Pending DEC-001 |
-| Phase 3 | PDF processing + Action items | **Complete** (DEC-010) |
+| Phase 3 | PDF processing + Action items | **Complete** (DEC-010, DEC-012) |
 | Phase 4 | RAG for health documents | Planned |
 | Phase 5 | Medication reminders | Planned |
 | Phase 6 | Local model distillation | Planned |
