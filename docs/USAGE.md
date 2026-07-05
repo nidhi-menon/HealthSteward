@@ -119,6 +119,31 @@ Click on a profile to open it, then use the tabs:
 4. Review the AI-generated questions organized by category
 5. Use **"Regenerate"** if you want different questions
 
+### Step 5: Upload an After-Visit Summary (AVS)
+
+1. Drop your PDF into the `data/avs/` folder in the project directory
+2. Go to the **Documents** tab on your profile page
+3. Click **"Scan for new files"** — the PDF appears as a new file (auto-refreshes every 30 s)
+4. Click **"Parse"** to extract data using the local Ollama model
+5. Review the parsed results (vitals, diagnoses, medications, lab orders, referrals, follow-ups)
+6. Check items you want to apply and click **"Apply to Profile"**
+7. Immediately after applying, a panel shows extracted follow-ups, lab orders, and referrals
+
+### Step 6: Review Proactive Action Items
+
+After applying an AVS or just browsing your profile:
+
+1. Go to the **Overview** tab
+2. The **Action Items** section surfaces things needing attention:
+   - Upcoming appointments without visit prep
+   - Past appointments to close out
+   - Completed visits missing an AVS document
+   - Vitals trends (weight, BMI, blood pressure, heart rate) across visits
+   - Pending follow-up appointments with aging indicators (overdue / approaching)
+   - Lab orders with staleness warnings and appointment-proximity alerts
+   - Outstanding referrals
+3. Click **"Prepare"** on an appointment nudge to go directly to visit prep
+
 ---
 
 ## API Usage (curl examples)
@@ -217,4 +242,4 @@ alembic upgrade head
 
 ---
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-07-05*
