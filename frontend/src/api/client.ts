@@ -195,6 +195,8 @@ export const actionItems = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  upcomingWithoutPrep: (profileId: string) =>
+    request<Appointment[]>(`/profiles/${profileId}/upcoming-without-prep`),
 };
 
 // Visit Prep
