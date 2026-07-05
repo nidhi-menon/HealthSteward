@@ -839,6 +839,13 @@ Snooze/action-completed loop and scheduled notifications deferred.
 - **Appointment-driven nudge** — banner on the Appointments tab when there are upcoming appointments within 30 days AND unprocessed files sitting in `data/avs/`. Prompts the patient to parse them before their visit. Pure frontend logic using already-available data (appointmentList + scannedFiles).
 - **Visit prep nudge** — "Needs Attention" section on Overview now includes upcoming appointments (within 30 days) that have no visit prep generated. Backend endpoint `GET /upcoming-without-prep` does the join efficiently. "Prepare" button links directly to the prep page; the nudge disappears as soon as prep is generated.
 
+**Third iteration — final simple tasks:**
+
+- **Longitudinal vitals alerts** — backend endpoint `GET /vitals-alerts` computes meaningful trends across all parsed vitals: weight change ≥5 lbs, BMI change ≥1.5, systolic BP change ≥10 mmHg, heart rate change ≥10 bpm. Surfaced in "Needs Attention" with oldest→newest values and visit count.
+- **Follow-up and referral aging** — follow-ups now show urgency escalation (approaching/overdue) based on timeframe elapsed since creation. Referrals show a staleness warning after 60 days pending. Lab orders show age warning after 21 days.
+- **Completed appointments without AVS** — backend endpoint `GET /completed-without-avs` finds completed appointments with no parsed document within 14 days of the visit date. Surfaced with a prompt to drop the PDF in `data/avs/`.
+- **Past-due appointments not marked complete** — pure frontend logic: scheduled appointments whose date has passed. Prompts patient to add visit notes and mark complete, which feeds future visit prep quality.
+
 ### Architecture Notes
 
 - The localhost safety check on Ollama (`_check_localhost`) means the nudge logic must stay on the local machine — no external notification service can be called with raw medical data
