@@ -833,6 +833,11 @@ Implement the simple ones first (DEC-012):
 
 Snooze/action-completed loop and scheduled notifications deferred.
 
+**Second iteration — remaining simple tasks:**
+
+- **Auto-refresh scan folder** — `refetchInterval: 30_000` on the scannedFiles query; new files dropped in `data/avs/` appear automatically without manual refresh. Small "auto-refreshes every 30s" label added to Documents tab header.
+- **Appointment-driven nudge** — banner on the Appointments tab when there are upcoming appointments within 30 days AND unprocessed files sitting in `data/avs/`. Prompts the patient to parse them before their visit. Pure frontend logic using already-available data (appointmentList + scannedFiles).
+
 ### Architecture Notes
 
 - The localhost safety check on Ollama (`_check_localhost`) means the nudge logic must stay on the local machine — no external notification service can be called with raw medical data
