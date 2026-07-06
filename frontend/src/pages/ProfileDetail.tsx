@@ -819,6 +819,7 @@ function DocumentsTab({ profileId, files, appointments: appointmentList }: { pro
       queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
       queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
       queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
       setParsedData(null);
       setActiveDocId(null);
       setView('list');
