@@ -7,6 +7,7 @@
 ![license](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![python](https://img.shields.io/badge/python-3.11+-green)
 ![status](https://img.shields.io/badge/status-early%20development-orange)
+![release](https://img.shields.io/github/v/release/nidhi-menon/HealthSteward?include_prereleases)
 
 **[GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues)**
 
