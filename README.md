@@ -45,6 +45,30 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 | AI (local) | Ollama (qwen2.5:7b) for PDF parsing |
 | Database | SQLite via aiosqlite, migrations via Alembic |
 
+```mermaid
+flowchart LR
+    PDF[AVS PDF<br/>data/avs/] --> OllamaParse[Ollama<br/>local, qwen2.5:7b]
+    OllamaParse -->|extracted items| Review[Review & Confirm]
+    Review --> DB[(SQLite)]
+
+    DB -->|raw past visits| Select[Context Selection]
+    Select -->|stage 2: relevance scoring<br/>on raw, unanonymized text| OllamaScore[Ollama<br/>local, qwen2.5:7b]
+    OllamaScore --> Select
+    Select -->|stage 4: anonymize| Anon[PII Anonymization]
+    Anon -->|no names, DOB, contact info| Claude[Claude API<br/>Sonnet]
+    Claude -->|visit prep questions| DB
+
+    DB --> API[FastAPI]
+    API --> UI[React + TypeScript UI]
+
+    style OllamaParse fill:#2d5a3d,color:#fff
+    style OllamaScore fill:#2d5a3d,color:#fff
+    style Claude fill:#8a5a2d,color:#fff
+    style Anon fill:#5a2d5a,color:#fff
+```
+
+Two LLMs, two trust boundaries: **Ollama runs locally** and never sees the network — it parses raw PDFs and also scores relevance of raw (pre-anonymization) visit history during context selection. **Claude API is remote** and only ever receives the final, already-anonymized context — anonymization happens as the last step before that call, not as a single gate in front of both LLMs.
+
 ## Quick Start
 
 ### Prerequisites
