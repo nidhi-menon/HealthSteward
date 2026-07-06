@@ -1,6 +1,19 @@
 # HealthSteward
 
-Privacy-first AI health coordination for people managing chronic illness and multimorbidity across multiple providers. Your health data never leaves your machine.
+> **Privacy-first AI agent for fragmented care.**
+> Your health is split across multiple specialists on different systems, none talking to each other.
+> HealthSteward centralizes it — locally, on your machine — and prepares you for every appointment.
+
+![license](https://img.shields.io/badge/license-GPL--3.0-blue)
+![python](https://img.shields.io/badge/python-3.11+-green)
+![status](https://img.shields.io/badge/status-early%20development-orange)
+
+**[GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues)**
+
+---
+
+No cloud. No sync. No PHI leaving your machine.
+PDF parsing runs on local Ollama. PII is stripped before anything touches an external model.
 
 ## Motivation
 
@@ -173,7 +186,7 @@ Uses a 4-stage context selection pipeline:
 ## Documentation
 
 - `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-012)
-- `docs/CHAT_HISTORY.md` — development conversation history
+- `docs/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
 
 ## Data Privacy
