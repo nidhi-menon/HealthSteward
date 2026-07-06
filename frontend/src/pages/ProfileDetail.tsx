@@ -587,6 +587,8 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
     mutationFn: (appointmentId: string) => appointments.delete(profileId, appointmentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       setDeleteTarget(null);
     },
   });
@@ -816,6 +818,8 @@ function DocumentsTab({ profileId, files, appointments: appointmentList }: { pro
       queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
       queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
       queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
       setParsedData(null);
       setActiveDocId(null);
       setView('list');
@@ -1346,6 +1350,8 @@ function AppointmentModal({ isOpen, onClose, profileId, doctors, appointment }: 
     mutationFn: (data: AppointmentCreate) => appointments.create(profileId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       handleClose();
     },
   });
@@ -1354,6 +1360,8 @@ function AppointmentModal({ isOpen, onClose, profileId, doctors, appointment }: 
     mutationFn: (data: AppointmentCreate) => appointments.update(profileId, appointment!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       handleClose();
     },
   });

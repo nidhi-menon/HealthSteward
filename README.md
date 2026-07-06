@@ -7,7 +7,7 @@ Privacy-first AI health coordination system that centralizes your fragmented hea
 - **Health profile management** — conditions (with ICD-10 codes), medications, doctors, appointments
 - **AI visit preparation** — generates personalized questions for upcoming doctor visits using Claude API, with intelligent context selection from past visits
 - **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
-- **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab
+- **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab with snooze (1 week) and one-click completion on every nudge type
 - **PII anonymization** — all data sent to external LLMs is anonymized (names, DOB, contact info removed)
 - **Complete privacy** — health data stays local; PDF parsing uses only local Ollama (no PHI leaves your machine)
 

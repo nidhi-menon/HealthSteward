@@ -854,7 +854,32 @@ Snooze/action-completed loop and scheduled notifications deferred.
 
 ---
 
+## 14. Snooze and Completion State (DEC-012 Medium Phase)
 
+**Date:** 2026-07-05
+
+**Context:** After implementing the simple action items phase, the "Needs Attention" section had no memory — completed items would re-appear on next refresh, and there was no way to acknowledge a nudge without acting on it. This made the section feel noisy and untrustworthy over time.
+
+**What was implemented:**
+
+**Backend:**
+- Added `snoozed_until` (DateTime, nullable) and `completed_at` (DateTime, nullable) columns to `FollowUp`, `LabOrder`, and `Referral` via Alembic migration
+- New `NudgeState` table — stores `(profile_id, nudge_type, item_id, snoozed_until)` for computed nudges (upcoming-without-prep, past-due appointments, completed-without-avs, vitals alerts) that have no persistent row to attach state to. Upserted via `POST /nudge-states`
+- List endpoints (follow-ups, lab-orders, referrals) now filter out completed and actively-snoozed items by default when no explicit status filter is passed — the backend handles it, frontend no longer needs to pass `?status=pending`
+- PATCH endpoints now accept `snoozed_until` (ISO datetime string) in addition to `status`; auto-stamp `completed_at` when status transitions to a completed value
+- Computed endpoints (upcoming-without-prep, vitals-alerts, completed-without-avs) query `NudgeState` and exclude matching snoozed items
+
+**Frontend:**
+- All action items in `ActionItemsSection` and `PostAvsActionPanel` now have a "Snooze 1w" secondary button alongside the existing primary action button
+- Snooze sets `snoozed_until` to 7 days from now; the item disappears immediately (query invalidation) and re-surfaces after the snooze period expires
+- Past-due appointments use optimistic client-side filtering (Set state) since they're computed from the appointments prop, not a server query
+- A shared `ActionButtons` component was extracted to avoid repeating the two-button pattern across all item types
+
+**Key design decisions:**
+- Snooze is always time-limited (1 week) — no permanent dismiss. Items re-surface after the snooze expires, keeping the feedback loop intact
+- `completed_at` is a permanent timestamp so we could show completion history in a future phase
+
+---
 
 | Phase | Feature | Status |
 |-------|---------|--------|

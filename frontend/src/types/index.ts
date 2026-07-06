@@ -225,6 +225,8 @@ export interface FollowUp {
   timeframe: string | null;
   target_date: string | null;
   status: string;
+  snoozed_until: string | null;
+  completed_at: string | null;
   created_at: string;
 }
 
@@ -235,6 +237,8 @@ export interface LabOrder {
   test_name: string;
   ordered_date: string | null;
   status: string;
+  snoozed_until: string | null;
+  completed_at: string | null;
   created_at: string;
 }
 
@@ -246,7 +250,17 @@ export interface Referral {
   provider_name: string | null;
   reason: string | null;
   status: string;
+  snoozed_until: string | null;
+  completed_at: string | null;
   created_at: string;
+}
+
+export interface NudgeState {
+  id: string;
+  profile_id: string;
+  nudge_type: string;
+  item_id: string;
+  snoozed_until: string;
 }
 
 export interface VitalsAlert {
