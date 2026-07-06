@@ -62,6 +62,8 @@ export default function VisitPrep() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointment', profileId, appointmentId] });
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       setIsEditingNotes(false);
     },
   });
