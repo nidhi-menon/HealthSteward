@@ -179,10 +179,11 @@ frontend/src/
 
 | Decision | Rationale |
 |----------|-----------|
-| **Client-side past-due computation** | Past appointments with `scheduled` status computed from appointment list — no extra endpoint |
+| **Server-side past-due endpoint** | `GET /past-due-appointments` filters via NudgeState so snooze survives page refresh — consistent with all other computed nudges |
 | **`timeframeToDays()` heuristic** | Parses free-text timeframes ("6 weeks", "3 months") to days for aging calculations |
 | **14-day proximity window** | Matches completed appointments to documents by visit_date proximity since the FK isn't always populated |
 | **`refetchInterval: 30_000`** | Documents tab auto-polls so scan results appear without manual refresh |
+| **Snooze via NudgeState** | Computed nudges (no persistent row) store snooze state in `NudgeState` table; FollowUp/LabOrder/Referral store it inline on `snoozed_until` |
 
 ---
 
@@ -414,15 +415,17 @@ Expected Claude response format:
 ### Action Items
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/profiles/{id}/follow-ups` | List follow-ups (optional `?status=`) |
-| PATCH | `/api/profiles/{id}/follow-ups/{fid}` | Update follow-up status |
-| GET | `/api/profiles/{id}/lab-orders` | List lab orders |
-| PATCH | `/api/profiles/{id}/lab-orders/{lid}` | Update lab order status |
-| GET | `/api/profiles/{id}/referrals` | List referrals |
-| PATCH | `/api/profiles/{id}/referrals/{rid}` | Update referral status |
-| GET | `/api/profiles/{id}/upcoming-without-prep` | Appointments in next 30 days with no VisitPrep |
-| GET | `/api/profiles/{id}/vitals-alerts` | Trend alerts across Vitals records |
-| GET | `/api/profiles/{id}/completed-without-avs` | Completed appointments missing a document |
+| GET | `/api/profiles/{id}/follow-ups` | List active follow-ups (excludes completed + snoozed) |
+| PATCH | `/api/profiles/{id}/follow-ups/{fid}` | Update status or snoozed_until; auto-stamps completed_at |
+| GET | `/api/profiles/{id}/lab-orders` | List active lab orders |
+| PATCH | `/api/profiles/{id}/lab-orders/{lid}` | Update status or snoozed_until |
+| GET | `/api/profiles/{id}/referrals` | List active referrals |
+| PATCH | `/api/profiles/{id}/referrals/{rid}` | Update status or snoozed_until |
+| POST | `/api/profiles/{id}/nudge-states` | Upsert snooze for a computed nudge (appointment-based, vitals) |
+| GET | `/api/profiles/{id}/past-due-appointments` | Scheduled appointments whose date has passed; respects NudgeState snooze |
+| GET | `/api/profiles/{id}/upcoming-without-prep` | Appointments in next 30 days with no VisitPrep; respects NudgeState snooze |
+| GET | `/api/profiles/{id}/vitals-alerts` | Trend alerts across Vitals records; respects NudgeState snooze |
+| GET | `/api/profiles/{id}/completed-without-avs` | Completed appointments missing a document; respects NudgeState snooze |
 
 ---
 
