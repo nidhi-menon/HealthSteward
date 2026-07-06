@@ -142,7 +142,9 @@ After applying an AVS or just browsing your profile:
    - Pending follow-up appointments with aging indicators (overdue / approaching)
    - Lab orders with staleness warnings and appointment-proximity alerts
    - Outstanding referrals
-3. Click **"Prepare"** on an appointment nudge to go directly to visit prep
+3. Each nudge has a **"Snooze 1w"** button — hides it for 7 days, then it re-surfaces automatically
+4. Action nudges (follow-ups, lab orders, referrals, past-due appointments) have a one-click button to mark the item complete or navigate to it
+5. Click **"Prepare"** on an upcoming-appointment nudge to go directly to visit prep
 
 ---
 
