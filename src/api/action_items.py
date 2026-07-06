@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.database import get_db
@@ -50,7 +50,7 @@ async def list_follow_ups(
 ):
     query = select(FollowUp).where(FollowUp.profile_id == profile_id)
     if include_resolved:
-        query = query.where(FollowUp.status.in_(list(_COMPLETED_STATUSES))).order_by(FollowUp.completed_at.desc()).limit(20)
+        query = query.where(FollowUp.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(FollowUp.completed_at.desc())).limit(20)
     else:
         if status:
             query = query.where(FollowUp.status == status)
@@ -99,7 +99,7 @@ async def list_lab_orders(
 ):
     query = select(LabOrder).where(LabOrder.profile_id == profile_id)
     if include_resolved:
-        query = query.where(LabOrder.status.in_(list(_COMPLETED_STATUSES))).order_by(LabOrder.completed_at.desc()).limit(20)
+        query = query.where(LabOrder.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(LabOrder.completed_at.desc())).limit(20)
     else:
         if status:
             query = query.where(LabOrder.status == status)
@@ -148,7 +148,7 @@ async def list_referrals(
 ):
     query = select(Referral).where(Referral.profile_id == profile_id)
     if include_resolved:
-        query = query.where(Referral.status.in_(list(_COMPLETED_STATUSES))).order_by(Referral.completed_at.desc()).limit(20)
+        query = query.where(Referral.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(Referral.completed_at.desc())).limit(20)
     else:
         if status:
             query = query.where(Referral.status == status)

@@ -354,8 +354,6 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
           </div>
         )}
 
-        {total === 0 && showResolved && null}
-
         {/* Visit prep nudge */}
         {unpreparedAppointments.length > 0 && (
           <div className="space-y-2">
