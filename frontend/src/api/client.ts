@@ -197,6 +197,8 @@ export const actionItems = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  pastDueAppointments: (profileId: string) =>
+    request<Appointment[]>(`/profiles/${profileId}/past-due-appointments`),
   upcomingWithoutPrep: (profileId: string) =>
     request<Appointment[]>(`/profiles/${profileId}/upcoming-without-prep`),
   vitalsAlerts: (profileId: string) =>
