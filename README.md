@@ -46,7 +46,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 | Database | SQLite via aiosqlite, migrations via Alembic |
 
 ```mermaid
-flowchart LR
+flowchart TD
     PDF[AVS PDF<br/>data/avs/] --> OllamaParse[Ollama<br/>local, qwen2.5:7b]
     OllamaParse -->|extracted items| Review[Review & Confirm]
     Review --> DB[(SQLite)]
