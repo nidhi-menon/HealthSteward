@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { actionItems as actionItemsApi } from '../api/client';
@@ -92,6 +91,7 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
   const invalidateFollowUps = () => queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
   const invalidateLabOrders = () => queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
   const invalidateReferrals = () => queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
+  const invalidatePastDue = () => queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
   const invalidateUpcomingPrep = () => queryClient.invalidateQueries({ queryKey: ['upcomingWithoutPrep', profileId] });
   const invalidateVitals = () => queryClient.invalidateQueries({ queryKey: ['vitalsAlerts', profileId] });
   const invalidateCompletedAvs = () => queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
@@ -114,6 +114,12 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
     enabled: !!profileId,
   });
 
+  const { data: pastDueFromServer = [] } = useQuery({
+    queryKey: ['pastDueAppointments', profileId],
+    queryFn: () => actionItemsApi.pastDueAppointments(profileId),
+    enabled: !!profileId,
+  });
+
   const { data: unpreparedAppointments = [] } = useQuery({
     queryKey: ['upcomingWithoutPrep', profileId],
     queryFn: () => actionItemsApi.upcomingWithoutPrep(profileId),
@@ -131,11 +137,6 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
     queryFn: () => actionItemsApi.completedWithoutAvs(profileId),
     enabled: !!profileId,
   });
-
-  const now = new Date();
-  const pastDueAppointments = appointments.filter(
-    a => a.status === 'scheduled' && new Date(a.scheduled_date) < now
-  );
 
   const followUpMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Parameters<typeof actionItemsApi.updateFollowUp>[2] }) =>
@@ -164,13 +165,8 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
   const snoozePastDueMutation = useMutation({
     mutationFn: (appointmentId: string) =>
       actionItemsApi.snoozeNudge(profileId, 'past_due', appointmentId, snoozeDate()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments', profileId] }),
+    onSuccess: invalidatePastDue,
   });
-
-  // Client-side filter: remove past-due appts snoozed via nudge state
-  // (snooze for past-due is optimistic — they disappear immediately on snooze click)
-  const [snoozedPastDue, setSnoozedPastDue] = useState<Set<string>>(new Set());
-  const visiblePastDue = pastDueAppointments.filter(a => !snoozedPastDue.has(a.id));
 
   const snoozeVitalsMutation = useMutation({
     mutationFn: (metric: string) =>
@@ -186,7 +182,7 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
 
   const total =
     unpreparedAppointments.length +
-    visiblePastDue.length +
+    pastDueFromServer.length +
     completedWithoutAvs.length +
     vitalsAlerts.length +
     followUps.length +
@@ -248,10 +244,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
         )}
 
         {/* Past-due appointments not marked complete */}
-        {visiblePastDue.length > 0 && (
+        {pastDueFromServer.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-orange-800">Appointments to close out</p>
-            {visiblePastDue.map(appt => {
+            {pastDueFromServer.map(appt => {
               const doctor = doctors.find(d => d.id === appt.doctor_id);
               const label = doctor ? doctor.name : appt.purpose || 'Appointment';
               const ago = daysSince(appt.scheduled_date);
@@ -265,10 +261,7 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
                     <button
-                      onClick={() => {
-                        setSnoozedPastDue(prev => new Set([...prev, appt.id]));
-                        snoozePastDueMutation.mutate(appt.id);
-                      }}
+                      onClick={() => snoozePastDueMutation.mutate(appt.id)}
                       disabled={snoozePastDueMutation.isPending}
                       className="text-xs px-2 py-1 text-gray-400 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50"
                     >
