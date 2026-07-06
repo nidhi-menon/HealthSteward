@@ -142,9 +142,11 @@ After applying an AVS or just browsing your profile:
    - Pending follow-up appointments with aging indicators (overdue / approaching)
    - Lab orders with staleness warnings and appointment-proximity alerts
    - Outstanding referrals
-3. Each nudge has a **"Snooze 1w"** button — hides it for 7 days, then it re-surfaces automatically
-4. Action nudges (follow-ups, lab orders, referrals, past-due appointments) have a one-click button to mark the item complete or navigate to it
-5. Click **"Prepare"** on an upcoming-appointment nudge to go directly to visit prep
+3. Each nudge has a **[1w] [2w] [1m]** snooze pill group — hides the item for the chosen duration, then re-surfaces it automatically
+4. Items that were previously snoozed show a small clock icon when they re-surface, so you know this isn't the first time you've seen it
+5. Action nudges (follow-ups, lab orders, referrals, past-due appointments) have a one-click button to mark the item complete or navigate to it
+6. Click **"Prepare"** on an upcoming-appointment nudge to go directly to visit prep
+7. Click **"Show resolved"** in the card header to view completed follow-ups, lab orders, and referrals (most recent 20), each with its completion date
 
 ---
 

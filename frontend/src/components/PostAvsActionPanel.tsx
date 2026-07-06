@@ -42,10 +42,34 @@ function daysUntil(dateStr: string): number {
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-function snoozeDate(): string {
+const SNOOZE_OPTIONS = [
+  { label: '1w', days: 7 },
+  { label: '2w', days: 14 },
+  { label: '1m', days: 30 },
+];
+
+function snoozeDate(days: number): string {
   const d = new Date();
-  d.setDate(d.getDate() + 7);
+  d.setDate(d.getDate() + days);
   return d.toISOString();
+}
+
+function SnoozeButtons({ onSnooze, isPending }: { onSnooze: (days: number) => void; isPending: boolean }) {
+  return (
+    <div className="flex flex-shrink-0">
+      {SNOOZE_OPTIONS.map((opt, i) => (
+        <button
+          key={opt.label}
+          onClick={() => onSnooze(opt.days)}
+          disabled={isPending}
+          className={`text-xs px-2 py-1 text-gray-500 border border-gray-200 hover:bg-gray-50 disabled:opacity-50
+            ${i === 0 ? 'rounded-l' : ''} ${i === SNOOZE_OPTIONS.length - 1 ? 'rounded-r' : ''} ${i > 0 ? '-ml-px' : ''}`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointments, onDismiss }: Props) {
@@ -57,6 +81,9 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
     queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
     queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
     queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['followUpsResolved', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['labOrdersResolved', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['referralsResolved', profileId] });
   };
 
   const followUpMutation = useMutation({
@@ -112,14 +139,11 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
                   </p>
                 )}
               </div>
-              <div className="flex gap-1.5 flex-shrink-0">
-                <button
-                  onClick={() => followUpMutation.mutate({ id: fu.id, body: { snoozed_until: snoozeDate() } })}
-                  disabled={followUpMutation.isPending}
-                  className="text-xs px-2 py-1 text-gray-500 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Snooze 1w
-                </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <SnoozeButtons
+                  onSnooze={(days) => followUpMutation.mutate({ id: fu.id, body: { snoozed_until: snoozeDate(days) } })}
+                  isPending={followUpMutation.isPending}
+                />
                 <button
                   onClick={() => followUpMutation.mutate({ id: fu.id, body: { status: 'booked' } })}
                   disabled={followUpMutation.isPending}
@@ -152,14 +176,11 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
                   <p className="text-xs text-gray-500 mt-0.5">Ordered {lab.ordered_date}</p>
                 )}
               </div>
-              <div className="flex gap-1.5 flex-shrink-0">
-                <button
-                  onClick={() => labMutation.mutate({ id: lab.id, body: { snoozed_until: snoozeDate() } })}
-                  disabled={labMutation.isPending}
-                  className="text-xs px-2 py-1 text-gray-500 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Snooze 1w
-                </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <SnoozeButtons
+                  onSnooze={(days) => labMutation.mutate({ id: lab.id, body: { snoozed_until: snoozeDate(days) } })}
+                  isPending={labMutation.isPending}
+                />
                 <button
                   onClick={() => labMutation.mutate({ id: lab.id, body: { status: 'completed' } })}
                   disabled={labMutation.isPending}
@@ -183,14 +204,11 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
                 <p className="text-sm text-gray-800">{ref.specialty}{ref.provider_name ? ` — ${ref.provider_name}` : ''}</p>
                 {ref.reason && <p className="text-xs text-gray-500 mt-0.5">{ref.reason}</p>}
               </div>
-              <div className="flex gap-1.5 flex-shrink-0">
-                <button
-                  onClick={() => referralMutation.mutate({ id: ref.id, body: { snoozed_until: snoozeDate() } })}
-                  disabled={referralMutation.isPending}
-                  className="text-xs px-2 py-1 text-gray-500 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Snooze 1w
-                </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <SnoozeButtons
+                  onSnooze={(days) => referralMutation.mutate({ id: ref.id, body: { snoozed_until: snoozeDate(days) } })}
+                  isPending={referralMutation.isPending}
+                />
                 <button
                   onClick={() => referralMutation.mutate({ id: ref.id, body: { status: 'scheduled' } })}
                   disabled={referralMutation.isPending}
