@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.database import get_db
@@ -45,15 +45,19 @@ def _is_active(item) -> bool:
 async def list_follow_ups(
     profile_id: str,
     status: str | None = None,
+    include_resolved: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     query = select(FollowUp).where(FollowUp.profile_id == profile_id)
-    if status:
-        query = query.where(FollowUp.status == status)
-    query = query.order_by(FollowUp.created_at.desc())
+    if include_resolved:
+        query = query.where(FollowUp.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(FollowUp.completed_at.desc())).limit(20)
+    else:
+        if status:
+            query = query.where(FollowUp.status == status)
+        query = query.order_by(FollowUp.created_at.desc())
     result = await db.execute(query)
     items = result.scalars().all()
-    if not status:
+    if not status and not include_resolved:
         items = [i for i in items if _is_active(i)]
     return items
 
@@ -90,15 +94,19 @@ async def update_follow_up(
 async def list_lab_orders(
     profile_id: str,
     status: str | None = None,
+    include_resolved: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     query = select(LabOrder).where(LabOrder.profile_id == profile_id)
-    if status:
-        query = query.where(LabOrder.status == status)
-    query = query.order_by(LabOrder.created_at.desc())
+    if include_resolved:
+        query = query.where(LabOrder.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(LabOrder.completed_at.desc())).limit(20)
+    else:
+        if status:
+            query = query.where(LabOrder.status == status)
+        query = query.order_by(LabOrder.created_at.desc())
     result = await db.execute(query)
     items = result.scalars().all()
-    if not status:
+    if not status and not include_resolved:
         items = [i for i in items if _is_active(i)]
     return items
 
@@ -135,15 +143,19 @@ async def update_lab_order(
 async def list_referrals(
     profile_id: str,
     status: str | None = None,
+    include_resolved: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Referral).where(Referral.profile_id == profile_id)
-    if status:
-        query = query.where(Referral.status == status)
-    query = query.order_by(Referral.created_at.desc())
+    if include_resolved:
+        query = query.where(Referral.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(Referral.completed_at.desc())).limit(20)
+    else:
+        if status:
+            query = query.where(Referral.status == status)
+        query = query.order_by(Referral.created_at.desc())
     result = await db.execute(query)
     items = result.scalars().all()
-    if not status:
+    if not status and not include_resolved:
         items = [i for i in items if _is_active(i)]
     return items
 
