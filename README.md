@@ -13,7 +13,7 @@
 
 ---
 
-No cloud. No sync. No PHI leaving your machine.
+No cloud storage. No sync. Your health data never leaves your machine.
 PDF parsing runs on local Ollama. PII is stripped before anything touches an external model.
 
 ## Motivation
