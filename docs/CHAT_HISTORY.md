@@ -892,4 +892,20 @@ Snooze/action-completed loop and scheduled notifications deferred.
 
 ---
 
+## 15. Snooze UX Polish (DEC-012 UX Polish Phase)
+
+**Date:** 2026-07-05
+
+**Context:** After merging the snooze/completion state branch, three minor UX gaps were identified: no way to see what had been resolved (items just disappeared), no indication when an item resurfaced after a snooze, and a fixed 1-week snooze that was too short for longer-horizon items like referrals.
+
+**What was built:**
+
+- **Resolved history** — "Show/Hide resolved" toggle in the Needs Attention card header. Backend gets `?include_resolved=true` on the three list endpoints, returning completed items capped at 20 ordered by `completed_at` desc. Frontend renders them muted with strikethrough and completion date; queries only fire when the toggle is on.
+- **Previously snoozed indicator** — A small clock icon + "snoozed" text appears inline on any active FollowUp/LabOrder/Referral that has a non-null `snoozed_until`. Since the backend already filters actively-snoozed items, any active item with the field set must have had an expired snooze — no date comparison needed in the frontend.
+- **Flexible snooze durations** — Single "Snooze 1w" button replaced with a [1w][2w][1m] pill group in both `ActionItemsSection` and `PostAvsActionPanel`. `snoozeDate()` now takes a `days` argument. Covers referrals or follow-ups that realistically won't happen within a week.
+
+**Files changed:** `src/api/action_items.py`, `frontend/src/api/client.ts`, `frontend/src/components/ActionItemsSection.tsx`, `frontend/src/components/PostAvsActionPanel.tsx`
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
