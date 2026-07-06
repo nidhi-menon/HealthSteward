@@ -219,6 +219,27 @@ async def _snoozed_item_ids(db: AsyncSession, profile_id: str, nudge_type: str) 
     return {s.item_id for s in result.scalars().all()}
 
 
+# ── Past-due appointments (scheduled but date has passed) ─────────────────────
+
+@router.get("/past-due-appointments", response_model=list[AppointmentResponse])
+async def past_due_appointments(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return scheduled appointments whose date has passed and haven't been marked complete."""
+    now = datetime.now(timezone.utc)
+    appt_result = await db.execute(
+        select(Appointment).where(
+            Appointment.profile_id == profile_id,
+            Appointment.status == "scheduled",
+            Appointment.scheduled_date < now,
+        ).order_by(Appointment.scheduled_date.desc())
+    )
+    past_due = appt_result.scalars().all()
+    snoozed = await _snoozed_item_ids(db, profile_id, "past_due")
+    return [a for a in past_due if a.id not in snoozed]
+
+
 # ── Upcoming appointments without prep ────────────────────────────────────────
 
 @router.get("/upcoming-without-prep", response_model=list[AppointmentResponse])
