@@ -1,6 +1,6 @@
 # HealthSteward
 
-Privacy-first AI health coordination system that centralizes your fragmented health information across multiple doctors and chronic conditions. All data stays on your local machine.
+Privacy-first AI health coordination for people managing chronic illness and multimorbidity across multiple providers. Your health data never leaves your machine.
 
 ## Motivation
 
