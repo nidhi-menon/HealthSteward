@@ -176,22 +176,22 @@ export const documents = {
 
 // Action Items
 export const actionItems = {
-  listFollowUps: (profileId: string, status?: string) =>
-    request<FollowUp[]>(`/profiles/${profileId}/follow-ups${status ? `?status=${status}` : ''}`),
+  listFollowUps: (profileId: string, status?: string, includeResolved?: boolean) =>
+    request<FollowUp[]>(`/profiles/${profileId}/follow-ups${includeResolved ? '?include_resolved=true' : status ? `?status=${status}` : ''}`),
   updateFollowUp: (profileId: string, id: string, body: { status?: string; snoozed_until?: string | null }) =>
     request<FollowUp>(`/profiles/${profileId}/follow-ups/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  listLabOrders: (profileId: string, status?: string) =>
-    request<LabOrder[]>(`/profiles/${profileId}/lab-orders${status ? `?status=${status}` : ''}`),
+  listLabOrders: (profileId: string, status?: string, includeResolved?: boolean) =>
+    request<LabOrder[]>(`/profiles/${profileId}/lab-orders${includeResolved ? '?include_resolved=true' : status ? `?status=${status}` : ''}`),
   updateLabOrder: (profileId: string, id: string, body: { status?: string; snoozed_until?: string | null }) =>
     request<LabOrder>(`/profiles/${profileId}/lab-orders/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  listReferrals: (profileId: string, status?: string) =>
-    request<Referral[]>(`/profiles/${profileId}/referrals${status ? `?status=${status}` : ''}`),
+  listReferrals: (profileId: string, status?: string, includeResolved?: boolean) =>
+    request<Referral[]>(`/profiles/${profileId}/referrals${includeResolved ? '?include_resolved=true' : status ? `?status=${status}` : ''}`),
   updateReferral: (profileId: string, id: string, body: { status?: string; snoozed_until?: string | null }) =>
     request<Referral>(`/profiles/${profileId}/referrals/${id}`, {
       method: 'PATCH',
