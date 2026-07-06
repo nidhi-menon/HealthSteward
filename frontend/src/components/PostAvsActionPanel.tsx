@@ -81,6 +81,9 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
     queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
     queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
     queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['followUpsResolved', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['labOrdersResolved', profileId] });
+    queryClient.invalidateQueries({ queryKey: ['referralsResolved', profileId] });
   };
 
   const followUpMutation = useMutation({
