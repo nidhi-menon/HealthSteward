@@ -77,7 +77,7 @@ async def update_follow_up(
         if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
             item.completed_at = datetime.now(timezone.utc)
     if "snoozed_until" in body:
-        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"]) if body["snoozed_until"] else None
+        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"].replace("Z", "+00:00")) if body["snoozed_until"] else None
 
     await db.commit()
     await db.refresh(item)
@@ -122,7 +122,7 @@ async def update_lab_order(
         if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
             item.completed_at = datetime.now(timezone.utc)
     if "snoozed_until" in body:
-        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"]) if body["snoozed_until"] else None
+        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"].replace("Z", "+00:00")) if body["snoozed_until"] else None
 
     await db.commit()
     await db.refresh(item)
@@ -167,7 +167,7 @@ async def update_referral(
         if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
             item.completed_at = datetime.now(timezone.utc)
     if "snoozed_until" in body:
-        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"]) if body["snoozed_until"] else None
+        item.snoozed_until = datetime.fromisoformat(body["snoozed_until"].replace("Z", "+00:00")) if body["snoozed_until"] else None
 
     await db.commit()
     await db.refresh(item)
@@ -208,7 +208,8 @@ async def upsert_nudge_state(
 
 async def _snoozed_item_ids(db: AsyncSession, profile_id: str, nudge_type: str) -> set[str]:
     """Return item_ids that are currently snoozed for this nudge_type."""
-    now = datetime.now(timezone.utc)
+    # Use naive UTC so SQLite string comparison is consistent (stored values are naive)
+    now = datetime.utcnow()
     result = await db.execute(
         select(NudgeState).where(
             NudgeState.profile_id == profile_id,
