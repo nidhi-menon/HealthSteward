@@ -1349,6 +1349,8 @@ function AppointmentModal({ isOpen, onClose, profileId, doctors, appointment }: 
     mutationFn: (data: AppointmentCreate) => appointments.create(profileId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       handleClose();
     },
   });
@@ -1357,6 +1359,8 @@ function AppointmentModal({ isOpen, onClose, profileId, doctors, appointment }: 
     mutationFn: (data: AppointmentCreate) => appointments.update(profileId, appointment!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       handleClose();
     },
   });
