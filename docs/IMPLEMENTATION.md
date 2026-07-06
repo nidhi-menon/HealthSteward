@@ -184,6 +184,9 @@ frontend/src/
 | **14-day proximity window** | Matches completed appointments to documents by visit_date proximity since the FK isn't always populated |
 | **`refetchInterval: 30_000`** | Documents tab auto-polls so scan results appear without manual refresh |
 | **Snooze via NudgeState** | Computed nudges (no persistent row) store snooze state in `NudgeState` table; FollowUp/LabOrder/Referral store it inline on `snoozed_until` |
+| **Resolved history** | `?include_resolved=true` on list endpoints returns completed items (capped at 20, `nullslast` on `completed_at desc`); frontend lazy-loads only when toggle is on |
+| **Previously snoozed indicator** | Any active item with non-null `snoozed_until` had an expired snooze — backend already filters active snoozes, so no date comparison needed in frontend |
+| **Flexible snooze** | `[1w][2w][1m]` pill group replaces single "Snooze 1w" button; `snoozeDate(days)` takes an argument; same pattern in ActionItemsSection and PostAvsActionPanel |
 
 ---
 
@@ -415,11 +418,11 @@ Expected Claude response format:
 ### Action Items
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/profiles/{id}/follow-ups` | List active follow-ups (excludes completed + snoozed) |
+| GET | `/api/profiles/{id}/follow-ups` | List active follow-ups (excludes completed + snoozed); `?include_resolved=true` returns completed items instead |
 | PATCH | `/api/profiles/{id}/follow-ups/{fid}` | Update status or snoozed_until; auto-stamps completed_at |
-| GET | `/api/profiles/{id}/lab-orders` | List active lab orders |
+| GET | `/api/profiles/{id}/lab-orders` | List active lab orders; `?include_resolved=true` returns completed items instead |
 | PATCH | `/api/profiles/{id}/lab-orders/{lid}` | Update status or snoozed_until |
-| GET | `/api/profiles/{id}/referrals` | List active referrals |
+| GET | `/api/profiles/{id}/referrals` | List active referrals; `?include_resolved=true` returns completed items instead |
 | PATCH | `/api/profiles/{id}/referrals/{rid}` | Update status or snoozed_until |
 | POST | `/api/profiles/{id}/nudge-states` | Upsert snooze for a computed nudge (appointment-based, vitals) |
 | GET | `/api/profiles/{id}/past-due-appointments` | Scheduled appointments whose date has passed; respects NudgeState snooze |

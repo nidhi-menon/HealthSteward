@@ -512,7 +512,7 @@ Oncology → Relevant to all
 
 **Reasoning:** The post-AVS panel is the highest-leverage nudge because it fires when the patient is already engaged. The overview section catches items that accumulated from past visits. Both are pure additions on top of existing data — no new schema, no scheduler. The snooze/action-completed loop and scheduled notifications are the right long-term direction but require new infrastructure; deferred to a follow-up iteration.
 
-**Status:** Decided (simple phase complete; medium phase — snooze/completion — implemented 2026-07-05)
+**Status:** Decided (simple phase complete; medium phase — snooze/completion — implemented 2026-07-05; UX polish — implemented 2026-07-05)
 
 **Medium Phase (2026-07-05):** Implemented snooze and completion state:
 
@@ -520,5 +520,11 @@ Oncology → Relevant to all
 - **`NudgeState` table** — persists snooze state for computed nudges (upcoming-without-prep, past-due appointments, completed-without-avs, vitals alerts) that have no row to attach state to
 - **Backend filtering** — list endpoints now exclude completed and actively-snoozed items by default; PATCH endpoints auto-stamp `completed_at` on status transition
 - **Frontend** — all action items now have a "Snooze 1w" secondary button alongside the existing primary action button; `ActionItemsSection` queries no longer pass explicit status filters (the backend handles it)
+
+**UX Polish Phase (2026-07-05):** Addressed three minor UX gaps:
+
+- **Resolved history** — "Show/Hide resolved" toggle in the Needs Attention card header; backend `?include_resolved=true` param returns completed items (capped at 20, ordered by `completed_at` desc); resolved items rendered muted with strikethrough and completion date; queries lazy-load only when toggle is on
+- **Previously snoozed indicator** — any active item with a non-null `snoozed_until` was previously snoozed (backend filters actively-snoozed items, so the field's presence on an active item means the snooze expired); shown as a small clock icon + "snoozed" badge inline with the item name; no backend changes required
+- **Flexible snooze** — single "Snooze 1w" button replaced with a [1w][2w][1m] pill group everywhere snooze appears (`ActionItemsSection` and `PostAvsActionPanel`); covers longer-horizon items like referrals without requiring a date picker
 
 *Last updated: 2026-07-05*

@@ -2,7 +2,7 @@
 
 This document captures the complete development conversation for the HealthSteward project, including questions, answers, options discussed, and decisions made.
 
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-07-05
 
 ---
 
@@ -701,7 +701,7 @@ After all discussions, the following was implemented:
 | DEC-009 | Agentic Visit Prep Architecture | Approved | Claude API native tool use |
 | DEC-010 | AVS PDF Parser Integration | Implemented | Local Ollama section-routing parser |
 | DEC-011 | Specialty-Aware Visit Prep | Implemented | ICD-10 specialty tags, specialty-focused prompt |
-| DEC-012 | Patient Disengagement / Action Items | Implemented (simple phase) | Post-AVS panel + overview section |
+| DEC-012 | Patient Disengagement / Action Items | **Complete** | Post-AVS panel, overview section, snooze/completion, UX polish |
 
 ---
 
@@ -872,7 +872,7 @@ Snooze/action-completed loop and scheduled notifications deferred.
 **Frontend:**
 - All action items in `ActionItemsSection` and `PostAvsActionPanel` now have a "Snooze 1w" secondary button alongside the existing primary action button
 - Snooze sets `snoozed_until` to 7 days from now; the item disappears immediately (query invalidation) and re-surfaces after the snooze period expires
-- Past-due appointments use optimistic client-side filtering (Set state) since they're computed from the appointments prop, not a server query
+- Past-due appointments moved to a server-side endpoint (`GET /past-due-appointments`) that checks `NudgeState`, so snooze survives page refresh — consistent with all other computed nudges
 - A shared `ActionButtons` component was extracted to avoid repeating the two-button pattern across all item types
 
 **Key design decisions:**
@@ -889,6 +889,22 @@ Snooze/action-completed loop and scheduled notifications deferred.
 | Phase 4 | RAG for health documents | Planned |
 | Phase 5 | Medication reminders | Planned |
 | Phase 6 | Local model distillation | Planned |
+
+---
+
+## 15. Snooze UX Polish (DEC-012 UX Polish Phase)
+
+**Date:** 2026-07-05
+
+**Context:** After merging the snooze/completion state branch, three minor UX gaps were identified: no way to see what had been resolved (items just disappeared), no indication when an item resurfaced after a snooze, and a fixed 1-week snooze that was too short for longer-horizon items like referrals.
+
+**What was built:**
+
+- **Resolved history** — "Show/Hide resolved" toggle in the Needs Attention card header. Backend gets `?include_resolved=true` on the three list endpoints, returning completed items capped at 20 ordered by `completed_at` desc. Frontend renders them muted with strikethrough and completion date; queries only fire when the toggle is on.
+- **Previously snoozed indicator** — A small clock icon + "snoozed" text appears inline on any active FollowUp/LabOrder/Referral that has a non-null `snoozed_until`. Since the backend already filters actively-snoozed items, any active item with the field set must have had an expired snooze — no date comparison needed in the frontend.
+- **Flexible snooze durations** — Single "Snooze 1w" button replaced with a [1w][2w][1m] pill group in both `ActionItemsSection` and `PostAvsActionPanel`. `snoozeDate()` now takes a `days` argument. Covers referrals or follow-ups that realistically won't happen within a week.
+
+**Files changed:** `src/api/action_items.py`, `frontend/src/api/client.ts`, `frontend/src/components/ActionItemsSection.tsx`, `frontend/src/components/PostAvsActionPanel.tsx`
 
 ---
 
