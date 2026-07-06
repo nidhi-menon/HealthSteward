@@ -701,7 +701,7 @@ After all discussions, the following was implemented:
 | DEC-009 | Agentic Visit Prep Architecture | Approved | Claude API native tool use |
 | DEC-010 | AVS PDF Parser Integration | Implemented | Local Ollama section-routing parser |
 | DEC-011 | Specialty-Aware Visit Prep | Implemented | ICD-10 specialty tags, specialty-focused prompt |
-| DEC-012 | Patient Disengagement / Action Items | Implemented (simple phase) | Post-AVS panel + overview section |
+| DEC-012 | Patient Disengagement / Action Items | **Complete** | Post-AVS panel, overview section, snooze/completion, UX polish |
 
 ---
 
@@ -872,7 +872,7 @@ Snooze/action-completed loop and scheduled notifications deferred.
 **Frontend:**
 - All action items in `ActionItemsSection` and `PostAvsActionPanel` now have a "Snooze 1w" secondary button alongside the existing primary action button
 - Snooze sets `snoozed_until` to 7 days from now; the item disappears immediately (query invalidation) and re-surfaces after the snooze period expires
-- Past-due appointments use optimistic client-side filtering (Set state) since they're computed from the appointments prop, not a server query
+- Past-due appointments moved to a server-side endpoint (`GET /past-due-appointments`) that checks `NudgeState`, so snooze survives page refresh — consistent with all other computed nudges
 - A shared `ActionButtons` component was extracted to avoid repeating the two-button pattern across all item types
 
 **Key design decisions:**
