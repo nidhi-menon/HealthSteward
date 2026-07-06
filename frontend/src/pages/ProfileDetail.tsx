@@ -587,6 +587,8 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
     mutationFn: (appointmentId: string) => appointments.delete(profileId, appointmentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['pastDueAppointments', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       setDeleteTarget(null);
     },
   });
@@ -816,6 +818,7 @@ function DocumentsTab({ profileId, files, appointments: appointmentList }: { pro
       queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
       queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
       queryClient.invalidateQueries({ queryKey: ['referrals', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
       setParsedData(null);
       setActiveDocId(null);
       setView('list');
