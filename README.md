@@ -113,10 +113,10 @@ pnpm dev  # starts on http://localhost:3000
 
 ```bash
 ollama serve
-ollama pull qwen2.5:7b
+ollama pull qwen2.5:7b   # AVS_PARSER_MODEL — used for PDF parsing
 ```
 
-Set `LLM_PROVIDER=ollama` to run visit prep's agentic tool-use loop fully locally instead of via Claude API. Tool-calling reliability varies by model size — on constrained hardware (see DEC-009), small quantized models can produce malformed tool calls; when that happens, visit prep automatically falls back to a single-shot (non-agentic) response rather than failing.
+Set `LLM_PROVIDER=ollama` to run visit prep's agentic tool-use loop fully locally instead of via Claude API. This uses a separate model, configured via `OLLAMA_MODEL` (default `llama3.2`) — pull whichever model you set there too, e.g. `ollama pull llama3.2`. Tool-calling reliability varies by model size — on constrained hardware (see DEC-009), small quantized models can produce malformed tool calls; when that happens, visit prep automatically falls back to a single-shot (non-agentic) response rather than failing.
 
 ### Environment
 
