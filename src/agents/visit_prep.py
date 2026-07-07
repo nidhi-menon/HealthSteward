@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.agents.base import BaseAgent
+from src.agents.llm_backend import ToolCallParsingError, get_llm_backend
 from src.agents.ollama_client import OllamaClient, get_ollama_client
+from src.agents.tools import VisitPrepTools, claude_tools, ollama_tools
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
 from src.utils.anonymization import Anonymizer, AnonymizedAppointment, AnonymizedProfile
@@ -300,15 +302,28 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         messages = [{"role": "user", "content": context}]
 
         try:
-            # Step 7: Call LLM
-            if self.settings.llm_provider == "ollama":
-                response = await self._call_ollama(messages, system_prompt)
-            else:
-                response = await self._call_claude(
-                    messages=messages,
-                    system=system_prompt,
-                    temperature=0.7,
-                )
+            # Step 7: Call LLM — try the agentic tool-use loop first (DEC-009),
+            # falling back to single-shot generation if it's disabled, the
+            # backend can't do reliable tool use, or it doesn't converge.
+            response = None
+            if self.settings.agent_tool_use_enabled:
+                try:
+                    response = await self._run_agentic_loop(
+                        appointment.profile_id, messages, system_prompt
+                    )
+                except (ToolCallParsingError, RuntimeError) as e:
+                    logger.warning(f"Agentic tool-use loop failed, falling back to single-shot: {e}")
+                    response = None
+
+            if response is None:
+                if self.settings.llm_provider == "ollama":
+                    response = await self._call_ollama(messages, system_prompt)
+                else:
+                    response = await self._call_claude(
+                        messages=messages,
+                        system=system_prompt,
+                        temperature=0.7,
+                    )
 
             # Step 8: Parse JSON response
             parsed = self._parse_json_response(response)
@@ -328,6 +343,50 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         except Exception as e:
             logger.error(f"Visit prep generation failed: {e}")
             return self._get_fallback_response()
+
+    async def _run_agentic_loop(
+        self,
+        profile_id: str,
+        messages: list[dict],
+        system: str,
+    ) -> str:
+        """Run the bounded agentic tool-use loop (DEC-009, DEC-013).
+
+        Raises ToolCallParsingError/RuntimeError if the loop can't converge
+        within settings.agent_max_turns — callers should fall back to
+        single-shot generation on those exceptions.
+        """
+        backend = get_llm_backend(self.settings)
+        tools = ollama_tools() if self.settings.llm_provider == "ollama" else claude_tools()
+        tool_executor = VisitPrepTools(self.db, self.anonymizer, profile_id)
+
+        conversation = list(messages)
+
+        for turn in range(self.settings.agent_max_turns):
+            result = await backend.call(conversation, system, tools=tools)
+
+            if not result.tool_calls:
+                model_name = (
+                    self.settings.ollama_model
+                    if self.settings.llm_provider == "ollama"
+                    else self.settings.anthropic_model
+                )
+                await self._log_conversation(
+                    messages=messages,
+                    response=result.text or "",
+                    system=system,
+                    input_tokens=None,
+                    output_tokens=None,
+                    model=model_name,
+                )
+                return result.text or ""
+
+            conversation.append(backend.build_assistant_message(result))
+            for tool_call in result.tool_calls:
+                tool_result = await tool_executor.execute(tool_call.name, tool_call.input)
+                conversation.append(backend.build_tool_result_message(tool_call, tool_result))
+
+        raise RuntimeError(f"Agentic loop did not converge within {self.settings.agent_max_turns} turns")
 
     async def _call_ollama(self, messages: list[dict], system: str) -> str:
         """Call Ollama for generation."""
@@ -349,6 +408,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             system=system,
             input_tokens=None,
             output_tokens=None,
+            model=self.settings.ollama_model,
         )
 
         return response

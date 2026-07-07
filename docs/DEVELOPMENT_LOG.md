@@ -2,7 +2,7 @@
 
 This document captures the complete development conversation for the HealthSteward project, including questions, answers, options discussed, and decisions made.
 
-**Last Updated:** 2026-07-05
+**Last Updated:** 2026-07-06
 
 ---
 
@@ -21,6 +21,7 @@ This document captures the complete development conversation for the HealthStewa
 11. [AVS PDF Parser Integration (DEC-010)](#11-avs-pdf-parser-integration-dec-010)
 12. [Specialty-Aware Visit Prep (DEC-011)](#12-specialty-aware-visit-prep-dec-011)
 11. [Implementation Summary](#11-implementation-summary)
+16. [Pluggable LLM Backend + Agentic Tool-Use (DEC-013)](#16-pluggable-llm-backend--agentic-tool-use-dec-013)
 
 ---
 
@@ -905,6 +906,36 @@ Snooze/action-completed loop and scheduled notifications deferred.
 - **Flexible snooze durations** — Single "Snooze 1w" button replaced with a [1w][2w][1m] pill group in both `ActionItemsSection` and `PostAvsActionPanel`. `snoozeDate()` now takes a `days` argument. Covers referrals or follow-ups that realistically won't happen within a week.
 
 **Files changed:** `src/api/action_items.py`, `frontend/src/api/client.ts`, `frontend/src/components/ActionItemsSection.tsx`, `frontend/src/components/PostAvsActionPanel.tsx`
+
+---
+
+## 16. Pluggable LLM Backend + Agentic Tool-Use (DEC-013)
+
+**Date:** 2026-07-06
+
+**Context:** A GitHub issue asked for a pluggable LLM backend so visit prep could run fully local (Ollama) alongside Claude. Investigating turned up a bigger gap: DEC-009's agentic visit-prep architecture (tool-calling for drug interactions, past-visit lookup, clarifying questions) had been approved back in February but never actually implemented — `prepare_visit()` was still a single-shot prompt-in/JSON-out call, with no tool-calling anywhere in the codebase. A basic `settings.llm_provider` toggle already existed, but it only switched which LLM generated that single-shot response; there was no agentic loop for it to plug into.
+
+**Decision:** Build both together — implement DEC-009's agentic tool-use loop, designed from day one behind a pluggable backend interface (`LLMBackend`) that works for both Claude and Ollama, rather than building the loop Claude-only and retrofitting pluggability later.
+
+**Scope, deliberately bounded for v1:**
+- Two read-only tools: `get_medication_details` (structured, on-demand medication lookup — not a real drug-interaction database, which would need a licensed external API) and `lookup_past_visits` (on-demand deeper visit history query)
+- Descoped, tracked as follow-up issues: a real drug-interaction checker, and a user-facing pause-to-ask-clarifying-questions flow (both are substantial features on their own — the latter needs new DB state, a new API endpoint, and new frontend UI)
+- Fallback, not a hard failure: if the loop can't converge within `agent_max_turns` (default 6) or a backend's tool-call output can't be parsed (`ToolCallParsingError` — expected on small quantized local models, per DEC-009's original caveat), `prepare_visit()` falls back to the existing single-shot call. No regression risk either way.
+- Anonymization is applied to tool results the same way for both backends, consistent with how the main context was already anonymized regardless of provider before this change
+- No DB schema changes, no API response shape changes, no frontend changes — `prepare_visit()`'s return shape is unchanged
+
+**What was built:**
+
+- **`src/agents/llm_backend.py`** (new) — `LLMBackend` ABC with `ClaudeBackend` (wraps `AsyncAnthropic`, native `tools=` param) and `OllamaBackend` (calls `/api/chat` with OpenAI-style tool specs) implementations. `ToolCall`/`LLMTurnResult` dataclasses normalize both providers' responses into a common shape. `get_llm_backend()` factory keyed off `settings.llm_provider`.
+- **`src/agents/tools.py`** (new) — `VisitPrepTools` executor for the two tools, plus `claude_tools()`/`ollama_tools()` adapters that convert one canonical tool spec into each backend's expected wire format. Every tool result is anonymized via the existing `Anonymizer` before being returned to the loop.
+- **`src/agents/visit_prep.py`** — new `_run_agentic_loop` method: bounded loop that calls the backend, executes any requested tools, appends results, and repeats until the model returns final text or `agent_max_turns` is exhausted (raising `RuntimeError` to trigger fallback). Wired into `prepare_visit()` ahead of the existing single-shot call, which now only runs when the agentic path is disabled, unavailable, or fails.
+- **`src/agents/base.py`** — additive `tool_calls` param on `_log_conversation` for a richer audit trail; no existing call sites changed behavior.
+- **`src/config.py`** — new settings `agent_tool_use_enabled` (default `True`, kill switch) and `agent_max_turns` (default `6`).
+- **Tests** — new `tests/test_llm_backend.py` (backend abstraction, both providers, malformed tool-call handling) and `tests/test_agent_tools.py` (tool execution + anonymization); extended `tests/test_visit_prep.py` with a successful tool-use round-trip test and a non-convergence fallback test. Full suite: 72/72 passing.
+
+**Verification:** An independent review pass re-ran the full test suite from scratch (confirmed 72/72) and read through the anonymization boundary, exception handling, and turn-counting logic line by line. No correctness bugs found. One non-blocking risk noted: the pre-existing broad `except Exception` around `prepare_visit()`'s Step 7/8 now wraps more surface area (the new tool-execution code), so a genuine bug inside a tool (e.g. a DB error) would currently be silently reported to the user as "AI service unavailable" rather than surfacing distinctly. Left as-is for now; worth tightening in a follow-up if failure visibility becomes important.
+
+**Files changed:** New `src/agents/llm_backend.py`, `src/agents/tools.py`, `tests/test_llm_backend.py`, `tests/test_agent_tools.py`. Modified `src/agents/visit_prep.py`, `src/agents/base.py`, `src/config.py`, `tests/test_visit_prep.py`.
 
 ---
 
