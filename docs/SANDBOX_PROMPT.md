@@ -22,7 +22,7 @@ PROJECT CONTEXT: I'm building HealthSteward, a privacy-first health management a
 - Backend: Python, FastAPI, async, SQLAlchemy + SQLite
 - Frontend: React + TypeScript + Tailwind + Vite
 - Vector DB: ChromaDB (available, not yet populated)
-- LLM: Claude API (Sonnet) for agentic features, Ollama for simple local tasks
+- LLM: Pluggable backend (Claude API Sonnet or local Ollama) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
 - PII: All patient data is anonymized before reaching Claude (names → "Patient", DOB → age, doctor names → "your cardiologist", etc.)
 - Machine: Apple M3, 8GB RAM
 ```
@@ -107,7 +107,7 @@ Parses after-visit summary PDFs and extracts structured items: instructions, med
 **Decision:** DEC-009
 **Goal:** Prototype the agentic loop pattern — Claude calling tools and asking clarifying questions in a multi-step loop before producing visit prep.
 **Link:** Sandbox (new Claude session)
-**Status:** Not started
+**Status:** Superseded — a bounded version shipped directly as DEC-013 (`src/agents/llm_backend.py`, `src/agents/tools.py`) without running this prototype first. Shipped scope is narrower than what's prompted below: two read-only tools (medication lookup, past-visit lookup), no RAG/ChromaDB, no drug-interaction API, no web search, and no user-facing clarifying-question pause (all descoped as follow-ups — see DEC-013). This prompt is kept for reference if those descoped pieces get picked up later.
 
 ### Prompt
 
@@ -116,7 +116,7 @@ PROJECT CONTEXT: I'm building HealthSteward, a privacy-first health management a
 - Backend: Python, FastAPI, async, SQLAlchemy + SQLite
 - Frontend: React + TypeScript + Tailwind + Vite
 - Vector DB: ChromaDB (available, not yet populated)
-- LLM: Claude API (Sonnet) for agentic features, Ollama for simple local tasks
+- LLM: Pluggable backend (Claude API Sonnet or local Ollama) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
 - PII: All patient data is anonymized before reaching Claude (names → "Patient", DOB → age, doctor names → "your cardiologist", etc.)
 - Machine: Apple M3, 8GB RAM
 

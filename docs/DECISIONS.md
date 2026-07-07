@@ -402,7 +402,7 @@ Oncology → Relevant to all
 - Claude API cost is negligible for personal use (~$1/month)
 - Ollama remains available for simpler tasks (context selection summarization per DEC-008)
 
-**Status:** Approved — ready for implementation planning
+**Status:** Implemented (bounded scope, see DEC-013) — 2026-07-06
 
 ---
 
@@ -527,4 +527,27 @@ Oncology → Relevant to all
 - **Previously snoozed indicator** — any active item with a non-null `snoozed_until` was previously snoozed (backend filters actively-snoozed items, so the field's presence on an active item means the snooze expired); shown as a small clock icon + "snoozed" badge inline with the item name; no backend changes required
 - **Flexible snooze** — single "Snooze 1w" button replaced with a [1w][2w][1m] pill group everywhere snooze appears (`ActionItemsSection` and `PostAvsActionPanel`); covers longer-horizon items like referrals without requiring a date picker
 
-*Last updated: 2026-07-05*
+---
+
+### DEC-013: Pluggable LLM Backend + Agentic Tool-Use Implementation
+
+**Date:** 2026-07-06
+
+**Topic:** Implementing DEC-009's agentic tool-use loop, designed from the start to work behind a pluggable backend for both Claude API and local Ollama
+
+**Context:** GitHub issue #11 asked for a pluggable LLM backend so visit prep could run fully local as well as on Claude. Investigation found DEC-009 (agentic visit prep) had been approved but never implemented — `prepare_visit()` was still single-shot prompt-in/JSON-out, with no tool-calling anywhere in the codebase. A basic provider toggle (`settings.llm_provider`) already existed but only switched which LLM generated that single-shot response.
+
+**Decision:** Build both together — the actual agentic tool-use loop, behind a new `LLMBackend` abstraction (`src/agents/llm_backend.py`) implemented for both `ClaudeBackend` and `OllamaBackend`.
+
+**Scope (deliberately bounded for v1):**
+- Two read-only tools (`src/agents/tools.py`): `get_medication_details` (on-demand structured medication lookup — not a real drug-interaction database/API, which would be a separate, bigger feature) and `lookup_past_visits` (on-demand deeper visit history query)
+- **Descoped:** a real drug-interaction checker (needs a licensed external API) and a user-facing pause-to-ask-clarifying-questions flow (needs new DB state, a new API endpoint, and new frontend UI) — both tracked as separate follow-up issues
+- **Fallback, not hard failure:** if the loop can't converge within `agent_max_turns` (default 6) or a backend raises `ToolCallParsingError` (malformed/missing tool-call data — expected on small quantized local models per DEC-009), `prepare_visit()` falls back to the existing non-agentic single-shot call. No regression risk.
+- **Anonymization:** tool results are anonymized before being fed back into the loop for both backends, consistent with how `prepare_visit()` already anonymizes the main context regardless of provider
+- No DB schema changes, no API response shape changes, no frontend changes — `prepare_visit()`'s return shape is unchanged
+
+**Status:** Implemented
+
+---
+
+*Last updated: 2026-07-06*

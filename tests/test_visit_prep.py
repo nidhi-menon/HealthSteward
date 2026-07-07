@@ -1,9 +1,23 @@
 """Tests for visit preparation agent with mocked Claude API."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
+
+
+def _mock_text_response(text: str) -> MagicMock:
+    """Build a mock Anthropic response with a single text content block.
+
+    Uses SimpleNamespace (not MagicMock) for the content block so
+    `block.type == "text"` comparisons in ClaudeBackend behave like the
+    real SDK's TextBlock, rather than always being falsy against a MagicMock.
+    """
+    mock_message = MagicMock()
+    mock_message.content = [SimpleNamespace(type="text", text=text)]
+    mock_message.usage = MagicMock(input_tokens=100, output_tokens=50)
+    return mock_message
 
 
 @pytest.fixture
@@ -66,14 +80,16 @@ async def test_prepare_visit(
     appointment_id = appointment_response.json()["id"]
 
     # Mock the Claude API call
-    mock_message = MagicMock()
-    mock_message.content = [MagicMock(text='{"questions": {"General": ["Test question"]}, "context_summary": "Test summary"}')]
-    mock_message.usage = MagicMock(input_tokens=100, output_tokens=50)
+    mock_message = _mock_text_response(
+        '{"questions": {"General": ["Test question"]}, "context_summary": "Test summary"}'
+    )
 
-    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic:
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_message)
         mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
 
         # Request visit preparation
         response = await client.post(f"/api/visits/{appointment_id}/prepare")
@@ -111,14 +127,16 @@ async def test_get_visit_prep(
     appointment_id = appointment_response.json()["id"]
 
     # Mock the Claude API call
-    mock_message = MagicMock()
-    mock_message.content = [MagicMock(text='{"questions": {"Test": ["Question 1"]}, "context_summary": "Summary"}')]
-    mock_message.usage = MagicMock(input_tokens=100, output_tokens=50)
+    mock_message = _mock_text_response(
+        '{"questions": {"Test": ["Question 1"]}, "context_summary": "Summary"}'
+    )
 
-    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic:
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_message)
         mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
 
         # Generate visit preparation
         await client.post(f"/api/visits/{appointment_id}/prepare")
@@ -190,14 +208,16 @@ async def test_prepare_visit_with_additional_concerns(
     appointment_id = appointment_response.json()["id"]
 
     # Mock the Claude API call
-    mock_message = MagicMock()
-    mock_message.content = [MagicMock(text='{"questions": {"Concerns": ["About fatigue"]}, "context_summary": "Patient concerned about fatigue"}')]
-    mock_message.usage = MagicMock(input_tokens=100, output_tokens=50)
+    mock_message = _mock_text_response(
+        '{"questions": {"Concerns": ["About fatigue"]}, "context_summary": "Patient concerned about fatigue"}'
+    )
 
-    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic:
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_message)
         mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
 
         # Request visit preparation with additional concerns
         response = await client.post(
@@ -216,3 +236,118 @@ async def test_prepare_visit_appointment_not_found(client: AsyncClient):
     response = await client.post("/api/visits/non-existent-id/prepare")
 
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_agentic_tool_use(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+    sample_medication_data,
+):
+    """Test the agentic loop: a tool_use turn followed by a final text turn."""
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    await client.post(f"/api/profiles/{profile_id}/medications/", json=sample_medication_data)
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    tool_use_response = MagicMock()
+    tool_use_response.content = [
+        SimpleNamespace(
+            type="tool_use",
+            id="call_1",
+            name="get_medication_details",
+            input={},
+        )
+    ]
+
+    final_response = _mock_text_response(
+        '{"questions": {"Medication Review": ["Is Metformin still working well?"]}, '
+        '"context_summary": "Patient on Metformin for diabetes."}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=[tool_use_response, final_response])
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["generated_questions"] == {
+        "Medication Review": ["Is Metformin still working well?"]
+    }
+    assert mock_client.messages.create.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_falls_back_when_agentic_loop_does_not_converge(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """If the agentic loop never converges, prepare_visit falls back to single-shot."""
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    # Every agentic-loop turn requests another tool call, so it never converges
+    # within agent_max_turns and prepare_visit must fall back to single-shot.
+    looping_tool_use_response = MagicMock()
+    looping_tool_use_response.content = [
+        SimpleNamespace(type="tool_use", id="call_1", name="get_medication_details", input={})
+    ]
+
+    fallback_response = _mock_text_response(
+        '{"questions": {"General": ["Fallback question"]}, "context_summary": "Fallback summary"}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend, \
+         patch("src.agents.base.AsyncAnthropic") as mock_anthropic_base:
+        mock_agentic_client = AsyncMock()
+        mock_agentic_client.messages.create = AsyncMock(return_value=looping_tool_use_response)
+        mock_anthropic_backend.return_value = mock_agentic_client
+
+        mock_fallback_client = AsyncMock()
+        mock_fallback_client.messages.create = AsyncMock(return_value=fallback_response)
+        mock_anthropic_base.return_value = mock_fallback_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["generated_questions"] == {"General": ["Fallback question"]}

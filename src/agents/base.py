@@ -76,6 +76,7 @@ class BaseAgent:
         input_tokens: Optional[int] = None,
         output_tokens: Optional[int] = None,
         model: Optional[str] = None,
+        tool_calls: Optional[list[dict[str, Any]]] = None,
     ) -> None:
         """Log conversation to database for training data collection.
 
@@ -106,14 +107,18 @@ class BaseAgent:
                 self.db.add(log_entry)
 
             # Log assistant response
+            assistant_extra_data = {
+                "system": system,
+                "model": model_name,
+                "anonymized": True,  # Per DEC-006
+            }
+            if tool_calls:
+                assistant_extra_data["tool_calls"] = tool_calls
+
             assistant_log = ConversationLog(
                 role="assistant",
                 content=response,
-                extra_data={
-                    "system": system,
-                    "model": model_name,
-                    "anonymized": True,  # Per DEC-006
-                },
+                extra_data=assistant_extra_data,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
             )

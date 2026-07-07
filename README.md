@@ -29,7 +29,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 ## What It Does
 
 - **Health profile management** — conditions (with ICD-10 codes), medications, doctors, appointments
-- **AI visit preparation** — generates personalized questions for upcoming doctor visits using Claude API, with intelligent context selection from past visits
+- **AI visit preparation** — an agentic loop generates personalized questions for upcoming doctor visits, with intelligent context selection from past visits and on-demand tools (medication lookup, past-visit lookup) it can call before finalizing; runs on Claude API or fully local Ollama, with automatic fallback to single-shot generation if tool-calling isn't reliable
 - **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
 - **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab with flexible snooze (1w / 2w / 1m), one-click completion, previously-snoozed indicators, and a resolved history toggle
 - **PII anonymization** — all data sent to external LLMs is anonymized (names, DOB, contact info removed)
@@ -41,8 +41,8 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 |-------|-----------|
 | Backend | FastAPI + SQLAlchemy (async) + SQLite |
 | Frontend | React 19 + TypeScript + Tailwind CSS + Vite |
-| AI (agentic) | Claude API (Sonnet) for visit prep |
-| AI (local) | Ollama (qwen2.5:7b) for PDF parsing |
+| AI (agentic) | Pluggable backend (Claude API Sonnet, or local Ollama) for visit prep's tool-use loop |
+| AI (local) | Ollama (qwen2.5:7b) for PDF parsing and context-selection relevance scoring |
 | Database | SQLite via aiosqlite, migrations via Alembic |
 
 ```mermaid
@@ -55,19 +55,26 @@ flowchart TD
     Select -->|stage 2: relevance scoring<br/>on raw, unanonymized text| OllamaScore[Ollama<br/>local, qwen2.5:7b]
     OllamaScore --> Select
     Select -->|stage 4: anonymize| Anon[PII Anonymization]
-    Anon -->|no names, DOB, contact info| Claude[Claude API<br/>Sonnet]
-    Claude -->|visit prep questions| DB
+    Anon --> Loop[Agentic Tool-Use Loop]
+
+    Loop -->|prompt + tools| Backend[Pluggable LLM Backend<br/>Claude API or local Ollama]
+    Backend -->|tool call: get_medication_details<br/>or lookup_past_visits| Tools[Visit Prep Tools]
+    Tools -->|query, then anonymize| DB
+    Tools -->|anonymized tool result| Backend
+    Backend -->|final text, up to agent_max_turns| Loop
+    Loop -->|falls back to single-shot<br/>if loop doesn't converge| DB
 
     DB --> API[FastAPI]
     API --> UI[React + TypeScript UI]
 
     style OllamaParse fill:#2d5a3d,color:#fff
     style OllamaScore fill:#2d5a3d,color:#fff
-    style Claude fill:#8a5a2d,color:#fff
+    style Backend fill:#8a5a2d,color:#fff
     style Anon fill:#5a2d5a,color:#fff
+    style Tools fill:#5a2d5a,color:#fff
 ```
 
-Two LLMs, two trust boundaries: **Ollama runs locally** and never sees the network — it parses raw PDFs and also scores relevance of raw (pre-anonymization) visit history during context selection. **Claude API is remote** and only ever receives the final, already-anonymized context — anonymization happens as the last step before that call, not as a single gate in front of both LLMs.
+Two LLMs, two trust boundaries: **Ollama runs locally** and never sees the network — it parses raw PDFs and also scores relevance of raw (pre-anonymization) visit history during context selection. **The pluggable backend (Claude or local Ollama) only ever receives already-anonymized data** — anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way for both backends, not just for Claude. If the loop can't converge (bounded by `agent_max_turns`) or a backend's tool-calling isn't reliable (a known risk on small local models per DEC-009), it falls back to the original single-shot call — no functional regression either way.
 
 ## Quick Start
 
@@ -102,12 +109,14 @@ pnpm install
 pnpm dev  # starts on http://localhost:3000
 ```
 
-### Ollama (for PDF parsing)
+### Ollama (for PDF parsing, and optionally for visit prep)
 
 ```bash
 ollama serve
 ollama pull qwen2.5:7b
 ```
+
+Set `LLM_PROVIDER=ollama` to run visit prep's agentic tool-use loop fully locally instead of via Claude API. Tool-calling reliability varies by model size — on constrained hardware (see DEC-009), small quantized models can produce malformed tool calls; when that happens, visit prep automatically falls back to a single-shot (non-agentic) response rather than failing.
 
 ### Environment
 
@@ -122,6 +131,10 @@ LLM_PROVIDER=claude
 OLLAMA_BASE_URL=http://localhost:11434
 AVS_PARSER_MODEL=qwen2.5:7b
 DATABASE_URL=sqlite+aiosqlite:///data/healthsteward.db
+
+# Agentic visit prep (DEC-009 / DEC-013)
+AGENT_TOOL_USE_ENABLED=true   # set false to force single-shot generation
+AGENT_MAX_TURNS=6             # max tool-call round trips before falling back
 ```
 
 ## Project Structure
@@ -202,15 +215,15 @@ The parser uses a **section-routing architecture**:
 
 ### Visit Prep
 
-Uses a 4-stage context selection pipeline:
+Context is assembled via a 4-stage selection pipeline, then handed to an agentic tool-use loop:
 1. Rules-based filtering (same doctor, PCP visits, related specialties)
 2. Local LLM relevance scoring (Ollama, if >5 past visits)
 3. Token budget management
-4. Anonymize and send to Claude for question generation
+4. Anonymize, then run the agentic loop (Claude API or local Ollama, per `LLM_PROVIDER`) — the model can call tools (`get_medication_details`, `lookup_past_visits`) before finalizing questions, bounded by `agent_max_turns`; falls back to a single non-agentic call if the loop doesn't converge or tool-calling isn't reliable (see DEC-009, DEC-013)
 
 ## Documentation
 
-- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-012)
+- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-013)
 - `docs/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
 
@@ -221,7 +234,7 @@ All health data stays local. The `.gitignore` protects:
 - `.env` files
 - Log files
 
-PDF parsing uses only local Ollama — no PHI is sent to external services. Visit prep anonymizes all PII before sending to Claude API.
+PDF parsing uses only local Ollama — no PHI is sent to external services. Visit prep anonymizes all PII before it reaches the configured LLM backend (Claude API or local Ollama).
 
 ## License
 
