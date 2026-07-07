@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     context_relevance_cutoff: float = 7.0  # Keep visits scoring >= this
     context_max_tokens: int = 2000  # Max tokens for visit context
 
+    # Agentic Visit Prep (DEC-009 / DEC-013)
+    agent_tool_use_enabled: bool = True  # Kill switch: falls back to single-shot if False
+    agent_max_turns: int = 6  # Max tool-call round trips before falling back to single-shot
+
     # Database
     database_url: str = "sqlite+aiosqlite:///data/healthsteward.db"
 
