@@ -166,6 +166,8 @@ HealthSteward/
 │   ├── agents/
 │   │   ├── base.py          # BaseAgent with Claude API + conversation logging
 │   │   ├── visit_prep.py    # AI visit preparation agent
+│   │   ├── llm_backend.py   # Pluggable LLM backend (Claude + Ollama) for the agentic loop
+│   │   ├── tools.py         # Read-only tools for the agentic loop (medication lookup, past-visit lookup)
 │   │   └── ollama_client.py
 │   └── utils/
 │       ├── anonymization.py # PII removal for LLM calls
@@ -223,7 +225,7 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 ## Documentation
 
-- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-013)
+- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-014)
 - `docs/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
 
