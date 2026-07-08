@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HealthSteward — infrastructure for the care nobody's coordinating</title>
+<meta name="description" content="Privacy-first care coordination for chronic illness. Runs locally by default — no cloud storage, no sync.">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<style>
+  :root {
+    --paper: #efeee6;
+    --paper-raised: #f7f6ef;
+    --ink: #171f1d;
+    --ink-soft: #3b453f;
+    --teal: #1f4a42;
+    --teal-bright: #2f6a5e;
+    --amber: #047857;
+    --redact: #101412;
+    --line: #cdccbf;
+    --focus: #047857;
+  }
+  /* Deliberately single-theme: the redaction-bar reveal needs dark ink on
+     light paper to read. Always paper/light, regardless of viewer theme. */
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: Iowan Old Style, Charter, Georgia, "Noto Serif", serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  ::selection { background: var(--amber); color: var(--redact); }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  a { color: var(--teal-bright); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  .wrap {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-size: 15px;
+  }
+  .brand .mark { flex: none; display: block; }
+  .brand .mark rect.card { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+  .brand .mark line { stroke: var(--ink-soft); stroke-width: 1.4; stroke-linecap: square; }
+  .brand .mark rect.bar { fill: var(--teal); }
+  .top nav { display: flex; gap: 22px; }
+  .top nav a {
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+  .top nav a:hover { color: var(--ink); }
+
+  /* HERO */
+  .hero {
+    padding: 88px 24px 64px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .eyebrow { margin-bottom: 18px; }
+  h1 {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 42px);
+    line-height: 1.28;
+    letter-spacing: -0.01em;
+    margin: 0 0 28px;
+    text-wrap: balance;
+    max-width: 640px;
+  }
+  h1 .line { display: block; overflow: hidden; }
+  h1 .line span {
+    display: inline-block;
+    background: linear-gradient(var(--redact), var(--redact));
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    color: transparent;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    animation: reveal 0.05s steps(1) 1 forwards;
+  }
+  .hero p.lede {
+    max-width: 560px;
+    font-size: 19px;
+    color: var(--ink-soft);
+    margin: 0 0 36px;
+  }
+  .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+
+  .btn {
+    font-family: ui-monospace, monospace;
+    font-size: 13.5px;
+    letter-spacing: 0.02em;
+    padding: 12px 20px;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    text-decoration: none;
+    display: inline-block;
+    background: transparent;
+    cursor: pointer;
+  }
+  .btn.primary {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: #f3f1e6;
+  }
+  .btn.primary:hover { background: var(--teal-bright); border-color: var(--teal-bright); }
+  .btn:hover { background: var(--paper-raised); }
+  .hero-note { font-family: ui-monospace, monospace; font-size: 14px; color: var(--ink-soft); }
+
+  /* redaction reveal keyframe applied via JS toggling class */
+  h1 .line span.revealed {
+    animation: unredact 1.5s cubic-bezier(.65,0,.35,1) forwards;
+  }
+  @keyframes unredact {
+    0%   { background-size: 100% 100%; color: transparent; }
+    72%  { background-size: 100% 100%; color: transparent; }
+    73%  { color: inherit; }
+    100% { background-size: 0% 100%; color: inherit; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    h1 .line span { animation: none !important; background-size: 0% 100% !important; color: inherit !important; }
+  }
+
+  /* SECTIONS styled like chart fields */
+  section.field {
+    padding: 52px 24px;
+    border-bottom: 1px solid var(--line);
+    scroll-margin-top: 84px;
+  }
+  section.field .field-label {
+    margin-bottom: 22px;
+  }
+  h2 {
+    font-family: ui-monospace, monospace;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+  }
+  section.field p {
+    max-width: 620px;
+    color: var(--ink-soft);
+    margin: 0 0 16px;
+  }
+  section.field p:last-child { margin-bottom: 0; }
+  section.field strong { color: var(--ink); font-weight: 600; }
+
+  /* feature list = chart line items */
+  .chart-lines { border-top: 1px solid var(--line); margin-top: 8px; }
+  .chart-line {
+    display: grid;
+    grid-template-columns: 108px 1fr;
+    gap: 20px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .chart-line .tag {
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--teal-bright);
+    padding-top: 3px;
+  }
+  .chart-line h3 {
+    margin: 0 0 6px;
+    font-size: 16.5px;
+    font-family: Iowan Old Style, Charter, Georgia, serif;
+    font-weight: 700;
+  }
+  .chart-line p { margin: 0; font-size: 15.5px; color: var(--ink-soft); max-width: 560px; }
+
+  /* trust boundary cards */
+  .boundaries {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-top: 8px;
+  }
+  .boundary {
+    background: var(--paper);
+    padding: 22px;
+  }
+  .boundary .eyebrow { margin-bottom: 10px; }
+  .boundary h3 { margin: 0 0 10px; font-size: 16px; font-family: ui-monospace, monospace; }
+  .boundary p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  @media (max-width: 620px) {
+    .boundaries { grid-template-columns: 1fr; }
+  }
+
+  /* install block styled like a form/prescription strip */
+  .install-block {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    padding: 20px 22px;
+    margin-top: 10px;
+  }
+  .install-block .eyebrow { margin-bottom: 12px; }
+  pre.cmd {
+    margin: 0;
+    font-family: ui-monospace, monospace;
+    font-size: 14px;
+    color: var(--ink);
+    overflow-x: auto;
+    white-space: pre;
+    padding-bottom: 2px;
+  }
+  pre.cmd .prompt { color: var(--teal-bright); }
+  .install-note { margin-top: 14px; font-size: 13.5px; color: var(--ink-soft); }
+  .install-note code { font-family: ui-monospace, monospace; font-size: 0.92em; }
+
+  footer {
+    padding: 40px 24px 60px;
+  }
+  footer .wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  footer .eyebrow { margin: 0; }
+  footer nav { display: flex; gap: 18px; }
+  footer nav a { font-family: ui-monospace, monospace; font-size: 13px; color: var(--ink-soft); text-decoration: none; }
+  footer nav a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="mark" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+      <rect class="card" x="1.5" y="1.5" width="17" height="17"></rect>
+      <line x1="4.5" y1="6.5" x2="15.5" y2="6.5"></line>
+      <rect class="bar" x="4.5" y="9.3" width="11" height="2.4"></rect>
+      <line x1="4.5" y1="14.5" x2="11" y2="14.5"></line>
+    </svg>
+    HealthSteward
+  </div>
+  <nav>
+    <a href="#what">what it does</a>
+    <a href="#privacy">privacy</a>
+    <a href="#start">get started</a>
+    <a href="https://github.com/nidhi-menon/HealthSteward">github</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div class="eyebrow">patient chart · continuity of care · v0, early development</div>
+    <h1 id="hero-h1">
+      <span class="line"><span>Nobody on the clinical side</span></span>
+      <span class="line"><span>owns the coordination work.</span></span>
+      <span class="line"><span>HealthSteward does.</span></span>
+    </h1>
+    <p class="lede">
+      Every specialist has their own chart. None of them talk to each other. HealthSteward
+      centralizes what they gave you — locally, on your machine — and turns it into what to
+      bring up at the next appointment.
+    </p>
+    <div class="hero-ctas">
+      <a class="btn primary" href="#start">Get started</a>
+      <a class="btn" href="https://github.com/nidhi-menon/HealthSteward">View source</a>
+    </div>
+    <p class="hero-note" style="margin-top:18px;">no cloud storage · no sync · nothing leaves your machine</p>
+  </div>
+</section>
+
+<section class="field" id="motivation">
+  <div class="wrap">
+    <div class="field-label eyebrow">Chief Complaint</div>
+    <h2>Chronic illness comes with a second, unpaid job.</h2>
+    <p>
+      Remembering what each specialist said. What changed since the last visit. Which labs are
+      still pending. What you're supposed to bring up next time — across providers who don't
+      share a health system and often don't share information at all.
+    </p>
+    <p>
+      That work falls hardest exactly when you have the least capacity to carry it: mid-flare,
+      mid-crisis, mid-diagnosis. Things get missed — a follow-up nobody rebooks, a lab result
+      nobody connects to a new symptom, a medication change one specialist doesn't know another
+      one made.
+    </p>
+    <p>
+      Most tools treat this as a records problem: store the documents, make them searchable,
+      maybe chat with them. <strong>HealthSteward treats it as a coordination problem</strong> —
+      ingest what providers give you, track what's changed and what's still open, and turn that
+      into something concrete for the next appointment.
+    </p>
+  </div>
+</section>
+
+<section class="field" id="what">
+  <div class="wrap">
+    <div class="field-label eyebrow">Plan</div>
+    <h2>What it does</h2>
+    <div class="chart-lines">
+      <div class="chart-line">
+        <div class="tag">Profile</div>
+        <div>
+          <h3>Health profile management</h3>
+          <p>Conditions with ICD-10 codes, medications, doctors, and appointments, kept in one place.</p>
+        </div>
+      </div>
+      <div class="chart-line">
+        <div class="tag">Prep</div>
+        <div>
+          <h3>AI visit preparation</h3>
+          <p>An agentic loop drafts personalized questions for an upcoming visit, pulling relevant history and calling tools (medication lookup, past-visit lookup) before it finalizes anything. Runs on Claude or fully local via Ollama.</p>
+        </div>
+      </div>
+      <div class="chart-line">
+        <div class="tag">Ingest</div>
+        <div>
+          <h3>After-visit summary parsing</h3>
+          <p>Upload the PDF you're handed on the way out. Parsed locally with Ollama, reviewed by you, then applied to your profile.</p>
+        </div>
+      </div>
+      <div class="chart-line">
+        <div class="tag">Follow-up</div>
+        <div>
+          <h3>Proactive action items</h3>
+          <p>Follow-ups to book, labs to get done, referrals to schedule — surfaced right after a visit, and again in a persistent "needs attention" list until you snooze or resolve them.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="field" id="privacy">
+  <div class="wrap">
+    <div class="field-label eyebrow">Chart Access Log</div>
+    <h2>Two trust boundaries, not one</h2>
+    <p>Health data is sensitive by default, so nothing crosses a boundary un-redacted.</p>
+    <div class="boundaries">
+      <div class="boundary">
+        <div class="eyebrow">Stays on device</div>
+        <h3>Ollama, local</h3>
+        <p>PDF parsing and visit-relevance scoring run on a local model. Your raw records never touch the network.</p>
+      </div>
+      <div class="boundary">
+        <div class="eyebrow">Anonymized first</div>
+        <h3>Claude API, optional</h3>
+        <p>If you opt into cloud-quality visit prep, names, DOB, and contact info are stripped — deterministically and via NER — before anything is sent.</p>
+      </div>
+    </div>
+    <p style="margin-top:16px; font-size:14.5px;">
+      This reduces exposure but isn't a guarantee — NER-based detection can miss names or
+      identifying details in unusual free-text phrasing. Local-only mode (Ollama for both
+      parsing and visit prep) needs no anonymization step, since nothing leaves the machine.
+    </p>
+  </div>
+</section>
+
+<section class="field" id="start">
+  <div class="wrap">
+    <div class="field-label eyebrow">Disposition</div>
+    <h2>Get started</h2>
+    <p>Everything, including the database, stays in a folder on your machine. Needs Python 3.11+, Node 18+/pnpm, and <a href="https://ollama.ai">Ollama</a>.</p>
+    <div class="install-block">
+      <div class="eyebrow">terminal — backend</div>
+      <pre class="cmd"><span class="prompt">$</span> git clone https://github.com/nidhi-menon/HealthSteward.git &amp;&amp; cd HealthSteward
+<span class="prompt">$</span> pip install -r requirements.txt
+<span class="prompt">$</span> python -m alembic upgrade head
+<span class="prompt">$</span> python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000</pre>
+    </div>
+    <div class="install-block" style="margin-top:14px;">
+      <div class="eyebrow">terminal — frontend</div>
+      <pre class="cmd"><span class="prompt">$</span> cd frontend &amp;&amp; pnpm install &amp;&amp; pnpm dev</pre>
+    </div>
+    <div class="install-block" style="margin-top:14px;">
+      <div class="eyebrow">terminal — local model, for PDF parsing</div>
+      <pre class="cmd"><span class="prompt">$</span> ollama serve
+<span class="prompt">$</span> ollama pull qwen2.5:7b</pre>
+    </div>
+    <p class="install-note">Full setup, including the <code>.env</code> file, is in the <a href="https://github.com/nidhi-menon/HealthSteward#quick-start">README</a>. A one-step installer for people who'd rather not open a terminal is on the way — <a href="https://github.com/nidhi-menon/HealthSteward/issues/18">track progress on GitHub</a>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="eyebrow mono">GPL-3.0 · early development · not a substitute for clinical judgment</p>
+    <nav>
+      <a href="https://github.com/nidhi-menon/HealthSteward">GitHub</a>
+      <a href="https://github.com/nidhi-menon/HealthSteward/discussions">Discussions</a>
+      <a href="https://github.com/nidhi-menon/HealthSteward/issues">Issues</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  var spans = document.querySelectorAll('#hero-h1 .line span');
+  spans.forEach(function (el, i) {
+    setTimeout(function () { el.classList.add('revealed'); }, Math.max(0, -400 + i * 900));
+  });
+</script>
+</body>
+</html>

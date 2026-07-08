@@ -15,9 +15,12 @@ export default function Layout() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
               <Link to="/" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">HS</span>
-                </div>
+                <svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true" className="flex-none">
+                  <rect x="1.5" y="1.5" width="17" height="17" fill="none" stroke="#111827" strokeWidth="1.4" />
+                  <line x1="4.5" y1="6.5" x2="15.5" y2="6.5" stroke="#9ca3af" strokeWidth="1.4" strokeLinecap="square" />
+                  <rect x="4.5" y="9.3" width="11" height="2.4" fill="#059669" />
+                  <line x1="4.5" y1="14.5" x2="11" y2="14.5" stroke="#9ca3af" strokeWidth="1.4" strokeLinecap="square" />
+                </svg>
                 <span className="font-semibold text-gray-900">HealthSteward</span>
               </Link>
               <nav className="flex gap-6">
