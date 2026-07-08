@@ -550,4 +550,30 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-06*
+### DEC-014: Packaging Strategy for Non-Terminal Users
+
+**Date:** 2026-07-08
+
+**Topic:** How to let someone go from the new marketing landing page to a running app without opening a terminal
+
+**Context:** The landing page (built to broaden reach beyond the GitHub repo) pitches HealthSteward to people outside the current audience, but setup still requires a terminal — cloning the repo, running pip/pnpm/alembic commands, and installing and running Ollama separately. That's a real barrier for non-technical users the landing page is meant to attract.
+
+**Options Considered:**
+
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| **1. One-line install script** | `curl \| sh` checks/installs Docker, pulls the image, runs it, opens the browser | Low effort, fast to ship | Still technically "terminal," just one command instead of many |
+| **2. Native desktop app** | Tauri/Electron wrapper + PyInstaller-bundled backend, packaged as .dmg/.exe/.AppImage | Real double-click installer, closest to "non-technical user" experience | Ollama's multi-GB model download has to be bundled or fetched on first run; cross-platform code signing/notarization ($99/yr Apple, Windows signing) and auto-updates make this a multi-week undertaking with ongoing packaging maintenance |
+| **3. Thin native launcher over Docker Desktop** | Small native app that checks Docker is running, runs `docker-compose up`, opens the browser | Hides most complexity without bundling Python/Ollama | Still requires Docker Desktop installed once; not truly terminal-free |
+
+**Decision:** Start with Option 1 (one-line install script). Options 2 and 3 deferred until there's signal that people want this enough to justify the ongoing packaging maintenance burden.
+
+**Reasoning:** A native installer (Option 2) is the best end-state for the stated goal of reaching people unfamiliar with terminals, but Ollama's model-download size and the cross-platform signing/notarization/update pipeline make it a significant, ongoing commitment for a pre-product-market-fit project. The install script is a cheap, reversible step that meaningfully lowers the barrier today; it can be superseded by a native installer later without having wasted the work.
+
+**Scope note:** This also requires `docker-compose.yml` to actually work end-to-end — it currently provisions Postgres/Redis/ChromaDB, but the app defaults to SQLite, and there's no Ollama service in compose. That needs fixing regardless of which installer approach is picked, and blocks Option 1 as much as Options 2/3.
+
+**Status:** Decided (simple phase — install script — not yet started; tracked in GitHub issue "Packaging: one-step installer for non-terminal users")
+
+---
+
+*Last updated: 2026-07-08*

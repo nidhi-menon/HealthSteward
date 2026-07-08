@@ -939,4 +939,24 @@ Snooze/action-completed loop and scheduled notifications deferred.
 
 ---
 
+## 17. Public Landing Page + Brand Mark (DEC-014)
+
+**Date:** 2026-07-08
+
+**Context:** HealthSteward existed only as a GitHub repo, with no public-facing presence for people who aren't already comfortable browsing source code. The goal was a real landing page, plus a decision on how (and whether) to package the app so non-technical users could try it without a terminal.
+
+**Decision:** Build a standalone marketing landing page (not a build-tooled part of the frontend) with its own visual identity distinct from the app's plain Tailwind UI, but tied to it via a shared brand mark and the app's emerald accent. Packaging strategy for non-terminal users is a separate, larger decision — see DEC-014 for the options considered (install script vs. native desktop app vs. thin Docker launcher) and why the install script was chosen as the starting point, deferring the others. That work is tracked in [issue #18](https://github.com/nidhi-menon/HealthSteward/issues/18) and hasn't started; the landing page's "Get started" section currently documents the real manual setup steps, not a placeholder installer command.
+
+**What was built:**
+
+- **`docs/index.html`** (new) — the landing page, served via GitHub Pages from `/docs` on `main`. Visual identity: a "patient chart" concept — monospace headline styled like a typed after-visit summary, a redaction-bar reveal animation on the hero (ties directly to the PII-anonymization feature), content laid out as chart fields (Chief Complaint, Plan, Chart Access Log, Disposition), and a two-column "trust boundary" panel explaining the local-vs-anonymized-cloud split. Deliberately single-theme (light/paper) — the redaction bars need dark ink on light paper to read, so it doesn't follow the viewer's dark-mode preference. Includes the same anonymization disclaimer already in the README (`src/utils/anonymization.py` — best-effort, not a guarantee) so the two documents don't drift into different claims.
+- **Brand mark** — a small SVG icon (a sharp-cornered card outline with one line rendered as a solid bar, echoing the redaction motif) replacing the placeholder "HS" initials badge that was previously hardcoded in the app. Applied consistently in three places: the landing page header (`docs/index.html`), the app's nav (`frontend/src/components/Layout.tsx`), and as the actual favicon for both the app (`frontend/public/favicon.svg`, replacing the default Vite icon) and the landing page (`docs/assets/favicon.svg`).
+- **README** — added a "Website" link alongside the existing Discussions/Issues links.
+
+**Explicitly not done in this pass:** the one-step installer script itself, and the `docker-compose.yml` fix it depends on (currently provisions Postgres/Redis/ChromaDB while the app defaults to SQLite, and has no Ollama service) — both are scoped to issue #18.
+
+**Files changed:** New `docs/index.html`, `docs/assets/favicon.svg`, `frontend/public/favicon.svg`. Modified `frontend/src/components/Layout.tsx`, `frontend/index.html`, `README.md`, `docs/DECISIONS.md` (DEC-014). Removed `frontend/public/vite.svg`.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
