@@ -32,7 +32,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 - **AI visit preparation** — an agentic loop generates personalized questions for upcoming doctor visits, with intelligent context selection from past visits and on-demand tools (medication lookup, past-visit lookup) it can call before finalizing; runs on Claude API or fully local Ollama, with automatic fallback to single-shot generation if tool-calling isn't reliable
 - **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
 - **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab with flexible snooze (1w / 2w / 1m), one-click completion, previously-snoozed indicators, and a resolved history toggle
-- **PII anonymization** — all data sent to external LLMs is anonymized (names, DOB, contact info removed)
+- **PII anonymization** — data sent to Claude is anonymized via deterministic field replacement, regex, and spaCy NER (names, DOB, contact info); best-effort on free text, not a hard guarantee
 - **Complete privacy** — health data stays local; PDF parsing uses only local Ollama (no PHI leaves your machine)
 
 ## Architecture
@@ -234,7 +234,7 @@ All health data stays local. The `.gitignore` protects:
 - `.env` files
 - Log files
 
-PDF parsing uses only local Ollama — no PHI is sent to external services. Visit prep anonymizes all PII before it reaches the configured LLM backend (Claude API or local Ollama).
+PDF parsing uses only local Ollama — no PHI is sent to external services. When visit prep is configured to use the Claude API, PII is anonymized before that call goes out (deterministic field replacement, regex, and spaCy NER — see `src/utils/anonymization.py`). This reduces exposure but isn't a guarantee: NER-based detection can miss names or identifying details in unusual free-text phrasing. When visit prep runs on local Ollama instead, no anonymization step is needed since nothing leaves the machine.
 
 ## License
 
