@@ -18,9 +18,9 @@ PDF parsing runs on local Ollama. PII is stripped before anything touches an ext
 
 ## Motivation
 
-Managing a chronic illness means managing a second, unpaid job: remembering what each specialist said, what changed since the last visit, which labs are still pending, and what you're supposed to bring up next time, across providers who don't talk to each other and often don't share a health system.
+Anyone navigating a fragmented care setup ends up managing a second, unpaid job: remembering what each specialist said, what changed since the last visit, which labs are still pending, and what you're supposed to bring up next time, across providers who don't talk to each other and often don't share a health system.
 
-That coordination work doesn't show up on any chart. Nobody on the clinical side owns it. It falls entirely on the patient, and it falls hardest exactly when a patient has the least capacity to carry it: mid-flare, mid-crisis, mid-diagnosis. When that happens, things get missed: a follow-up nobody rebooks, a lab result nobody connects to a new symptom, a medication change one specialist doesn't know another one made.
+That coordination work doesn't show up on any chart. Nobody on the clinical side owns it. It falls entirely on the patient — and it falls hardest on people managing multiple chronic conditions and multimorbidities, who are almost always stuck in this kind of fragmented setup, and hardest of all exactly when they have the least capacity to carry it: mid-flare, mid-crisis, mid-diagnosis. When that happens, things get missed: a follow-up nobody rebooks, a lab result nobody connects to a new symptom, a medication change one specialist doesn't know another one made.
 
 Most existing tools treat this as a records problem: store the documents, make them searchable, maybe chat with them. HealthSteward treats it as a coordination problem instead: ingest the documents providers give you, keep track of what's changed and what's still open, and turn that into something concrete to bring into the next appointment. All of it runs locally by default, because a tool asking to hold this much of someone's health history should not require sending that history to a server to be useful.
 
