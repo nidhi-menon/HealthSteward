@@ -12,9 +12,11 @@
     --paper-raised: #f7f6ef;
     --ink: #171f1d;
     --ink-soft: #3b453f;
+    --ink-faint: #5a635d; /* shared token with tdd.html; unused on this page today but kept in sync for palette consistency across the site */
     --teal: #1f4a42;
     --teal-bright: #2f6a5e;
-    --amber: #047857;
+    --amber: #8a5a17; /* shared token with tdd.html (accessible warm accent); unused on this page today — see --select-hl below for what this page actually uses for its selection highlight */
+    --select-hl: #047857; /* this page's text-selection highlight — was previously (mis)named --amber, despite being a green, not amber */
     --redact: #101412;
     --line: #cdccbf;
     --focus: #047857;
@@ -33,7 +35,7 @@
     font-size: 17px;
     line-height: 1.6;
   }
-  ::selection { background: var(--amber); color: var(--redact); }
+  ::selection { background: var(--select-hl); color: var(--redact); }
 
   .mono {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
@@ -50,6 +52,22 @@
   a:focus-visible, button:focus-visible, .btn:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 3px;
+  }
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    padding: 10px 16px;
+    z-index: 100;
+    text-decoration: none;
+  }
+  .skip-link:focus {
+    left: 12px;
+    top: 12px;
   }
 
   .wrap {
@@ -269,6 +287,8 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to content</a>
+
 <header class="top">
   <div class="brand">
     <svg class="mark" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
@@ -280,16 +300,19 @@
     HealthSteward
   </div>
   <nav>
-    <a href="#what">what it does</a>
+    <a href="#motivation">the problem</a>
+    <a href="#what">features</a>
     <a href="#privacy">privacy</a>
-    <a href="#start">get started</a>
+    <a href="#start">setup</a>
+    <a href="#from-me">personal note</a>
+    <a href="tdd.html">technical design doc</a>
     <a href="https://github.com/nidhi-menon/HealthSteward">github</a>
   </nav>
 </header>
 
-<section class="hero">
+<section class="hero" id="main-content">
   <div class="wrap">
-    <div class="eyebrow">patient chart · continuity of care · v0, early development</div>
+    <div class="eyebrow">open source · privacy-first · v0, early development</div>
     <h1 id="hero-h1">
       <span class="line"><span>Nobody on the clinical side</span></span>
       <span class="line"><span>owns the coordination work.</span></span>
@@ -310,7 +333,7 @@
 
 <section class="field" id="motivation">
   <div class="wrap">
-    <div class="field-label eyebrow">Chief Complaint</div>
+    <div class="field-label eyebrow">The Problem</div>
     <h2>Fragmented care comes with a second, unpaid job.</h2>
     <p>
       Remembering what each specialist said. What changed since the last visit. Which labs are
@@ -337,7 +360,7 @@
 
 <section class="field" id="what">
   <div class="wrap">
-    <div class="field-label eyebrow">Plan</div>
+    <div class="field-label eyebrow">Features</div>
     <h2>What it does</h2>
     <div class="chart-lines">
       <div class="chart-line">
@@ -374,7 +397,7 @@
 
 <section class="field" id="privacy">
   <div class="wrap">
-    <div class="field-label eyebrow">Chart Access Log</div>
+    <div class="field-label eyebrow">Privacy</div>
     <h2>Two trust boundaries, not one</h2>
     <p>Health data is sensitive by default, so nothing crosses a boundary un-redacted.</p>
     <div class="boundaries">
@@ -399,7 +422,7 @@
 
 <section class="field" id="start">
   <div class="wrap">
-    <div class="field-label eyebrow">Disposition</div>
+    <div class="field-label eyebrow">Setup</div>
     <h2>Get started</h2>
     <p>Everything, including the database, stays in a folder on your machine. Needs Python 3.11+, Node 18+/pnpm, and <a href="https://ollama.ai">Ollama</a>.</p>
     <div class="install-block">
@@ -422,10 +445,43 @@
   </div>
 </section>
 
+<section class="field" id="from-me">
+  <div class="wrap">
+    <div class="field-label eyebrow">Personal Note</div>
+    <h2>Why this exists</h2>
+    <p>
+      For years I lived with endometriosis, PCOS, adenomyosis, and other conditions that went
+      undiagnosed. What I experienced wasn't just a lack of answers — it was medical gaslighting:
+      symptoms dismissed, concerns minimized, years lost to a diagnosis that should have come far
+      sooner. At the same time, I was building production ML systems used by hundreds of thousands
+      of people. Underneath the professional life was a body the medical system kept failing to
+      take seriously.
+    </p>
+    <p>
+      A high-risk pregnancy, a layoff during my last trimester, and a postpartum period that made
+      already-invisible struggles even more invisible — that's when I stopped treating this as a
+      question and started treating it as the most personal thing I had. It's also why
+      HealthSteward runs locally by default: when a system has already failed to take you
+      seriously, the last thing you want is to also hand your data to another one.
+    </p>
+    <p>
+      HealthSteward started as something I built for myself: a way to hold together a medical
+      system that asks you to track too many providers, records, and follow-ups in your own head.
+      After sharing it with others navigating similarly fragmented care, it was clear the need
+      went well beyond me — so it's public, GPLv3, free to use, fork, or build on.
+    </p>
+    <p>
+      If something here is wrong, could be better, or you just have thoughts, I'd genuinely like
+      to hear them.
+    </p>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
     <p class="eyebrow mono">GPL-3.0 · early development · not a substitute for clinical judgment</p>
     <nav>
+      <a href="tdd.html">Technical Design Doc</a>
       <a href="https://github.com/nidhi-menon/HealthSteward">GitHub</a>
       <a href="https://github.com/nidhi-menon/HealthSteward/discussions">Discussions</a>
       <a href="https://github.com/nidhi-menon/HealthSteward/issues">Issues</a>
