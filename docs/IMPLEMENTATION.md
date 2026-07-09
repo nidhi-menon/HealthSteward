@@ -220,8 +220,8 @@ tests/
 | Decision | Rationale |
 |----------|-----------|
 | **Fallback, not hard failure** | If the loop can't converge within `agent_max_turns` or a backend's tool-call output is malformed, `prepare_visit()` falls back to the pre-existing single-shot `_call_claude`/`_call_ollama` — no regression risk on either backend |
-| **Descoped: real drug-interaction checker** | `get_medication_details` exposes existing structured medication data for the model to reason over; it is not a real interaction-checking API/DB (would need a licensed external service) |
-| **Descoped: user-facing clarifying-question pause** | Would need new DB state, a new API endpoint, and new frontend UI to resume a paused conversation — tracked as a follow-up, not built in this pass |
+| **Descoped: real drug-interaction checker** | `get_medication_details` exposes existing structured medication data for the model to reason over; it is not a real interaction-checking API/DB (would need a licensed external service) — tracked in GitHub issue #24 |
+| **Descoped: user-facing clarifying-question pause** | Would need new DB state, a new API endpoint, and new frontend UI to resume a paused conversation — tracked in GitHub issue #15 |
 | **Anonymize tool results the same way for both backends** | Consistent with how the main context was already anonymized regardless of provider before this change — avoids fragile backend-aware branching |
 
 ---
