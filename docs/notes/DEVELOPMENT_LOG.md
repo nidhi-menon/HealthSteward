@@ -1047,4 +1047,18 @@ Left unchanged: "Stays on device," "Anonymized first," the three "terminal — .
 
 ---
 
+## 22. Personal Note: Rewritten
+
+**Date:** 2026-07-09
+
+**Context:** Revisited entry 21's Personal Note copy. Two concerns: naming specific diagnoses (endometriosis, PCOS, adenomyosis) publicly and permanently, tied to a real name, in a page also linked from a technical/interview-facing artifact; and whether "medical gaslighting" plus a diagnosis-delay framing was the most direct way to explain why HealthSteward exists specifically, versus a story more tightly tied to the coordination failure the app actually addresses.
+
+**Decision:** Rewrote the section around a different, more concrete incident: months of postpartum chronic-condition management (medications, blood tests, follow-ups) quietly lapsing with no provider ever flagging it, because care was split across specialists with no shared system and the patient was the only one holding the full picture. Drops the named diagnoses and the "medical gaslighting"/professional-background framing entirely. Also cut a relative time reference ("last year") that would go stale on rereading — the section already anchors to an absolute date ("December 2025") a sentence later, so the relative one was redundant and the one that ages badly. Restored a "why open source" beat (shared it with others, realized the need went beyond personal use) that a tighter intermediate draft had cut along with the redundant product-feature recap.
+
+**Reasoning:** The new framing is more directly load-bearing for "why does this specific tool, with this specific architecture, exist" — a coordination failure that nobody caught maps straight onto a tool that centralizes and tracks, more so than a diagnostic-delay story did. It also resolves the disclosure-level question in the author's favor without needing a judgment call from anyone else: specific diagnoses are gone, the concrete narrative beat (a gap that opened and took a long time to close) stayed.
+
+**Files changed:** `docs/index.html`.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
