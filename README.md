@@ -225,7 +225,7 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 ## Documentation
 
-- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-014)
+- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-015)
 - `docs/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
 - `CONTRIBUTING.md` — how to contribute, including the privacy constraints PRs must respect

@@ -959,4 +959,33 @@ Snooze/action-completed loop and scheduled notifications deferred.
 
 ---
 
+## 18. Visit Prep Tool Scope Audit (DEC-015)
+
+**Date:** 2026-07-08
+
+**Context:** Revisiting the visit-prep agentic loop (DEC-009/DEC-013) from first principles: what data is actually useful to prep a visit, regardless of whether a human or an agent does the prepping? The candidate list — current medications, test results, visit notes from other providers since the last visit with the target provider, and any surgeries/hospital admissions/procedures since then — was checked against `src/data/models.py` rather than assumed.
+
+**Findings:**
+- **Current medications** — already fully supported; `get_medication_details` returns all current meds when `medication_name` is omitted (that's a tool call default, not missing data — every returned medication still includes its name).
+- **Visit notes from other providers since last visit with target provider** — data exists (`Appointment.visit_notes` + `Doctor`), but `lookup_past_visits` only filters by `specialty`/`keyword`, with no date window. Tool-layer gap, not a data gap.
+- **Test results** — real data gap. `LabOrder` only records that a test was *ordered* (name, ordered date, status); there is no result value, reference range, or result date anywhere in the schema, and the AVS parser doesn't extract results either.
+- **Surgeries / hospital admissions / procedures** — real data gap. No model at all, and no AVS parser section-routing branch for this category.
+
+**Decision:** Split into three independent follow-ups (schema-change costs differ too much to bundle) — see DEC-015 for full reasoning:
+1. Widen `lookup_past_visits`'s default window to "since last completed visit with the target provider" — tool-layer only ([issue #21](https://github.com/nidhi-menon/HealthSteward/issues/21))
+2. Add lab results to schema + AVS parser, windowed to whichever is shorter of since-last-visit-with-provider or 6 months, to avoid surfacing stale results ([issue #22](https://github.com/nidhi-menon/HealthSteward/issues/22))
+3. Add a procedures/hospitalizations model, parser branch, and tool — largest of the three ([issue #23](https://github.com/nidhi-menon/HealthSteward/issues/23))
+
+**Broader audit:** Separately checked whether any other previously-descoped or deferred work across `docs/DECISIONS.md` was missing a tracking issue. Found two:
+- **Real drug-interaction checker** — DEC-013 descoped this and said it would be "tracked as a follow-up issue," but no issue was ever filed. Opened as [issue #24](https://github.com/nidhi-menon/HealthSteward/issues/24) — framed as a research spike given the "needs a licensed external API" unknown, with open questions on data source, whether checks should run only inside visit-prep vs. also fire on medication changes, and whether the privacy posture (DEC-006) is compatible with sending medication names to a third-party API.
+- **Scheduled push notifications** (DEC-012, option C) — the sibling option D (snooze/completion state) shipped in the medium phase back on 2026-07-05, but option C was deferred and never picked up. Opened as [issue #25](https://github.com/nidhi-menon/HealthSteward/issues/25) — flagged as needing its own design decision (channel, scheduler, trigger logic) before scoping, since it's new infrastructure rather than a pure addition on existing data like options A/B were.
+
+Everything else referenced as deferred (DEC-001 multi-user family sharing, DEC-004/005 PDF storage/encryption approach) is waiting on a decision from the user, not on an engineering task, so it wasn't issue-ified.
+
+**Docs updated:** `docs/DECISIONS.md` (new DEC-015; DEC-012 and DEC-013 status lines updated to link #24/#25/#15 instead of describing untracked follow-up work in prose), `docs/IMPLEMENTATION.md` (same two descoped-item rows linked to #24/#15), `README.md` (decision log range now "DEC-001 through DEC-015").
+
+**Files changed:** `docs/DECISIONS.md`, `docs/IMPLEMENTATION.md`, `README.md`. No code changes — this was a scoping/planning pass, not an implementation.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
