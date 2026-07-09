@@ -119,7 +119,7 @@ The Phase 1 implementation was completed with:
 
 **User:** "Can we maintain these implementation details summary in a file as we go along so that I can refer to it later to make sense of the project?"
 
-**Action:** Created `docs/IMPLEMENTATION.md` with:
+**Action:** Created `docs/notes/IMPLEMENTATION.md` with:
 - Project overview and tech stack
 - Phase 1 summary with all files created
 - Architecture diagrams showing request flow
@@ -133,7 +133,7 @@ The Phase 1 implementation was completed with:
 
 **User:** "Can you also add these instructions to a file as we go along so that I know how to use the tool?"
 
-**Action:** Created `docs/USAGE.md` with:
+**Action:** Created `docs/notes/USAGE.md` with:
 - Starting instructions
 - First-time setup
 - Step-by-step usage guide
@@ -955,7 +955,7 @@ Snooze/action-completed loop and scheduled notifications deferred.
 
 **Explicitly not done in this pass:** the one-step installer script itself, and the `docker-compose.yml` fix it depends on (currently provisions Postgres/Redis/ChromaDB while the app defaults to SQLite, and has no Ollama service) — both are scoped to issue #18.
 
-**Files changed:** New `docs/index.html`, `docs/assets/favicon.svg`, `frontend/public/favicon.svg`. Modified `frontend/src/components/Layout.tsx`, `frontend/index.html`, `README.md`, `docs/DECISIONS.md` (DEC-014). Removed `frontend/public/vite.svg`.
+**Files changed:** New `docs/index.html`, `docs/assets/favicon.svg`, `frontend/public/favicon.svg`. Modified `frontend/src/components/Layout.tsx`, `frontend/index.html`, `README.md`, `docs/notes/DECISIONS.md` (DEC-014). Removed `frontend/public/vite.svg`.
 
 ---
 
@@ -976,15 +976,88 @@ Snooze/action-completed loop and scheduled notifications deferred.
 2. Add lab results to schema + AVS parser, windowed to whichever is shorter of since-last-visit-with-provider or 6 months, to avoid surfacing stale results ([issue #22](https://github.com/nidhi-menon/HealthSteward/issues/22))
 3. Add a procedures/hospitalizations model, parser branch, and tool — largest of the three ([issue #23](https://github.com/nidhi-menon/HealthSteward/issues/23))
 
-**Broader audit:** Separately checked whether any other previously-descoped or deferred work across `docs/DECISIONS.md` was missing a tracking issue. Found two:
+**Broader audit:** Separately checked whether any other previously-descoped or deferred work across `docs/notes/DECISIONS.md` was missing a tracking issue. Found two:
 - **Real drug-interaction checker** — DEC-013 descoped this and said it would be "tracked as a follow-up issue," but no issue was ever filed. Opened as [issue #24](https://github.com/nidhi-menon/HealthSteward/issues/24) — framed as a research spike given the "needs a licensed external API" unknown, with open questions on data source, whether checks should run only inside visit-prep vs. also fire on medication changes, and whether the privacy posture (DEC-006) is compatible with sending medication names to a third-party API.
 - **Scheduled push notifications** (DEC-012, option C) — the sibling option D (snooze/completion state) shipped in the medium phase back on 2026-07-05, but option C was deferred and never picked up. Opened as [issue #25](https://github.com/nidhi-menon/HealthSteward/issues/25) — flagged as needing its own design decision (channel, scheduler, trigger logic) before scoping, since it's new infrastructure rather than a pure addition on existing data like options A/B were.
 
 Everything else referenced as deferred (DEC-001 multi-user family sharing, DEC-004/005 PDF storage/encryption approach) is waiting on a decision from the user, not on an engineering task, so it wasn't issue-ified.
 
-**Docs updated:** `docs/DECISIONS.md` (new DEC-015; DEC-012 and DEC-013 status lines updated to link #24/#25/#15 instead of describing untracked follow-up work in prose), `docs/IMPLEMENTATION.md` (same two descoped-item rows linked to #24/#15), `README.md` (decision log range now "DEC-001 through DEC-015").
+**Docs updated:** `docs/notes/DECISIONS.md` (new DEC-015; DEC-012 and DEC-013 status lines updated to link #24/#25/#15 instead of describing untracked follow-up work in prose), `docs/notes/IMPLEMENTATION.md` (same two descoped-item rows linked to #24/#15), `README.md` (decision log range now "DEC-001 through DEC-015").
 
-**Files changed:** `docs/DECISIONS.md`, `docs/IMPLEMENTATION.md`, `README.md`. No code changes — this was a scoping/planning pass, not an implementation.
+**Files changed:** `docs/notes/DECISIONS.md`, `docs/notes/IMPLEMENTATION.md`, `README.md`. No code changes — this was a scoping/planning pass, not an implementation.
+
+---
+
+## 19. Public Technical Design Doc + Site Style Guide
+
+**Date:** 2026-07-09
+
+**Context:** DESIGN.md (entry above's follow-on) works as a Markdown snapshot, but isn't a shareable artifact for a technical interview — nobody wants to scroll 600 lines of Markdown live on a call. Built `docs/tdd.html` as a tabbed, publicly-hosted rendering of the same material (problem framing, system design, deep dives, decisions/tradeoffs with filters, a synthetic walkthrough example, honest risks/gaps, glossary, FAQ), styled to match `docs/index.html`'s existing brand identity rather than a generic doc template.
+
+**What was built:**
+
+- **`docs/tdd.html`** (new) — sidebar-navigated, 8 sections, single-theme paper palette shared with `index.html`. Centerpiece is a hand-built system-architecture diagram (not mermaid): a dashed "your machine" boundary box containing 6 vertically-stacked phase boxes (Ingest → Select → Anonymize → Orchestrate → Backend → Serve), each with its own icon-labeled sub-nodes, plus a standalone Claude API box outside the boundary connected by a bidirectional crossing arrow — directly visualizing the local-vs-anonymized-external trust boundary rather than describing it only in prose. Iterated through several structural bugs before landing here: horizontal lanes with inter-card arrows produced "dangling arrow" bugs on wrap (fixed by switching to the vertical full-width-phase-box spine); a `width:100%` + `max-width` breakout attempt silently failed to widen the diagram past its 820px reading column (fixed by setting `width` directly to the `clamp()` expression); `.chart-line`/list text was nested inside containers narrower than its own cap, shrinking it visibly shorter than the row's divider line (removed the redundant nested caps).
+- **Accessibility pass**: fixed two real WCAG AA contrast failures (`--ink-faint` 4.15:1 → 5.34:1, `--amber`-as-text 3.24:1 → 5.07:1 — both had shipped without being computed, not just eyeballed), added a proper ARIA tab pattern (roving tabindex, arrow-key nav, `aria-selected`/`aria-controls`) to the sidebar, `aria-hidden="true"` on all 18 decorative diagram icons (previously screen-readers would've announced an unlabeled graphic before every node label), skip-to-content links on both pages, and a repo-wide sweep for a `ch`-unit bug: `ch` is relative to an element's own font-size, so several smaller-font paragraphs (footer, dek, glossary, FAQ, chart-lines) were wrapping narrower than the page's 80ch body text despite nominally sharing the same cap — fixed with per-font-size compensated values.
+- **Token consistency fix**: `index.html` and `tdd.html` both defined `--amber`, but with different meanings (a green selection-highlight in one, a real warning-amber in the other) — split into `--amber` (warning/boundary, consistent value in both files now) and `--select-hl` (selection highlight) to stop the collision.
+- **`docs/SITE_STYLE_GUIDE.md`** (new) — captures every pattern above as a living reference (unlike DESIGN.md's point-in-time-snapshot rule) so the next edit to either public page doesn't have to rediscover the `ch`-compensation formula, the breakout-width pitfall, or the diagram conventions from scratch. Cross-linked from `CLAUDE.md` and the README.
+- **Diagram sizing**: scaled the whole diagram to 80% via CSS `zoom` (not `transform: scale()`, which leaves reserved blank layout space since it doesn't reflow) after confirming a `transform`-based preview looked right; raised the smallest diagram sub-label text from 9.5px to a 10.5px legibility floor first, since a blanket 80% shrink would otherwise have pushed it below that.
+- **Cross-linked Risks & Open Gaps to live issues**: four of the panel's six items map to actual GitHub issues (#27, #29, #30, #31 — confirmed via `gh issue view` before linking, not assumed), plus a general pointer to the Issues backlog and Discussions.
+
+**Files changed:** New `docs/tdd.html`, `docs/SITE_STYLE_GUIDE.md`. Modified `docs/index.html` (shared token fixes, skip-link, cross-nav to tdd.html), `CLAUDE.md` (gitignored, local-only — pointer to the new style guide), `README.md` (Documentation section).
+
+---
+
+## 20. Landing Page Terminology: Dropped Clinical-Jargon Labels
+
+**Date:** 2026-07-09
+
+**Context:** Revisiting `index.html`'s "patient chart" visual concept (entry 17), the section labels were literally in-character clinical terms — "Chief Complaint," "Chart Access Log," "Disposition." Two problems surfaced on review: the terms ask a first-time visitor to decode jargon before reaching actual content, and the site's author isn't a clinician, so writing the page's voice in clinical vocabulary reads as a costume that doesn't fit — not what HealthSteward is about.
+
+**Decision:** Keep the visual chart identity (brand mark, redaction-bar reveal animation, palette, monospace/serif pairing) since it's genuinely tied to the anonymization feature, not just decoration — but replace the in-character section labels with plain, direct ones:
+
+| Before | After |
+|--------|-------|
+| "patient chart · continuity of care · v0, early development" (hero eyebrow) | "open source · privacy-first · v0, early development" |
+| "Chief Complaint" | "The Problem" |
+| "Plan" | "Features" |
+| "Chart Access Log" | "Privacy" |
+| "Disposition" | "Setup" (not "Get Started" — would have duplicated the section's own h2) |
+
+Left unchanged: "Stays on device," "Anonymized first," the three "terminal — ..." labels, and the Profile/Prep/Ingest/Follow-up feature tags — these were already plain, not clinical roleplay. Also kept the footer's "not a substitute for clinical judgment" line — a standard protective disclaimer, not costume language, distinct from the labeling issue.
+
+**Reasoning:** Distinctive visual identity and plain language aren't in tension here — the metaphor lives in the *styling* (mono headline like a typed summary, redaction bars, chart-line layout), not in the *words* the visitor has to read. Removing the in-character vocabulary doesn't cost the page its identity, and it removes a real confusion/tone risk.
+
+**Files changed:** `docs/index.html`.
+
+---
+
+## 21. Landing Page: Personal Note From the Builder
+
+**Date:** 2026-07-09
+
+**Context:** The landing page pitches HealthSteward on privacy and coordination mechanics, but had no human voice behind it — no explanation of why it exists or an invitation for feedback. Added a "Personal Note" section, in the same first-person voice deliberately absent from the rest of the page (which stays product-copy throughout).
+
+**What was built:** A new `#from-me` section, labeled "Personal Note" (after briefly trying "Margin Note," which was confusing, and "From Me"), covering: living for years with undiagnosed endometriosis/PCOS/adenomyosis and the medical gaslighting that came with it; a high-risk pregnancy and a layoff during the last trimester as the moment that made it personal rather than intellectual; an explicit bridge line tying that experience to why HealthSteward runs locally by default ("when a system has already failed to take you seriously, the last thing you want is to also hand your data to another one"); why it's public under GPLv3; and a direct invitation for critique.
+
+**Placement:** Ordered last among the field sections — after Setup, right before the footer — rather than between Privacy and Setup where it was first drafted. Reasoning: going straight from a vulnerable personal story into `pip install` commands read as tonal whiplash; keeping the practical flow (problem → features → privacy → setup) uninterrupted and closing on the personal note instead reads more like an authentic sign-off. Nav link order was updated to match.
+
+**Reasoning:** The section is deliberately personal-heavy rather than product-heavy — "what HealthSteward does" is already covered thoroughly elsewhere on the page, so re-explaining it here would be redundant. The bridge sentence was added specifically so the personal and product paragraphs read as causally connected rather than a life story followed by an unrelated project plug.
+
+**Files changed:** `docs/index.html`.
+
+---
+
+## 22. Personal Note: Rewritten
+
+**Date:** 2026-07-09
+
+**Context:** Revisited entry 21's Personal Note copy. Two concerns: naming specific diagnoses (endometriosis, PCOS, adenomyosis) publicly and permanently, tied to a real name, in a page also linked from a technical/interview-facing artifact; and whether "medical gaslighting" plus a diagnosis-delay framing was the most direct way to explain why HealthSteward exists specifically, versus a story more tightly tied to the coordination failure the app actually addresses.
+
+**Decision:** Rewrote the section around a different, more concrete incident: months of postpartum chronic-condition management (medications, blood tests, follow-ups) quietly lapsing with no provider ever flagging it, because care was split across specialists with no shared system and the patient was the only one holding the full picture. Drops the named diagnoses and the "medical gaslighting"/professional-background framing entirely. Also cut a relative time reference ("last year") that would go stale on rereading — the section already anchors to an absolute date ("December 2025") a sentence later, so the relative one was redundant and the one that ages badly. Restored a "why open source" beat (shared it with others, realized the need went beyond personal use) that a tighter intermediate draft had cut along with the redundant product-feature recap.
+
+**Reasoning:** The new framing is more directly load-bearing for "why does this specific tool, with this specific architecture, exist" — a coordination failure that nobody caught maps straight onto a tool that centralizes and tracks, more so than a diagnostic-delay story did. It also resolves the disclosure-level question in the author's favor without needing a judgment call from anyone else: specific diagnoses are gone, the concrete narrative beat (a gap that opened and took a long time to close) stayed.
+
+**Files changed:** `docs/index.html`.
 
 ---
 
