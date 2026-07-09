@@ -225,6 +225,7 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 ## Documentation
 
+- `docs/DESIGN.md` — technical design doc; point-in-time architecture snapshot (problem framing, system design, AI approach, evaluation gaps, risks)
 - `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-015)
 - `docs/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
