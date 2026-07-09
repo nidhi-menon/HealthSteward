@@ -225,9 +225,11 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 ## Documentation
 
-- `docs/DECISIONS.md` — architectural decision log (DEC-001 through DEC-015)
-- `docs/DEVELOPMENT_LOG.md` — development conversation history
-- `docs/SANDBOX_PROMPT.md` — sandbox experiment prompts
+- `docs/notes/DESIGN.md` — technical design doc; point-in-time architecture snapshot (problem framing, system design, AI approach, evaluation gaps, risks)
+- `docs/SITE_STYLE_GUIDE.md` — palette, typography, layout, diagram, and accessibility conventions for the public site (`docs/index.html`, `docs/tdd.html`)
+- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-015)
+- `docs/notes/DEVELOPMENT_LOG.md` — development conversation history
+- `docs/notes/SANDBOX_PROMPT.md` — sandbox experiment prompts
 - `CONTRIBUTING.md` — how to contribute, including the privacy constraints PRs must respect
 - `SECURITY.md` — how to report a vulnerability
 - `CHANGELOG.md` — what shipped in each release
