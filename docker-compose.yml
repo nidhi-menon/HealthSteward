@@ -1,5 +1,13 @@
 version: '3.8'
 
+# NOTE: this file is currently out of sync with the app's actual defaults —
+# it provisions Postgres/Redis/ChromaDB below, but the app defaults to SQLite
+# (DATABASE_URL in .env.example) and there is no Ollama service here, which
+# visit prep and PDF parsing both need. `docker-compose up` will not give you
+# a working app as-is. Tracked in issue #18 (DEC-014) along with the rest of
+# the one-step-installer work. Until that's fixed, follow the README's
+# Quick Start (manual pip/pnpm/Ollama setup) instead of this file.
+
 services:
   # Main HealthSteward application
   app:
