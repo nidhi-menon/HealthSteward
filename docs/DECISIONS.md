@@ -512,7 +512,7 @@ Oncology → Relevant to all
 
 **Reasoning:** The post-AVS panel is the highest-leverage nudge because it fires when the patient is already engaged. The overview section catches items that accumulated from past visits. Both are pure additions on top of existing data — no new schema, no scheduler. The snooze/action-completed loop and scheduled notifications are the right long-term direction but require new infrastructure; deferred to a follow-up iteration.
 
-**Status:** Decided (simple phase complete; medium phase — snooze/completion — implemented 2026-07-05; UX polish — implemented 2026-07-05)
+**Status:** Decided (simple phase complete; medium phase — snooze/completion, i.e. option D — implemented 2026-07-05; UX polish — implemented 2026-07-05; option C — scheduled push notifications — tracked in GitHub issue #25, DEC-015)
 
 **Medium Phase (2026-07-05):** Implemented snooze and completion state:
 
@@ -541,7 +541,7 @@ Oncology → Relevant to all
 
 **Scope (deliberately bounded for v1):**
 - Two read-only tools (`src/agents/tools.py`): `get_medication_details` (on-demand structured medication lookup — not a real drug-interaction database/API, which would be a separate, bigger feature) and `lookup_past_visits` (on-demand deeper visit history query)
-- **Descoped:** a real drug-interaction checker (needs a licensed external API) and a user-facing pause-to-ask-clarifying-questions flow (needs new DB state, a new API endpoint, and new frontend UI) — both tracked as separate follow-up issues
+- **Descoped:** a real drug-interaction checker (needs a licensed external API) and a user-facing pause-to-ask-clarifying-questions flow (needs new DB state, a new API endpoint, and new frontend UI) — tracked in GitHub issues #24 (drug-interaction checker, DEC-015) and #15 (clarifying-question conversation)
 - **Fallback, not hard failure:** if the loop can't converge within `agent_max_turns` (default 6) or a backend raises `ToolCallParsingError` (malformed/missing tool-call data — expected on small quantized local models per DEC-009), `prepare_visit()` falls back to the existing non-agentic single-shot call. No regression risk.
 - **Anonymization:** tool results are anonymized before being fed back into the loop for both backends, consistent with how `prepare_visit()` already anonymizes the main context regardless of provider
 - No DB schema changes, no API response shape changes, no frontend changes — `prepare_visit()`'s return shape is unchanged
@@ -573,6 +573,35 @@ Oncology → Relevant to all
 **Scope note:** This also requires `docker-compose.yml` to actually work end-to-end — it currently provisions Postgres/Redis/ChromaDB, but the app defaults to SQLite, and there's no Ollama service in compose. That needs fixing regardless of which installer approach is picked, and blocks Option 1 as much as Options 2/3.
 
 **Status:** Decided (simple phase — install script — not yet started; tracked in GitHub issue "Packaging: one-step installer for non-terminal users")
+
+---
+
+### DEC-015: Visit Prep Tool Scope — What Data Would Actually Be Useful to Prep With
+
+**Date:** 2026-07-08
+
+**Topic:** Revisiting the visit-prep agentic loop's tool scope (DEC-009/DEC-013) by asking what context is actually useful for prepping a visit, regardless of whether a human or an agent is doing the prepping
+
+**Context:** DEC-013 shipped the agentic loop with two deliberately narrow, read-only tools (`get_medication_details`, `lookup_past_visits`) chosen because they could be built from data already in the schema, not because they were the right end state. Revisiting from first principles: what's actually useful to prep for a visit is current medications, test results since relevant to the upcoming provider, visit notes from other providers since the last visit with this one, and any surgeries/hospital admissions/procedures since then. Checking each against `src/data/models.py` surfaced that the tool layer and the data layer have different gaps.
+
+**Findings per item:**
+
+| Need | Status | Gap |
+|------|--------|-----|
+| Current medications | Supported today | `get_medication_details` already returns all current meds when `medication_name` is omitted — no change needed |
+| Visit notes from other providers since last visit with target provider | Data exists, tool doesn't | `Appointment.visit_notes` + `Doctor` relationship exist; `lookup_past_visits` filters by specialty/keyword but has no date window — needs a query change, not new data |
+| Test results | Data doesn't exist | `LabOrder` only records that a test was *ordered* (`test_name`, `ordered_date`, `status`) — there is no result value, reference range, or result date field anywhere in the schema. The AVS parser doesn't extract results either. |
+| Surgeries / hospital admissions / procedures | Data doesn't exist | No model at all — not `Condition`, not `Document`. The AVS parser's section-routing architecture (DEC-010) has no branch for this. |
+
+**Decision:** Split into three independent follow-ups rather than one combined rework, tracked as GitHub issues (see below):
+
+1. **Widen `lookup_past_visits`'s default window** to "since the patient's last completed visit with the target provider, across all providers" when no explicit `specialty`/`keyword` filter is given, while keeping the existing filters composable on top. Small, tool-layer-only change.
+2. **Add lab results to the schema and AVS parser** (`LabOrder.result_value`/`result_date`/`reference_range` or similar), windowed to whichever is shorter: since the last visit with the target provider, or the last 6 months — avoids surfacing stale results when visits are far apart. Needs schema + parser work, not just a tool wrapper.
+3. **Add a procedures/hospitalizations model and parser branch**, then a corresponding tool. New table, new AVS section-router branch, biggest lift of the three.
+
+**Reasoning:** Consistent with DEC-013's bounded-scope pattern — ship what's cheap now, treat schema/parser changes as their own scoped projects rather than inflating one PR. Splitting also reflects that these three have genuinely different costs (query change vs. schema+parser vs. new model+parser+tool), so bundling them would obscure that in planning and review.
+
+**Status:** Decided — tracked in GitHub issues (visit-notes default window, lab results schema+parser, procedures/hospitalizations schema+parser)
 
 ---
 
