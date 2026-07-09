@@ -1,0 +1,1035 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HealthSteward — Technical Design Document</title>
+<meta name="description" content="System design, architecture decisions, and tradeoffs behind HealthSteward — a privacy-first LLM application for care coordination.">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<style>
+  :root {
+    /* Same palette as index.html, deliberately single-theme (paper/light)
+       for visual continuity between the two pages of this site. */
+    --paper: #efeee6;
+    --paper-raised: #f7f6ef;
+    --ink: #171f1d;
+    --ink-soft: #3b453f;
+    --ink-faint: #5a635d; /* darkened from an earlier #6b746e — that failed WCAG AA (4.15:1) at the small sizes it's used at; this hits 5.34:1 */
+    --teal: #1f4a42;
+    --teal-bright: #2f6a5e;
+    --amber: #8a5a17; /* darkened from an earlier #b5761f — that failed WCAG AA as text (3.24:1); this hits 5.07:1. Same token name/role as index.html's --amber, kept distinct in value since index.html only ever uses it as a non-text selection highlight, not as text needing AA contrast */
+    --select-hl: #047857; /* matches index.html's selection-highlight value, kept as a separate token from --amber since they serve different roles here */
+    --line: #cdccbf;
+    --focus: #047857;
+    --code-bg: #e6e4d8;
+    --tag-bg: #1f4a4212;
+    --risk-bg: #8a5a1714;
+    --gap-bg: #9a3a2e12;
+    --gap-ink: #9a3a2e;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: Iowan Old Style, Charter, Georgia, "Noto Serif", serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+  }
+  ::selection { background: var(--select-hl); color: var(--paper); }
+  a { color: var(--teal-bright); }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    font-size: 0.88em;
+  }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    padding: 10px 16px;
+    z-index: 100;
+    text-decoration: none;
+  }
+  .skip-link:focus {
+    left: 12px;
+    top: 12px;
+  }
+  .eyebrow {
+    font-family: ui-monospace, monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  h1, h2, h3, h4 {
+    font-family: ui-monospace, monospace;
+    letter-spacing: -0.01em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  p { max-width: 80ch; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- shell layout ---- */
+  .shell { display: flex; min-height: 100vh; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper);
+  }
+  .brand {
+    display: flex; align-items: center; gap: 8px;
+    font-family: ui-monospace, monospace; font-weight: 700; font-size: 14px;
+  }
+  .brand .mark { flex: none; }
+  .brand .mark rect.card { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+  .brand .mark line { stroke: var(--ink-soft); stroke-width: 1.4; stroke-linecap: square; }
+  .brand .mark rect.bar { fill: var(--teal); }
+  header.top .back { font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--ink-faint); text-decoration: none; }
+  header.top .back:hover { color: var(--ink); }
+  .menu-btn {
+    display: none;
+    font-family: ui-monospace, monospace; font-size: 12.5px;
+    background: none; border: 1px solid var(--line); color: var(--ink);
+    padding: 6px 10px; cursor: pointer;
+  }
+
+  nav.side {
+    width: 232px; flex: none;
+    border-right: 1px solid var(--line);
+    padding: 22px 0;
+    position: sticky; top: 49px;
+    align-self: flex-start;
+    height: calc(100vh - 49px);
+    overflow-y: auto;
+  }
+  nav.side .group { margin-bottom: 20px; }
+  nav.side .group-label {
+    font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-faint);
+    padding: 0 20px; margin-bottom: 6px;
+  }
+  nav.side button.tab {
+    display: block; width: 100%; text-align: left;
+    font-family: ui-monospace, monospace; font-size: 13px;
+    color: var(--ink-soft); background: none; border: none;
+    border-left: 2px solid transparent;
+    padding: 8px 18px; cursor: pointer;
+  }
+  nav.side button.tab:hover { color: var(--ink); background: var(--paper-raised); }
+  nav.side button.tab.active {
+    color: var(--ink); border-left-color: var(--teal-bright);
+    background: var(--tag-bg); font-weight: 600;
+  }
+
+  main.content { flex: 1; min-width: 0; padding: 44px 40px 100px; }
+  .panel { display: none; max-width: 820px; margin: 0 auto; }
+  .panel.active { display: block; }
+  .panel > .eyebrow { margin-bottom: 10px; }
+  .panel > h1 { font-size: clamp(22px, 3.4vw, 30px); margin: 0 0 8px; }
+  .panel > .dek { color: var(--ink-faint); font-size: 14.5px; margin: 0 0 34px; max-width: 91ch; }
+
+  section.block { margin-bottom: 38px; }
+  section.block h2 {
+    font-size: 16.5px; margin: 0 0 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--line);
+  }
+  section.block h3 { font-size: 14.5px; margin: 20px 0 8px; color: var(--ink); font-family: Iowan Old Style, Charter, Georgia, serif; font-weight: 700; }
+  section.block ul, section.block ol { color: var(--ink-soft); padding-left: 22px; max-width: 80ch; }
+  section.block li { margin-bottom: 6px; }
+
+  /* callout blocks */
+  .callout {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--teal-bright);
+    background: var(--paper-raised);
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 14.5px;
+  }
+  .callout.risk { border-left-color: var(--amber); background: var(--risk-bg); }
+  .callout.gap { border-left-color: var(--gap-ink); background: var(--gap-bg); }
+  .callout p { margin: 0; max-width: none; }
+  .callout .callout-label {
+    font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; display: block;
+  }
+  .callout.risk .callout-label { color: var(--amber); }
+  .callout.gap .callout-label { color: var(--gap-ink); }
+
+  /* chart-line list, matches landing page motif */
+  .chart-lines { border-top: 1px solid var(--line); margin-top: 8px; }
+  .chart-line {
+    display: grid; grid-template-columns: 100px 1fr; gap: 18px;
+    padding: 16px 0; border-bottom: 1px solid var(--line);
+  }
+  .chart-line .tag {
+    font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--teal-bright); padding-top: 2px;
+  }
+  .chart-line h4 { margin: 0 0 4px; font-size: 15px; font-family: Iowan Old Style, Charter, Georgia, serif; font-weight: 700; color: var(--ink); }
+  .chart-line p { margin: 0; font-size: 14px; max-width: 94ch; }
+
+  /* ---- system architecture diagram ---- */
+  /* breaks the diagram out of .panel's 820px reading column — prose stays
+     capped at 80ch on its own, so only this element needs to widen */
+  .arch-wide {
+    width: clamp(700px, calc(100vw - 420px), 950px);
+    margin-left: 50%;
+    transform: translateX(-50%);
+  }
+  .arch { margin: 14px 0 8px; zoom: 0.8; }
+  .arch-row { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  .arch-boundary {
+    border: 1.5px dashed var(--teal-bright); border-radius: 6px;
+    padding: 16px 16px 18px; background: var(--paper);
+    flex: 1 1 480px; min-width: 0;
+  }
+  .arch-boundary-label {
+    display: flex; align-items: center; gap: 6px;
+    font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--teal-bright); margin-bottom: 16px;
+  }
+  .arch-boundary-label svg { flex: none; width: 14px; height: 14px; }
+
+  /* vertical stack of full-width phase boxes */
+  .arch-stack { display: flex; flex-direction: column; }
+  .arch-phase {
+    border: 1.5px solid var(--ink-soft); border-radius: 5px; padding: 12px 14px 14px;
+    background: var(--paper-raised);
+  }
+  .arch-phase-title {
+    font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 10px;
+  }
+  .arch-phase-row { display: flex; align-items: center; gap: 10px; row-gap: 12px; flex-wrap: wrap; }
+  .arch-inline-arrow { color: var(--ink-faint); font-size: 13px; flex: none; }
+  .arch-spine-arrow { text-align: center; color: var(--ink-faint); font-size: 15px; line-height: 1; padding: 6px 0; }
+
+  .arch-node {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); background: var(--paper); border-radius: 4px;
+    padding: 7px 9px; font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--ink);
+    flex: 1 1 auto;
+  }
+  .arch-node svg { flex: none; width: 16px; height: 16px; color: var(--ink-faint); }
+  .arch-node .arch-sub {
+    display: block; font-size: 10.5px; color: var(--ink-faint); font-weight: 400;
+    margin-top: 2px; text-transform: none; letter-spacing: 0;
+  }
+  .arch-node--ai { border-color: var(--teal-bright); color: var(--teal-bright); }
+  .arch-node--ai svg { color: var(--teal-bright); }
+  .arch-node--store { border-style: dashed; }
+  .arch-node--boundary { border-color: var(--amber); color: var(--amber); }
+  .arch-node--boundary svg { color: var(--amber); }
+  .arch-node--external { border-color: var(--amber); color: var(--amber); }
+  .arch-node--external svg { color: var(--amber); }
+
+  /* the one point where the flow may leave the boundary — sits to the right of .arch-boundary */
+  .arch-side {
+    flex: 0 1 220px; display: flex; flex-direction: column; align-items: center;
+    gap: 10px; text-align: center;
+  }
+  .arch-crossing-arrow { flex: none; font-size: 22px; color: var(--amber); line-height: 1; align-self: center; transform: translateY(-28px); }
+  .arch-external {
+    border: 1.5px dashed var(--amber); border-radius: 6px; padding: 14px 16px;
+    display: inline-flex;
+  }
+  .arch-crossing-label { font-size: 12px; color: var(--ink-faint); margin: 0; }
+
+  /* small connector tag hung off the Orchestrate phase, pointing at .arch-side */
+  .arch-branch-tag {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 10px;
+    font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--amber);
+  }
+
+  .arch-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: 12.5px; color: var(--ink-faint); }
+  .arch-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .arch-legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+  /* boundary cards, reused from landing page */
+  .boundaries { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 14px 0; }
+  .boundary { background: var(--paper); padding: 18px; }
+  .boundary .eyebrow { margin-bottom: 8px; }
+  .boundary h4 { margin: 0 0 8px; font-size: 14px; font-family: ui-monospace, monospace; }
+  .boundary p { margin: 0; font-size: 13.5px; max-width: 98ch; }
+  @media (max-width: 700px) { .boundaries { grid-template-columns: 1fr; } }
+
+  /* deep dive accordion */
+  .accordion-item { border: 1px solid var(--line); margin-bottom: 8px; }
+  .accordion-item summary {
+    cursor: pointer; padding: 14px 16px; font-family: ui-monospace, monospace;
+    font-size: 13.5px; font-weight: 600; color: var(--ink); list-style: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .accordion-item summary::-webkit-details-marker { display: none; }
+  .accordion-item summary .plus { color: var(--teal-bright); font-size: 15px; flex: none; }
+  .accordion-item[open] summary .plus { transform: rotate(45deg); display: inline-block; }
+  .accordion-item .body { padding: 4px 16px 18px; border-top: 1px solid var(--line); }
+  .accordion-item .body p { font-size: 14px; max-width: 94ch; }
+  .accordion-item .body ul { font-size: 14px; }
+
+  /* decisions table */
+  .dec-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .dec-filters button {
+    font-family: ui-monospace, monospace; font-size: 12px;
+    background: var(--paper-raised); border: 1px solid var(--line); color: var(--ink-soft);
+    padding: 6px 12px; cursor: pointer; border-radius: 3px;
+  }
+  .dec-filters button.active { background: var(--tag-bg); border-color: var(--teal-bright); color: var(--ink); }
+  .dec-card { border: 1px solid var(--line); padding: 16px 18px; margin-bottom: 10px; }
+  .dec-card .dec-id { font-family: ui-monospace, monospace; font-size: 11px; color: var(--teal-bright); letter-spacing: 0.04em; }
+  .dec-card h4 { margin: 6px 0 8px; font-size: 15px; font-family: ui-monospace, monospace; }
+  .dec-card table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  .dec-card th, .dec-card td { text-align: left; padding: 6px 8px; border: 1px solid var(--line); vertical-align: top; color: var(--ink-soft); }
+  .dec-card th { color: var(--ink-faint); font-family: ui-monospace, monospace; font-weight: 600; font-size: 11.5px; text-transform: uppercase; }
+  .dec-card .verdict { font-size: 13.5px; margin-top: 8px; }
+  .dec-card .verdict strong { color: var(--teal-bright); }
+
+  /* walkthrough */
+  .step { display: flex; gap: 16px; margin-bottom: 22px; }
+  .step .stepnum {
+    flex: none; width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid var(--teal-bright); color: var(--teal-bright);
+    display: flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, monospace; font-size: 12px; margin-top: 2px;
+  }
+  .step .stepbody { flex: 1; min-width: 0; }
+  .step h4 { margin: 2px 0 6px; font-size: 14.5px; font-family: ui-monospace, monospace; }
+  pre.snippet {
+    background: var(--code-bg); border: 1px solid var(--line); padding: 14px 16px;
+    font-size: 12.5px; line-height: 1.55; overflow-x: auto; margin: 8px 0; border-radius: 3px;
+  }
+  .synthetic-tag {
+    display: inline-block; font-family: ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber);
+    border: 1px solid var(--amber); padding: 2px 8px; border-radius: 3px; margin-bottom: 18px;
+  }
+  .qcat { margin-bottom: 14px; }
+  .qcat .cathead { font-family: ui-monospace, monospace; font-size: 12px; color: var(--teal-bright); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .qcat ul { margin: 0; }
+
+  /* glossary / faq */
+  .gterm { margin-bottom: 16px; }
+  .gterm dt { font-family: ui-monospace, monospace; font-weight: 700; font-size: 14px; color: var(--ink); margin-bottom: 3px; }
+  .gterm dd { margin: 0; font-size: 14px; color: var(--ink-soft); max-width: 94ch; }
+  .faq-item { border-bottom: 1px solid var(--line); padding: 14px 0; }
+  .faq-item .q { font-weight: 700; color: var(--ink); font-size: 14.5px; margin-bottom: 6px; font-family: Iowan Old Style, Charter, Georgia, serif; }
+  .faq-item .a { font-size: 14px; margin: 0; max-width: 94ch; }
+
+  footer.doc-footer { max-width: 820px; margin: 50px auto 0; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-faint); }
+  /* ch is relative to the element's own font-size — at 13px, 80ch renders
+     narrower than the same 80ch at body's 16.5px, so scale up to match */
+  footer.doc-footer p { max-width: 102ch; }
+
+  @media (max-width: 860px) {
+    nav.side {
+      position: fixed; top: 49px; left: 0; height: calc(100vh - 49px);
+      background: var(--paper); transform: translateX(-100%);
+      transition: transform 0.2s ease; z-index: 15; width: 240px;
+    }
+    nav.side.open { transform: translateX(0); }
+    .menu-btn { display: inline-block; }
+    main.content { padding: 28px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="mark" width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
+      <rect class="card" x="1.5" y="1.5" width="17" height="17"></rect>
+      <line x1="4.5" y1="6.5" x2="15.5" y2="6.5"></line>
+      <rect class="bar" x="4.5" y="9.3" width="11" height="2.4"></rect>
+      <line x1="4.5" y1="14.5" x2="11" y2="14.5"></line>
+    </svg>
+    HealthSteward <span style="color:var(--ink-faint); font-weight:400;">/ Technical Design Doc</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <a class="back" href="index.html">← project site</a>
+    <a class="back" href="https://github.com/nidhi-menon/HealthSteward">github</a>
+    <button class="menu-btn" id="menuBtn" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sideNav">menu</button>
+  </div>
+</header>
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+
+<div class="shell">
+  <nav class="side" id="sideNav" role="tablist" aria-label="Document sections" aria-orientation="vertical">
+    <div class="group">
+      <div class="group-label" id="group-first">Read this first</div>
+      <button class="tab active" id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-panel="overview">Overview</button>
+    </div>
+    <div class="group">
+      <div class="group-label" id="group-technical">Technical</div>
+      <button class="tab" id="tab-system-design" role="tab" aria-selected="false" aria-controls="panel-system-design" tabindex="-1" data-panel="system-design">System Design</button>
+      <button class="tab" id="tab-deep-dives" role="tab" aria-selected="false" aria-controls="panel-deep-dives" tabindex="-1" data-panel="deep-dives">Deep Dives</button>
+      <button class="tab" id="tab-decisions" role="tab" aria-selected="false" aria-controls="panel-decisions" tabindex="-1" data-panel="decisions">Decisions &amp; Tradeoffs</button>
+    </div>
+    <div class="group">
+      <div class="group-label" id="group-practice">In practice</div>
+      <button class="tab" id="tab-walkthrough" role="tab" aria-selected="false" aria-controls="panel-walkthrough" tabindex="-1" data-panel="walkthrough">Walkthrough</button>
+      <button class="tab" id="tab-risks" role="tab" aria-selected="false" aria-controls="panel-risks" tabindex="-1" data-panel="risks">Risks &amp; Open Gaps</button>
+    </div>
+    <div class="group">
+      <div class="group-label" id="group-reference">Reference</div>
+      <button class="tab" id="tab-glossary" role="tab" aria-selected="false" aria-controls="panel-glossary" tabindex="-1" data-panel="glossary">Glossary</button>
+      <button class="tab" id="tab-faq" role="tab" aria-selected="false" aria-controls="panel-faq" tabindex="-1" data-panel="faq">FAQ</button>
+    </div>
+  </nav>
+
+  <main class="content" id="main-content">
+
+    <!-- OVERVIEW -->
+    <section class="panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
+      <div class="eyebrow">Snapshot as of DEC-015 · 2026-07-08</div>
+      <h1>HealthSteward — Technical Design Document</h1>
+      <p class="dek">A point-in-time architecture snapshot, written up for anyone who wants to go deep on how it's built — reviewers, collaborators, or a technical interview. Re-written on architectural shifts, not on every change; see the note at the bottom of this page.</p>
+
+      <section class="block">
+        <h2>Problem &amp; motivation</h2>
+        <p>Patients managing fragmented care — multiple specialists, no shared record system — carry an unpaid coordination job: remembering what changed since the last visit, which labs are pending, what to raise with which doctor. This falls hardest on people with the least capacity to carry it (mid-flare, mid-crisis), and nobody on the clinical side owns it.</p>
+        <p>Most tools treat this as a records problem: store the documents, make them searchable, maybe chat with them. <strong>HealthSteward treats it as a coordination problem instead</strong> — ingest documents providers already give you, track what's changed and what's still open, and turn that into something concrete for the next visit. Locally, by default, because a tool holding this much health history shouldn't require sending it to a server to be useful.</p>
+      </section>
+
+      <section class="block">
+        <h2>What it does</h2>
+        <div class="chart-lines">
+          <div class="chart-line">
+            <div class="tag">Profile</div>
+            <div><h4>Health profile management</h4><p>Conditions (ICD-10 coded), medications, doctors, appointments in one place.</p></div>
+          </div>
+          <div class="chart-line">
+            <div class="tag">Prep</div>
+            <div><h4>AI visit preparation</h4><p>An agentic loop drafts personalized questions for an upcoming visit — pulling relevant history and calling tools before finalizing. Runs on Claude API or fully local Ollama.</p></div>
+          </div>
+          <div class="chart-line">
+            <div class="tag">Ingest</div>
+            <div><h4>After-visit summary parsing</h4><p>Upload the PDF from a visit. Parsed locally, reviewed by you, then applied to your profile.</p></div>
+          </div>
+          <div class="chart-line">
+            <div class="tag">Follow-up</div>
+            <div><h4>Proactive action items</h4><p>Follow-ups to book, labs to get done, referrals to schedule — surfaced at the moment of engagement and again until resolved.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Goals</h2>
+        <ul>
+          <li>Generate genuinely useful, specialty-relevant visit-prep questions from the patient's own data</li>
+          <li>Keep health data local by default; anonymize anything that must leave the machine</li>
+          <li>Turn parsed AVS data into closed-loop action, not just storage</li>
+          <li>Degrade gracefully — a failing LLM call should never block the user from getting <em>something</em> useful</li>
+        </ul>
+      </section>
+
+      <section class="block">
+        <h2>Explicit non-goals</h2>
+        <ul>
+          <li><strong>Not a clinical decision-support tool.</strong> Generated questions are prompts for a conversation with a real clinician — not diagnostic or treatment guidance. No automated clinical-safety validation exists or is planned; human review is the only safety mechanism today.</li>
+          <li><strong>Not multi-user yet.</strong> Family sharing is deferred pending a decision, not built toward.</li>
+          <li><strong>Not HIPAA-scoped.</strong> Personal/family use, not a covered entity.</li>
+          <li><strong>No A/B testing, canary rollout, or drift-monitoring infrastructure.</strong> Single-user local app, no population to canary against — a deliberate scope cut, not an oversight.</li>
+        </ul>
+      </section>
+
+      <section class="block">
+        <h2>Tech stack</h2>
+        <div class="chart-lines">
+          <div class="chart-line"><div class="tag">Backend</div><div><p>FastAPI + SQLAlchemy (async) + SQLite, migrations via Alembic</p></div></div>
+          <div class="chart-line"><div class="tag">Frontend</div><div><p>React 19 + TypeScript + Tailwind CSS + Vite</p></div></div>
+          <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Claude API (Sonnet) or local Ollama — for visit prep's tool-use loop</p></div></div>
+          <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama (qwen2.5:7b) for PDF parsing and context-selection relevance scoring</p></div></div>
+        </div>
+      </section>
+    </section>
+
+    <!-- SYSTEM DESIGN -->
+    <section class="panel" id="panel-system-design" role="tabpanel" aria-labelledby="tab-system-design" tabindex="0">
+      <div class="eyebrow">Architecture</div>
+      <h1>System Design</h1>
+      <p class="dek">Two LLMs, two trust boundaries. Almost everything runs inside the dashed local boundary below; the only thing outside it is an optional external LLM call, made only after anonymization.</p>
+
+      <section class="block">
+        <h2>Data flow</h2>
+
+        <svg style="position:absolute; width:0; height:0; overflow:hidden;" aria-hidden="true">
+          <defs>
+            <symbol id="icon-file" viewBox="0 0 16 16">
+              <path d="M3.5 1.5h6l3 3v10h-9z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              <path d="M9.5 1.5v3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              <line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1.1"/>
+              <line x1="5" y1="10.5" x2="11" y2="10.5" stroke="currentColor" stroke-width="1.1"/>
+            </symbol>
+            <symbol id="icon-chip" viewBox="0 0 16 16">
+              <rect x="4" y="4" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/>
+              <line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1.1"/>
+              <line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1.1"/>
+              <line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1.1"/>
+              <line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.1"/>
+            </symbol>
+            <symbol id="icon-check" viewBox="0 0 16 16">
+              <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M5 8.2l2 2 4-4.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="icon-db" viewBox="0 0 16 16">
+              <ellipse cx="8" cy="3.3" rx="5.3" ry="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M2.7 3.3v9.4c0 1 2.4 1.8 5.3 1.8s5.3-.8 5.3-1.8V3.3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M2.7 8c0 1 2.4 1.8 5.3 1.8s5.3-.8 5.3-1.8" fill="none" stroke="currentColor" stroke-width="1.1"/>
+            </symbol>
+            <symbol id="icon-gear" viewBox="0 0 16 16">
+              <circle cx="8" cy="8" r="2.6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M8 1.6v1.8M8 12.6v1.8M14.4 8h-1.8M3.4 8H1.6M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3M12.5 12.5l-1.3-1.3M4.8 4.8L3.5 3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+            </symbol>
+            <symbol id="icon-lock" viewBox="0 0 16 16">
+              <rect x="3" y="7" width="10" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M5 7V5a3 3 0 016 0v2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+              <circle cx="8" cy="10.3" r="0.9" fill="currentColor"/>
+            </symbol>
+            <symbol id="icon-api" viewBox="0 0 16 16">
+              <path d="M6 3L2.5 8 6 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 3l3.5 5-3.5 5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+            <symbol id="icon-browser" viewBox="0 0 16 16">
+              <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/>
+              <line x1="1.5" y1="5.3" x2="14.5" y2="5.3" stroke="currentColor" stroke-width="1.2"/>
+              <circle cx="3.3" cy="3.9" r="0.5" fill="currentColor"/>
+              <circle cx="4.8" cy="3.9" r="0.5" fill="currentColor"/>
+            </symbol>
+            <symbol id="icon-cloud" viewBox="0 0 16 16">
+              <path d="M4.5 11.5a2.7 2.7 0 01-.3-5.4 3.6 3.6 0 016.9-1.2 2.9 2.9 0 013.4 2.9 2.4 2.4 0 01-.5 4.7z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            </symbol>
+          </defs>
+        </svg>
+
+        <div class="arch-wide">
+        <div class="arch">
+        <div class="arch-row">
+          <div class="arch-boundary">
+            <div class="arch-boundary-label"><svg aria-hidden="true"><use href="#icon-lock"></use></svg> Your machine — everything in this box runs locally by default</div>
+
+            <div class="arch-stack">
+              <div class="arch-phase">
+                <div class="arch-phase-title">Ingest</div>
+                <div class="arch-phase-row">
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-file"></use></svg><div>AVS PDF<span class="arch-sub">data/avs/</span></div></div>
+                  <div class="arch-inline-arrow">→</div>
+                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, qwen2.5:7b</span></div></div>
+                  <div class="arch-inline-arrow">→</div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-check"></use></svg><div>Review &amp; confirm<span class="arch-sub">user</span></div></div>
+                </div>
+              </div>
+
+              <div class="arch-spine-arrow">↓</div>
+
+              <div class="arch-phase">
+                <div class="arch-phase-title">Select</div>
+                <div class="arch-phase-row">
+                  <div class="arch-node arch-node--store"><svg aria-hidden="true"><use href="#icon-db"></use></svg><div>SQLite<span class="arch-sub">past visits</span></div></div>
+                  <div class="arch-inline-arrow">→</div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Context selection<span class="arch-sub">4-stage pipeline</span></div></div>
+                  <div class="arch-inline-arrow">→</div>
+                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama scoring<span class="arch-sub">raw, pre-anonymization</span></div></div>
+                </div>
+              </div>
+
+              <div class="arch-spine-arrow">↓</div>
+
+              <div class="arch-phase">
+                <div class="arch-phase-title">Anonymize</div>
+                <div class="arch-phase-row">
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Deterministic replacement<span class="arch-sub">name → "Patient", DOB → age</span></div></div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Regex patterns<span class="arch-sub">phone, email, SSN</span></div></div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>spaCy NER<span class="arch-sub">names in free text</span></div></div>
+                </div>
+                <div class="arch-spine-arrow" style="padding-bottom:0;">↓</div>
+                <div class="arch-phase-row" style="justify-content:center;">
+                  <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Anonymized context</div></div>
+                </div>
+              </div>
+
+              <div class="arch-spine-arrow">↓</div>
+
+              <div class="arch-phase">
+                <div class="arch-phase-title">Orchestrate</div>
+                <div class="arch-phase-row">
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Agentic tool-use loop<span class="arch-sub">≤ agent_max_turns</span></div></div>
+                  <div class="arch-inline-arrow">→</div>
+                  <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Query DB, anonymize result<span class="arch-sub">tool calls</span></div></div>
+                </div>
+                <div class="arch-branch-tag">⇄ optionally calls out to Claude API — see right</div>
+              </div>
+
+              <div class="arch-spine-arrow">↓</div>
+
+              <div class="arch-phase">
+                <div class="arch-phase-title">Backend</div>
+                <div class="arch-phase-row">
+                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, default — stays inside this box</span></div></div>
+                </div>
+              </div>
+
+              <div class="arch-spine-arrow">↓</div>
+
+              <div class="arch-phase">
+                <div class="arch-phase-title">Serve</div>
+                <div class="arch-phase-row">
+                  <div class="arch-node arch-node--store"><svg aria-hidden="true"><use href="#icon-db"></use></svg><div>SQLite<span class="arch-sub">VisitPrep</span></div></div>
+                  <div class="arch-inline-arrow">→</div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-api"></use></svg><div>FastAPI</div></div>
+                  <div class="arch-inline-arrow">→</div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-browser"></use></svg><div>React UI</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-crossing-arrow">⇄</div>
+
+          <div class="arch-side">
+            <div class="arch-external">
+              <div class="arch-node arch-node--external"><svg aria-hidden="true"><use href="#icon-cloud"></use></svg><div>Claude API<span class="arch-sub">Sonnet — optional, leaves this box</span></div></div>
+            </div>
+            <p class="arch-crossing-label">Only if <code>LLM_PROVIDER=claude</code> — anonymized context and tool results only. Response returns to Orchestrate; Serve continues either way.</p>
+          </div>
+        </div>
+
+          <div class="arch-legend">
+            <span><span class="swatch" style="background:var(--paper); border:1px solid var(--line);"></span> local process</span>
+            <span><span class="swatch" style="background:var(--paper); border:1.5px solid var(--teal-bright);"></span> local AI call (Ollama)</span>
+            <span><span class="swatch" style="background:var(--paper); border:1px dashed var(--line);"></span> data store</span>
+            <span><span class="swatch" style="background:var(--paper); border:1.5px solid var(--amber);"></span> anonymization / external boundary</span>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Two trust boundaries</h2>
+        <div class="boundaries">
+          <div class="boundary">
+            <div class="eyebrow">Stays on device</div>
+            <h4>Ollama, local</h4>
+            <p>PDF parsing and visit-relevance scoring run on a local model. Raw records never touch the network — enforced by a hard localhost-only safety check in the Ollama client, not just convention.</p>
+          </div>
+          <div class="boundary">
+            <div class="eyebrow">Anonymized first</div>
+            <h4>Pluggable backend (Claude or local Ollama)</h4>
+            <p>Only ever receives already-anonymized data. Anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way, for both backends.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Reliability design</h2>
+        <p>The agentic tool-use loop is <strong>fallback-not-hard-failure by construction</strong>: if it can't converge within <code>agent_max_turns</code> (default 6) or a backend produces a malformed tool call, the system falls back to the pre-existing single-shot prompt-in/JSON-out call. The single-shot path is the floor every enhancement is built on top of — no functional regression is possible by design, only degraded quality on failure.</p>
+      </section>
+    </section>
+
+    <!-- DEEP DIVES -->
+    <section class="panel" id="panel-deep-dives" role="tabpanel" aria-labelledby="tab-deep-dives" tabindex="0">
+      <div class="eyebrow">Component internals</div>
+      <h1>Deep Dives</h1>
+      <p class="dek">Expand any section — these are written to be answerable as "walk me through how X works" in a technical conversation.</p>
+
+      <details class="accordion-item" open>
+        <summary>Agentic tool-use loop <span class="plus">+</span></summary>
+        <div class="body">
+          <p><code>_run_agentic_loop</code> in <code>src/agents/visit_prep.py</code>: send context + tool specs to the backend → if it returns tool calls, execute each against the DB, anonymize the result, append to the conversation, repeat → if it returns final text with no tool calls, that's the answer → if <code>agent_max_turns</code> is exhausted first, raise and let the caller fall back to single-shot.</p>
+          <ul>
+            <li><strong>Why bounded, not open-ended:</strong> an unbounded loop against a small/unreliable local model can spin. A hard turn cap makes worst-case latency and cost predictable.</li>
+            <li><strong>Why Claude API as default, not local Ollama:</strong> the dev machine (Apple M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool selection, non-convergence. Claude API cost is negligible for personal use (~$1/month).</li>
+            <li><strong>Two tools today, deliberately bounded scope for v1:</strong> <code>get_medication_details</code> (on-demand medication lookup, not a real interaction checker) and <code>lookup_past_visits</code> (deeper visit history query). A real drug-interaction checker and a user-facing pause-to-ask-clarifying-questions flow were explicitly descoped as separate, bigger features.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="accordion-item">
+        <summary>PII anonymization <span class="plus">+</span></summary>
+        <div class="body">
+          <p>Hybrid approach in <code>src/utils/anonymization.py</code>: structured fields get deterministic replacement (patient name → "Patient", DOB → exact age, doctor name → "your [specialty]"), free text goes through regex (phone/email/SSN patterns) plus spaCy NER for names.</p>
+          <ul>
+            <li><strong>Documented as best-effort on free text, not a guarantee</strong> — NER can miss names in unusual phrasing. This is stated explicitly rather than implied, since silently overstating a privacy guarantee is worse than none.</li>
+            <li><strong>Applies uniformly regardless of provider</strong> — even when running fully local Ollama (where anonymization is technically unnecessary since nothing leaves the machine), the same code path is used for consistency and to avoid two divergent implementations.</li>
+            <li><strong>Tool results are anonymized too</strong>, not just the initial context — a result from <code>lookup_past_visits</code> mid-loop goes through the same <code>Anonymizer</code> before re-entering the conversation.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="accordion-item">
+        <summary>4-stage context selection <span class="plus">+</span></summary>
+        <div class="body">
+          <p>Before generating visit-prep questions, relevant past-visit history is selected via a 4-stage pipeline in <code>src/utils/context_selection.py</code>:</p>
+          <ol>
+            <li><strong>Rules-based filter</strong> (instant, free) — always include same-doctor's last visit and PCP/Internal Medicine visits; apply a specialty-relevance mapping (e.g. Endocrinology ↔ Cardiology, Nephrology); exclude doctors flagged out of prep context.</li>
+            <li><strong>Local LLM relevance scoring</strong> (Ollama) — only runs if more than 5 visits remain after stage 1; scores each 1-10, keeps ≥7. Skipped if Ollama is unavailable, falling back to rules + truncation.</li>
+            <li><strong>Token budget check</strong> — summarizes older visits with the local LLM if still over budget.</li>
+            <li><strong>Anonymize</strong> — the only stage where data crosses into what the external-capable backend will see.</li>
+          </ol>
+          <p>Stage 2's relevance scoring deliberately runs on <em>raw, pre-anonymization</em> text — it's a local-only call, so there's no privacy reason to anonymize before it, and doing so first would degrade the local model's ability to judge relevance from real names/context.</p>
+        </div>
+      </details>
+
+      <details class="accordion-item">
+        <summary>AVS PDF parsing <span class="plus">+</span></summary>
+        <div class="body">
+          <p>Section-routing architecture in <code>src/parsers/</code>: deterministic parsers handle structured sections (patient info, medication changes, follow-ups, appointments, diagnoses with ICD codes); local Ollama handles unstructured sections (vitals, lab orders, notes, referrals, diagnoses without a structured Assessment section).</p>
+          <ul>
+            <li><strong>Local-only, enforced not just documented</strong> — <code>ollama_chat.py</code> has a safety check that blocks any non-localhost URL, so a misconfiguration can't silently route PHI externally.</li>
+            <li><strong>Review before apply</strong> — parsed items are always presented for user confirmation with per-section checkboxes; nothing is auto-applied to the profile.</li>
+            <li><strong>Deduplication</strong> — diagnoses dedupe by name on apply (existing conditions get ICD-10 backfilled if missing); medication stops match by name.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="accordion-item">
+        <summary>Proactive action items &amp; nudging <span class="plus">+</span></summary>
+        <div class="body">
+          <p>Closes the loop between "document parsed" and "patient acts on what the doctor ordered." Two surfaces: a post-AVS action panel (fires at the moment of highest engagement, right after confirming a parsed document) and a persistent "Needs Attention" overview section (catches items accumulated from past visits, always visible).</p>
+          <ul>
+            <li>Snooze (1w/2w/1m) and completion state persist via <code>snoozed_until</code>/<code>completed_at</code> on <code>FollowUp</code>/<code>LabOrder</code>/<code>Referral</code>, plus a <code>NudgeState</code> table for computed nudges that have no natural row to attach state to (e.g. "past-due appointment").</li>
+            <li>Scheduled push notifications for genuinely disengaged patients — reaching someone who isn't currently in the app — were considered and explicitly deferred; it's new infrastructure (a scheduler + notification channel) that arguably conflicts with the local-first architecture, not a pure addition on existing data like the two shipped surfaces are.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <!-- DECISIONS -->
+    <section class="panel" id="panel-decisions" role="tabpanel" aria-labelledby="tab-decisions" tabindex="0">
+      <div class="eyebrow">Alternatives considered</div>
+      <h1>Decisions &amp; Tradeoffs</h1>
+      <p class="dek">A curated set of the calls with real engineering tension — not all 15+ decision-log entries, just the ones worth defending in a conversation. Full log: <code>docs/notes/DECISIONS.md</code>.</p>
+
+      <div class="dec-filters" id="decFilters" role="group" aria-label="Filter decisions by category">
+        <button class="active" aria-pressed="true" data-filter="all">All</button>
+        <button aria-pressed="false" data-filter="ai">AI / LLM</button>
+        <button aria-pressed="false" data-filter="data">Data</button>
+        <button aria-pressed="false" data-filter="privacy">Privacy</button>
+      </div>
+
+      <div class="dec-card" data-tags="ai">
+        <div class="dec-id">DEC-009 / DEC-013</div>
+        <h4>Agentic loop framework: native tool use, not Agent SDK or LangGraph</h4>
+        <table>
+          <tr><th>Option</th><th>Why not</th></tr>
+          <tr><td>Anthropic Agent SDK</td><td>New dependency and learning curve for a single-agent workflow that doesn't need its structured primitives</td></tr>
+          <tr><td>LangGraph</td><td>Explicit state machine is overkill — heavy abstraction for one agent, one loop</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> Claude API's native tool use. Already integrated, no new deps, a simple send/loop/execute pattern that's easy to upgrade to a framework later if the loop ever needs to coordinate multiple agents.</div>
+      </div>
+
+      <div class="dec-card" data-tags="ai privacy">
+        <div class="dec-id">DEC-009</div>
+        <h4>Local Ollama vs. Claude API for the agentic backend</h4>
+        <table>
+          <tr><th>Option</th><th>Tradeoff</th></tr>
+          <tr><td>Local Ollama (7-8B, quantized)</td><td>Free, maximum privacy — but only 4-5GB RAM available after OS on an 8GB M3, so only 4-bit quantized models fit, and those produce unreliable tool-calling (malformed JSON, wrong tools, loops)</td></tr>
+          <tr><td>Claude API (Sonnet)</td><td>Reliable tool use out of the box, ~$0.03-0.10 per visit prep (~$1/month typical use) — but leaves the local-first ideal for this one call path</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> Claude API as default, Ollama as an explicit opt-in via <code>LLM_PROVIDER=ollama</code> with documented reduced reliability. Anonymization make the Claude path privacy-acceptable rather than privacy-ideal.</div>
+      </div>
+
+      <div class="dec-card" data-tags="data">
+        <div class="dec-id">DEC-003</div>
+        <h4>SQLite vs. PostgreSQL</h4>
+        <table>
+          <tr><th>Option</th><th>Tradeoff</th></tr>
+          <tr><td>SQLite</td><td>Zero setup, file-based, portable — but single-writer, not ideal if multi-user ever ships</td></tr>
+          <tr><td>PostgreSQL</td><td>Production-ready, concurrent — but requires a running server for a currently single-user local app</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> SQLite for the current single-user phase; the SQLAlchemy abstraction keeps a later move to Postgres cheap if/when multi-user sharing (deferred, DEC-001) actually ships.</div>
+      </div>
+
+      <div class="dec-card" data-tags="data privacy">
+        <div class="dec-id">DEC-004</div>
+        <h4>UUID vs. auto-increment integer primary keys</h4>
+        <table>
+          <tr><th>Option</th><th>Tradeoff</th></tr>
+          <tr><td>Auto-increment integers</td><td>Simple, compact, fast — but leaks record count and lets IDs be enumerated/guessed</td></tr>
+          <tr><td>UUIDs</td><td>Larger, marginally slower — but private and trivially portable across databases</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> UUIDs. Health data specifically warrants the extra privacy consideration over the minor storage/perf cost.</div>
+      </div>
+
+      <div class="dec-card" data-tags="privacy">
+        <div class="dec-id">DEC-005 / DEC-010</div>
+        <h4>PDF parsing: local-only Ollama vs. cloud OCR/vision</h4>
+        <table>
+          <tr><th>Option</th><th>Tradeoff</th></tr>
+          <tr><td>Claude Vision / cloud OCR</td><td>Best accuracy on scanned/image PDFs — but sends raw medical documents to a third party</td></tr>
+          <tr><td>Local Ollama + deterministic parsers</td><td>Maximum privacy, section-routing keeps accuracy reasonable on structured sections — but weaker on genuinely unstructured, image-heavy documents</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> Local-only Ollama, enforced with a hard safety check, not just a default. For a tool whose entire pitch is "your health data never leaves your machine," an accuracy/privacy tradeoff here isn't really optional.</div>
+      </div>
+
+      <div class="dec-card" data-tags="ai">
+        <div class="dec-id">DEC-013</div>
+        <h4>Agentic loop scope: two read-only tools, not a full feature set</h4>
+        <table>
+          <tr><th>Descoped</th><th>Why</th></tr>
+          <tr><td>Real drug-interaction checker</td><td>Needs a licensed external interaction-database API — a separate, bigger feature (tracked as its own issue)</td></tr>
+          <tr><td>User-facing clarifying-question pause</td><td>Needs new DB state, a new API endpoint, and new frontend UI to resume a paused conversation (tracked as its own issue)</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> ship the smallest version of the loop that's actually useful — two tools buildable entirely from existing schema data, both read-only, both anonymized — rather than block the whole agentic architecture on the bigger features.</div>
+      </div>
+    </section>
+
+    <!-- WALKTHROUGH -->
+    <section class="panel" id="panel-walkthrough" role="tabpanel" aria-labelledby="tab-walkthrough" tabindex="0">
+      <div class="eyebrow">Example run</div>
+      <h1>Walkthrough</h1>
+      <span class="synthetic-tag">⚠ synthetic example — fabricated patient, not real data</span>
+      <p class="dek">There's no captured real-patient output in the repo to pull from (by design — nothing leaves a real user's machine). This walkthrough is a constructed, illustrative example showing what actually happens end-to-end for one visit-prep run.</p>
+
+      <div class="step">
+        <div class="stepnum">1</div>
+        <div class="stepbody">
+          <h4>Input: upcoming appointment + existing profile data</h4>
+          <p>Patient has an upcoming <strong>Endocrinology</strong> visit. Profile has two conditions with a real cross-specialty interaction worth surfacing: Type 2 Diabetes (E11) and Hashimoto's thyroiditis (E06.3) — both endocrine, but historically diagnosed by different specialists (PCP and an OB-GYN, respectively).</p>
+          <pre class="snippet">Conditions:
+- Type 2 Diabetes Mellitus (E11.9) [active] — typically managed by: Endocrinology
+- Hashimoto's Thyroiditis (E06.3) [active] — typically managed by: Endocrinology
+Medications:
+- Metformin 500mg — twice daily [prescribed for Endocrinology]
+- Levothyroxine 75mcg — once daily, morning [prescribed for Endocrinology]
+Lab Orders:
+- HbA1c (ordered 2026-05-02)
+- TSH (ordered 2026-05-02)</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="stepnum">2</div>
+        <div class="stepbody">
+          <h4>Context selection + anonymization</h4>
+          <p>4-stage pipeline includes the same-doctor's last visit and PCP visits automatically; a past OB-GYN visit surfaces via the Endocrinology ↔ Gynecology specialty-relevance mapping (PCOS/thyroid cross-relevance) rather than being excluded as off-specialty. Before this reaches the LLM, patient name → "Patient", DOB → "39 years old", doctor names → "your Endocrinologist".</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="stepnum">3</div>
+        <div class="stepbody">
+          <h4>Agentic loop: a tool call mid-generation</h4>
+          <p>Model calls <code>get_medication_details</code> with no filter to double-check dosing/timing before finalizing a question about levothyroxine-metformin timing overlap — a real absorption interaction worth asking about. Result is anonymized (prescriber name redacted) and fed back into the conversation.</p>
+          <pre class="snippet">→ tool_call: get_medication_details({})
+← result: "- Metformin (500mg) — twice daily
+  Purpose: Blood sugar control
+- Levothyroxine (75mcg) — once daily, morning
+  Purpose: Thyroid hormone replacement
+  Prescribed by: your Endocrinologist"</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="stepnum">4</div>
+        <div class="stepbody">
+          <h4>Final output</h4>
+          <p>Loop converges (no further tool calls) within 2 turns. Output parsed as JSON, returned to the UI:</p>
+          <div class="qcat">
+            <div class="cathead">Condition Management</div>
+            <ul>
+              <li>How does having both Hashimoto's and Type 2 Diabetes affect your target A1c range?</li>
+              <li>Is my current thyroid control (TSH) affecting how well Metformin is managing my blood sugar?</li>
+            </ul>
+          </div>
+          <div class="qcat">
+            <div class="cathead">Medication Review</div>
+            <ul>
+              <li>Should I space out Levothyroxine and Metformin — I take them close together in the morning?</li>
+            </ul>
+          </div>
+          <div class="qcat">
+            <div class="cathead">Lab Results &amp; Monitoring</div>
+            <ul>
+              <li>My HbA1c and TSH were both ordered last visit — what results would prompt a dosage change on either medication?</li>
+            </ul>
+          </div>
+          <p style="font-size:13.5px; max-width:98ch; margin-top:10px;"><strong>Context summary:</strong> "Patient manages co-occurring Type 2 Diabetes and Hashimoto's Thyroiditis, both under active medication management with pending labs to assess control."</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RISKS -->
+    <section class="panel" id="panel-risks" role="tabpanel" aria-labelledby="tab-risks" tabindex="0">
+      <div class="eyebrow">Honest assessment</div>
+      <h1>Risks &amp; Open Gaps</h1>
+      <p class="dek">What's actually unsolved right now — shown deliberately, not glossed over.</p>
+
+      <section class="block">
+        <h2>Risks</h2>
+        <div class="callout risk">
+          <span class="callout-label">Clinical safety</span>
+          <p>Generated output is health-adjacent guidance. The only safety mechanism is the patient reading it before a real appointment — no automated check exists for a plausible-but-wrong suggestion (e.g. a hallucinated interaction, a misread lab trend). Framed as a <strong>permanent</strong> human-in-the-loop requirement, not a gap with a "done" state.</p>
+        </div>
+        <div class="callout risk">
+          <span class="callout-label">External dependency risk</span>
+          <p>Anthropic API pricing/availability changes affect the default agentic backend directly, with no equally-reliable local fallback today. Ollama model tags (<code>qwen2.5:7b</code>, <code>llama3.2</code>) are referenced by tag, not pinned digest — a silent upstream re-tag could change parsing/scoring behavior with no code change to explain why. <a href="https://github.com/nidhi-menon/HealthSteward/issues/31">Tracked in issue #31.</a></p>
+        </div>
+        <div class="callout risk">
+          <span class="callout-label">Prompt-change management</span>
+          <p>The specialty-aware system prompts are the actual product behavior, but changes go through normal code review with no dedicated versioning or before/after quality comparison. Low-stakes at current scale; would need a real process if the loop gains more agentic freedom.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Known gaps</h2>
+        <div class="callout gap">
+          <span class="callout-label">No quality evaluation of generated output</span>
+          <p>Tests mock the LLM and verify the pipeline works — loop convergence, tool execution, anonymization boundaries — not whether generated questions are actually good: relevant, non-redundant, correctly specialty-scoped. <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">Tracked in issue #29.</a></p>
+        </div>
+        <div class="callout gap">
+          <span class="callout-label">No visibility into agentic-loop fallback rate</span>
+          <p><code>ConversationLog</code> stores the data, but nothing surfaces how often the loop actually falls back to single-shot. A silently degrading backend would be invisible. <a href="https://github.com/nidhi-menon/HealthSteward/issues/30">Tracked in issue #30.</a></p>
+        </div>
+        <div class="callout gap">
+          <span class="callout-label">No frontend test coverage</span>
+          <p>Backend has 72+ tests; frontend has zero — no framework installed, no test files. <a href="https://github.com/nidhi-menon/HealthSteward/issues/27">Tracked in issue #27.</a></p>
+        </div>
+      </section>
+
+      <p style="font-size:13px; max-width:102ch; margin-top:8px;">
+        See all <a href="https://github.com/nidhi-menon/HealthSteward/issues">open issues</a> for the full backlog, or start a <a href="https://github.com/nidhi-menon/HealthSteward/discussions">Discussion</a> if something here isn't clearly a bug or a scoped feature yet.
+      </p>
+    </section>
+
+    <!-- GLOSSARY -->
+    <section class="panel" id="panel-glossary" role="tabpanel" aria-labelledby="tab-glossary" tabindex="0">
+      <div class="eyebrow">Reference</div>
+      <h1>Glossary</h1>
+      <p class="dek">Terms as used specifically in this codebase — some have a more specific meaning here than the general ML/LLM usage.</p>
+      <dl>
+        <div class="gterm"><dt>Agentic loop</dt><dd>The bounded tool-use conversation loop in <code>visit_prep.py</code> — the model can call tools before producing a final answer, up to <code>agent_max_turns</code>, with automatic fallback to single-shot generation if it doesn't converge.</dd></div>
+        <div class="gterm"><dt>AVS</dt><dd>After-Visit Summary — the PDF a patient is typically handed at the end of a doctor's visit, containing vitals, orders, diagnoses, and notes.</dd></div>
+        <div class="gterm"><dt>Anonymization boundary</dt><dd>The point in the pipeline (after context selection, before the agentic loop starts) past which no unredacted PII should exist — a hard constraint (DEC-006), not a best-effort nicety.</dd></div>
+        <div class="gterm"><dt>Specialty-aware prompting</dt><dd>System prompts that constrain generated questions to what's relevant to the specific doctor's specialty, using ICD-10 → specialty mapping and medication → prescriber tagging (DEC-011).</dd></div>
+        <div class="gterm"><dt>Section-routing</dt><dd>The AVS parser's architecture: deterministic parsers handle structured PDF sections, local LLM calls handle unstructured ones — routed by section type, not one monolithic LLM call over the whole document.</dd></div>
+        <div class="gterm"><dt>Pluggable backend</dt><dd><code>LLMBackend</code> abstraction (<code>src/agents/llm_backend.py</code>) that normalizes Claude API and Ollama tool-calling into one interface, so the agentic loop code doesn't branch on provider.</dd></div>
+        <div class="gterm"><dt>NudgeState</dt><dd>DB table persisting snooze/dismiss state for computed action items that have no natural row of their own to attach state to (e.g. "appointment is past-due").</dd></div>
+        <div class="gterm"><dt>DEC-XXX</dt><dd>An entry in <code>docs/notes/DECISIONS.md</code>'s architectural decision log — Date / Topic / Context / Options Considered / Decision / Reasoning / Status.</dd></div>
+      </dl>
+    </section>
+
+    <!-- FAQ -->
+    <section class="panel" id="panel-faq" role="tabpanel" aria-labelledby="tab-faq" tabindex="0">
+      <div class="eyebrow">Reference</div>
+      <h1>FAQ</h1>
+      <div class="faq-item">
+        <div class="q">Why not just use a real drug-interaction API from day one?</div>
+        <p class="a">It needs a licensed external service (RxNorm/DrugBank/FDB-class), which is a bigger, separate integration than what shipped with the agentic loop's first version — deliberately descoped rather than blocking the rest of the architecture on it. Tracked as its own follow-up.</p>
+      </div>
+      <div class="faq-item">
+        <div class="q">Why does the agentic loop fall back instead of just erroring?</div>
+        <p class="a">Because small local models are known to produce unreliable tool-calling, and the single-shot path already worked before the agentic loop existed. Falling back preserves that guarantee — a user should never get a worse experience than pre-agentic HealthSteward, only a potentially less-refined one on failure.</p>
+      </div>
+      <div class="faq-item">
+        <div class="q">Is any of this HIPAA-compliant?</div>
+        <p class="a">Not scoped as HIPAA-compliant — it's personal/family use, not a covered entity under HIPAA. The privacy design (local-first, anonymization, no cloud storage) is motivated by good practice for sensitive personal data, not a regulatory compliance target.</p>
+      </div>
+      <div class="faq-item">
+        <div class="q">Why two different local models (Ollama for parsing vs. relevance scoring) instead of one shared path?</div>
+        <p class="a">They're actually the same Ollama instance/model (qwen2.5:7b) used for two different jobs — PDF parsing and context relevance scoring — not two separate models. They're kept as distinct call sites because they have different failure-handling needs (parsing failure surfaces to the user for review; scoring failure silently falls back to rules-based selection).</p>
+      </div>
+      <div class="faq-item">
+        <div class="q">What happens if Ollama isn't running at all?</div>
+        <p class="a">PDF parsing simply can't proceed (surfaced to the user). Context-selection relevance scoring skips stage 2 and falls back to rules-based filtering plus truncation. Visit prep itself is unaffected unless <code>LLM_PROVIDER=ollama</code> is explicitly set.</p>
+      </div>
+    </section>
+
+    <footer class="doc-footer">
+      <p>This is a point-in-time snapshot, re-written when a decision represents a genuine architectural shift — not on every change. Full decision-by-decision detail: <code>docs/notes/DECISIONS.md</code>. Narrative build history: <code>docs/notes/DEVELOPMENT_LOG.md</code>. Source: <a href="https://github.com/nidhi-menon/HealthSteward">github.com/nidhi-menon/HealthSteward</a>.</p>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  var tabs = document.querySelectorAll('nav.side button.tab');
+  var panels = document.querySelectorAll('.panel');
+  var tabList = Array.prototype.slice.call(tabs);
+
+  function activate(name, opts) {
+    opts = opts || {};
+    tabs.forEach(function (t) {
+      var isActive = t.dataset.panel === name;
+      t.classList.toggle('active', isActive);
+      t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      t.tabIndex = isActive ? 0 : -1;
+    });
+    panels.forEach(function (p) { p.classList.toggle('active', p.id === 'panel-' + name); });
+    if (opts.moveFocus) {
+      var activeTab = tabList.filter(function (t) { return t.dataset.panel === name; })[0];
+      if (activeTab) activeTab.focus();
+    }
+    window.scrollTo(0, 0);
+    document.getElementById('sideNav').classList.remove('open');
+    document.getElementById('menuBtn').setAttribute('aria-expanded', 'false');
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      activate(t.dataset.panel);
+      history.replaceState(null, '', '#' + t.dataset.panel);
+    });
+    t.addEventListener('keydown', function (e) {
+      var i = tabList.indexOf(t);
+      var next = null;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = tabList[(i + 1) % tabList.length];
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = tabList[(i - 1 + tabList.length) % tabList.length];
+      else if (e.key === 'Home') next = tabList[0];
+      else if (e.key === 'End') next = tabList[tabList.length - 1];
+      if (next) {
+        e.preventDefault();
+        activate(next.dataset.panel, { moveFocus: true });
+        history.replaceState(null, '', '#' + next.dataset.panel);
+      }
+    });
+  });
+
+  if (location.hash) {
+    var initial = location.hash.slice(1);
+    if (document.getElementById('panel-' + initial)) activate(initial);
+  }
+
+  var menuBtn = document.getElementById('menuBtn');
+  menuBtn.addEventListener('click', function () {
+    var open = document.getElementById('sideNav').classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  var decFilters = document.querySelectorAll('#decFilters button');
+  var decCards = document.querySelectorAll('.dec-card');
+  decFilters.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      decFilters.forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+      var f = btn.dataset.filter;
+      decCards.forEach(function (c) {
+        c.style.display = (f === 'all' || c.dataset.tags.indexOf(f) !== -1) ? '' : 'none';
+      });
+    });
+  });
+</script>
+</body>
+</html>

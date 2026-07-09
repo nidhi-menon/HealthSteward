@@ -2,7 +2,7 @@
 
 **Snapshot as of:** DEC-015 · 2026-07-08
 
-This is a point-in-time architecture snapshot, not a living doc — it reflects the system as understood at the DEC entry above and is re-written only when a subsequent DEC represents a genuine architectural shift (new/removed subsystem, changed trust boundary, deprecated core pattern), not on every change. See `CLAUDE.md` for the re-snapshot rule. For decision-by-decision detail, see `docs/DECISIONS.md`; for narrative build history, see `docs/DEVELOPMENT_LOG.md`.
+This is a point-in-time architecture snapshot, not a living doc — it reflects the system as understood at the DEC entry above and is re-written only when a subsequent DEC represents a genuine architectural shift (new/removed subsystem, changed trust boundary, deprecated core pattern), not on every change. See `CLAUDE.md` for the re-snapshot rule. For decision-by-decision detail, see `docs/notes/DECISIONS.md`; for narrative build history, see `docs/notes/DEVELOPMENT_LOG.md`.
 
 This doc borrows structure from ML technical design docs (problem framing, system design, evaluation, rollout, risks), but HealthSteward isn't a trained-model system — no feature store, no hyperparameter tuning, no offline precision/recall. It's an **LLM application**: prompting + agentic tool use + deterministic parsing layered over off-the-shelf models (Claude API, local Ollama). Sections below are reinterpreted accordingly rather than applied by template.
 
@@ -60,7 +60,7 @@ flowchart TD
 
 **Tech stack:** FastAPI + SQLAlchemy (async) + SQLite · React 19 + TypeScript + Tailwind + Vite · Claude API (Sonnet) or local Ollama for the agentic loop · Ollama (qwen2.5:7b) for PDF parsing and relevance scoring · Alembic migrations.
 
-Full component-level detail: `docs/IMPLEMENTATION.md`.
+Full component-level detail: `docs/notes/IMPLEMENTATION.md`.
 
 ## 4. Data & Privacy
 
@@ -101,7 +101,7 @@ No staged rollout — single-user local app, changes ship by pulling `main` and 
 
 ## 9. Alternatives Considered
 
-Full detail lives in `docs/DECISIONS.md` (DEC-001 through DEC-015) — this section is a pointer, not a duplicate. Headline calls: Claude native tool use over the Agent SDK or LangGraph (DEC-009 — no new deps, framework overhead unwarranted for a single agent); SQLite over Postgres for Phase 1 (DEC-003); UUID over integer primary keys (DEC-004); local-only Ollama for PDF parsing over any cloud OCR/vision option (DEC-005/DEC-010).
+Full detail lives in `docs/notes/DECISIONS.md` (DEC-001 through DEC-015) — this section is a pointer, not a duplicate. Headline calls: Claude native tool use over the Agent SDK or LangGraph (DEC-009 — no new deps, framework overhead unwarranted for a single agent); SQLite over Postgres for Phase 1 (DEC-003); UUID over integer primary keys (DEC-004); local-only Ollama for PDF parsing over any cloud OCR/vision option (DEC-005/DEC-010).
 
 ## 10. Risks
 

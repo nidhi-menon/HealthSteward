@@ -11,9 +11,9 @@ HealthSteward is early-stage and the codebase evolves through a handful of docum
 
 Two docs record *why* the codebase looks the way it does — read them before assuming something is an oversight:
 
-- **`docs/DECISIONS.md`** — architectural decisions (framework choices, scope cuts, privacy trade-offs), one entry per `DEC-XXX`. If your PR makes or changes an architectural call, add an entry here in the same format (Date / Topic / Context / Options Considered / Decision / Reasoning / Status).
-- **`docs/DEVELOPMENT_LOG.md`** — narrative history of what was built and why, one entry per significant unit of work. Add an entry for anything beyond a small fix.
-- **`docs/DESIGN.md`** — a point-in-time architecture snapshot, not a living doc. Most DEC entries don't need it touched. Update it only if your DEC represents a genuine architectural shift: adds/removes a major subsystem, changes a trust boundary or core pattern, or deprecates something the doc currently describes. If you do update it, refresh the date/commit-stamp at the top.
+- **`docs/notes/DECISIONS.md`** — architectural decisions (framework choices, scope cuts, privacy trade-offs), one entry per `DEC-XXX`. If your PR makes or changes an architectural call, add an entry here in the same format (Date / Topic / Context / Options Considered / Decision / Reasoning / Status).
+- **`docs/notes/DEVELOPMENT_LOG.md`** — narrative history of what was built and why, one entry per significant unit of work. Add an entry for anything beyond a small fix.
+- **`docs/notes/DESIGN.md`** — a point-in-time architecture snapshot, not a living doc. Most DEC entries don't need it touched. Update it only if your DEC represents a genuine architectural shift: adds/removes a major subsystem, changes a trust boundary or core pattern, or deprecates something the doc currently describes. If you do update it, refresh the date/commit-stamp at the top.
 
 Both DECISIONS.md and DEVELOPMENT_LOG.md exist so that "why is this deferred" or "why isn't X built yet" has a documented answer instead of living only in someone's memory. Skipping them isn't a blocker for a tiny PR, but is expected for anything that changes behavior or defers/descopes something.
 
