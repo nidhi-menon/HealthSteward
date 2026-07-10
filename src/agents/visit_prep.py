@@ -16,10 +16,10 @@ from sqlalchemy.orm import selectinload
 
 from src.agents.base import BaseAgent
 from src.agents.llm_backend import ToolCallParsingError, get_llm_backend
-from src.agents.ollama_client import OllamaClient, get_ollama_client
-from src.agents.tools import VisitPrepTools, claude_tools, ollama_tools
+from src.agents.tools import VisitPrepTools, get_tools_for_provider
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
+from src.services import settings_service
 from src.utils.anonymization import Anonymizer, AnonymizedAppointment, AnonymizedProfile
 from src.utils.context_selection import ContextSelector, ContextSelectionResult
 
@@ -183,13 +183,6 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             stage2_threshold=self.settings.context_stage2_threshold,
             relevance_cutoff=self.settings.context_relevance_cutoff,
         )
-        self._ollama_client: Optional[OllamaClient] = None
-
-    async def _get_ollama_client(self) -> Optional[OllamaClient]:
-        """Get Ollama client if available."""
-        if self._ollama_client is None:
-            self._ollama_client = await get_ollama_client()
-        return self._ollama_client
 
     async def _get_past_appointments(self, profile_id: str, current_appointment_id: str) -> list[Appointment]:
         """Get past completed appointments for context."""
@@ -255,6 +248,12 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
 
         Uses anonymization and context selection per DEC-006 and DEC-008.
         """
+        # Step 0: Refresh settings with any DB-persisted overrides (DEC-016) —
+        # the LLM provider can be switched from the Settings UI at runtime,
+        # so pull the effective settings fresh for each visit prep rather
+        # than relying on the env-only settings captured in __init__.
+        self.settings = await settings_service.get_effective_settings(self.db)
+
         # Step 1: Get past appointments for context
         past_appointments = await self._get_past_appointments(
             appointment.profile_id,
@@ -316,14 +315,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
                     response = None
 
             if response is None:
-                if self.settings.llm_provider == "ollama":
-                    response = await self._call_ollama(messages, system_prompt)
-                else:
-                    response = await self._call_claude(
-                        messages=messages,
-                        system=system_prompt,
-                        temperature=0.7,
-                    )
+                response = await self._call_backend(messages, system_prompt)
 
             # Step 8: Parse JSON response
             parsed = self._parse_json_response(response)
@@ -357,7 +349,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         single-shot generation on those exceptions.
         """
         backend = get_llm_backend(self.settings)
-        tools = ollama_tools() if self.settings.llm_provider == "ollama" else claude_tools()
+        tools = get_tools_for_provider(self.settings.llm_provider)
         tool_executor = VisitPrepTools(self.db, self.anonymizer, profile_id)
 
         conversation = list(messages)
@@ -366,18 +358,13 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             result = await backend.call(conversation, system, tools=tools)
 
             if not result.tool_calls:
-                model_name = (
-                    self.settings.ollama_model
-                    if self.settings.llm_provider == "ollama"
-                    else self.settings.anthropic_model
-                )
                 await self._log_conversation(
                     messages=messages,
                     response=result.text or "",
                     system=system,
                     input_tokens=None,
                     output_tokens=None,
-                    model=model_name,
+                    model=self._model_name_for_provider(),
                 )
                 return result.text or ""
 
@@ -388,19 +375,19 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
 
         raise RuntimeError(f"Agentic loop did not converge within {self.settings.agent_max_turns} turns")
 
-    async def _call_ollama(self, messages: list[dict], system: str) -> str:
-        """Call Ollama for generation."""
-        client = await self._get_ollama_client()
-        if not client:
-            raise RuntimeError("Ollama is not available")
+    def _model_name_for_provider(self) -> str:
+        """Model name to log against, for whichever provider is configured."""
+        if self.settings.llm_provider == "ollama":
+            return self.settings.ollama_model
+        if self.settings.llm_provider == "custom":
+            return self.settings.custom_llm_model or "custom"
+        return self.settings.anthropic_model
 
-        ollama_messages = [{"role": "system", "content": system}]
-        ollama_messages.extend(messages)
-
-        response = await client.chat(
-            messages=ollama_messages,
-            temperature=0.7,
-        )
+    async def _call_backend(self, messages: list[dict], system: str) -> str:
+        """Single-shot (non-agentic) generation via whichever backend is configured."""
+        backend = get_llm_backend(self.settings)
+        result = await backend.call(messages, system, tools=None)
+        response = result.text or ""
 
         await self._log_conversation(
             messages=messages,
@@ -408,7 +395,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             system=system,
             input_tokens=None,
             output_tokens=None,
-            model=self.settings.ollama_model,
+            model=self._model_name_for_provider(),
         )
 
         return response

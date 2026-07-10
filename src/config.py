@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "development"
 
-    # LLM Provider: "claude" or "ollama"
-    llm_provider: str = "claude"
+    # LLM Provider: "ollama" (default, local-first — DEC-016), "claude", or "custom"
+    llm_provider: str = "ollama"
 
     # Anthropic API (used when llm_provider="claude")
     anthropic_api_key: Optional[str] = None
@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     # Ollama (used when llm_provider="ollama" or for local LLM scoring)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
+
+    # Custom OpenAI-compatible provider (used when llm_provider="custom") —
+    # any endpoint speaking OpenAI's /chat/completions + tool-calling format:
+    # OpenAI itself, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio
+    # server, etc. (DEC-016)
+    custom_llm_base_url: Optional[str] = None
+    custom_llm_api_key: Optional[str] = None
+    custom_llm_model: Optional[str] = None
 
     # AVS PDF Parser
     avs_parser_model: str = "qwen2.5:7b"

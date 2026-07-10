@@ -289,3 +289,28 @@ export interface ApplyItemsRequest {
   follow_ups: ParsedFollowUp[];
   appointments: ParsedAppointment[];
 }
+
+// App Settings (DEC-016)
+export type LlmProvider = 'claude' | 'ollama' | 'custom';
+
+export interface AppSettings {
+  llm_provider: LlmProvider;
+  anthropic_api_key: string | null; // masked, e.g. "...ab12"
+  anthropic_model: string;
+  ollama_base_url: string;
+  ollama_model: string;
+  custom_llm_base_url: string | null;
+  custom_llm_api_key: string | null; // masked
+  custom_llm_model: string | null;
+}
+
+export interface AppSettingsUpdate {
+  llm_provider?: LlmProvider;
+  anthropic_api_key?: string;
+  anthropic_model?: string;
+  ollama_base_url?: string;
+  ollama_model?: string;
+  custom_llm_base_url?: string;
+  custom_llm_api_key?: string;
+  custom_llm_model?: string;
+}

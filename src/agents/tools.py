@@ -77,7 +77,12 @@ def claude_tools() -> list[dict[str, Any]]:
 
 
 def ollama_tools() -> list[dict[str, Any]]:
-    """Tool specs in Ollama's OpenAI-style {type, function} shape."""
+    """Tool specs in OpenAI-style {type, function} shape.
+
+    Used for both Ollama and any custom OpenAI-compatible backend — Ollama's
+    /api/chat tool-calling already mirrors OpenAI's function-calling format,
+    so a third provider speaking the same wire format needs no new adapter.
+    """
     return [
         {
             "type": "function",
@@ -89,6 +94,11 @@ def ollama_tools() -> list[dict[str, Any]]:
         }
         for t in TOOL_SPECS
     ]
+
+
+def get_tools_for_provider(provider: str) -> list[dict[str, Any]]:
+    """Pick the right tool-spec shape for a given llm_provider value."""
+    return claude_tools() if provider == "claude" else ollama_tools()
 
 
 class VisitPrepTools:

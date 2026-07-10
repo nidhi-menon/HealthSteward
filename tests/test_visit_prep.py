@@ -336,15 +336,16 @@ async def test_prepare_visit_falls_back_when_agentic_loop_does_not_converge(
         '{"questions": {"General": ["Fallback question"]}, "context_summary": "Fallback summary"}'
     )
 
-    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend, \
-         patch("src.agents.base.AsyncAnthropic") as mock_anthropic_base:
-        mock_agentic_client = AsyncMock()
-        mock_agentic_client.messages.create = AsyncMock(return_value=looping_tool_use_response)
-        mock_anthropic_backend.return_value = mock_agentic_client
-
-        mock_fallback_client = AsyncMock()
-        mock_fallback_client.messages.create = AsyncMock(return_value=fallback_response)
-        mock_anthropic_base.return_value = mock_fallback_client
+    # The single-shot fallback now also routes through get_llm_backend()
+    # (src.agents.llm_backend.ClaudeBackend), same as the agentic loop, so
+    # both share one mocked client: agent_max_turns looping responses,
+    # then the fallback response on the single-shot call after that.
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=[looping_tool_use_response] * get_settings().agent_max_turns + [fallback_response]
+        )
+        mock_anthropic_backend.return_value = mock_client
 
         response = await client.post(f"/api/visits/{appointment_id}/prepare")
 
