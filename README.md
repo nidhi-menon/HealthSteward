@@ -19,10 +19,14 @@ No cloud storage. No sync. Your health data never leaves your machine.
 PDF parsing runs on local Ollama. PII is stripped before anything touches an external model.
 
 <p align="center">
-  <img src="docs/assets/overview-needs-attention.png" alt="HealthSteward overview tab showing the Needs Attention panel with pending follow-ups, lab orders, and referrals" width="49%" />
-  <img src="docs/assets/visit-prep-questions.png" alt="HealthSteward visit prep page showing an AI-generated health context summary and categorized questions to ask a doctor" width="49%" />
+  <img src="docs/assets/visit-prep-questions.png" alt="HealthSteward visit prep page showing an AI-generated health context summary and categorized questions to ask a doctor" width="85%" />
 </p>
-<p align="center"><em>Left: the Needs Attention overview. Right: AI-generated visit prep, grounded in the patient's actual conditions, medications, and pending labs. (Screenshots use synthetic demo data.)</em></p>
+<p align="center"><em>AI-generated visit prep, grounded in the patient's actual conditions, medications, and pending labs.</em></p>
+
+<p align="center">
+  <img src="docs/assets/overview-needs-attention.png" alt="HealthSteward overview tab showing the Needs Attention panel with pending follow-ups, lab orders, and referrals" width="85%" />
+</p>
+<p align="center"><em>The Needs Attention overview — pending follow-ups, lab orders, and referrals surfaced in one place. (Screenshots use synthetic demo data.)</em></p>
 
 ## Motivation
 
