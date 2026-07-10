@@ -10,8 +10,9 @@ Two tools are implemented for v1, deliberately bounded in scope:
   same DB query already used for context selection.
 
 Every tool result is anonymized before being returned to the loop, for
-both Claude and Ollama backends — consistent with how prepare_visit()
-already anonymizes the main context regardless of provider.
+all backends (Ollama, Claude, or a custom provider — DEC-016) — consistent
+with how prepare_visit() already anonymizes the main context regardless
+of provider.
 """
 
 from typing import Any, Optional
@@ -20,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.agents.llm_backend import uses_openai_style_wire_format
 from src.data.models import Appointment, Medication
 from src.utils.anonymization import Anonymizer
 
@@ -97,8 +99,13 @@ def ollama_tools() -> list[dict[str, Any]]:
 
 
 def get_tools_for_provider(provider: str) -> list[dict[str, Any]]:
-    """Pick the right tool-spec shape for a given llm_provider value."""
-    return claude_tools() if provider == "claude" else ollama_tools()
+    """Pick the right tool-spec shape for a given llm_provider value.
+
+    Shares its ollama/custom-vs-claude split with `get_llm_backend()` via
+    `uses_openai_style_wire_format` so an unrecognized provider value can't
+    make this function and `get_llm_backend()` pick mismatched shapes.
+    """
+    return ollama_tools() if uses_openai_style_wire_format(provider) else claude_tools()
 
 
 class VisitPrepTools:

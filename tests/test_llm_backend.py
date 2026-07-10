@@ -12,7 +12,9 @@ from src.agents.llm_backend import (
     OllamaBackend,
     ToolCallParsingError,
     get_llm_backend,
+    uses_openai_style_wire_format,
 )
+from src.agents.tools import get_tools_for_provider, claude_tools, ollama_tools
 from src.config import Settings
 
 
@@ -35,10 +37,28 @@ def test_get_llm_backend_custom():
     assert isinstance(backend, CustomOpenAICompatibleBackend)
 
 
+@pytest.mark.parametrize("provider", ["claude", "ollama", "custom", "", "Claude", "unknown"])
+def test_backend_and_tools_dispatch_agree_on_every_provider_value(provider):
+    """get_llm_backend() and get_tools_for_provider() must never disagree on
+    which wire format a provider speaks — even for garbage/miscased input —
+    or a Claude backend can end up sent OpenAI-shaped tool specs (or vice
+    versa)."""
+    backend = get_llm_backend(_settings(llm_provider=provider))
+    tools = get_tools_for_provider(provider)
+
+    if isinstance(backend, ClaudeBackend):
+        assert not uses_openai_style_wire_format(provider)
+        assert tools == claude_tools()
+    else:
+        assert uses_openai_style_wire_format(provider)
+        assert tools == ollama_tools()
+
+
 @pytest.mark.asyncio
 async def test_claude_backend_text_only_response():
     mock_response = MagicMock()
     mock_response.content = [SimpleNamespace(type="text", text="hello")]
+    mock_response.usage = SimpleNamespace(input_tokens=123, output_tokens=45)
 
     with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic:
         mock_client = AsyncMock()
@@ -51,6 +71,8 @@ async def test_claude_backend_text_only_response():
     assert result.text == "hello"
     assert result.tool_calls == []
     assert result.stop_reason == "end_turn"
+    assert result.input_tokens == 123
+    assert result.output_tokens == 45
 
 
 @pytest.mark.asyncio
@@ -86,7 +108,7 @@ async def test_claude_backend_tool_use_response():
 async def test_ollama_backend_text_only_response():
     mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
 
-    async def fake_post(self, url, json):
+    async def fake_post(self, url, json, headers=None):
         return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
 
     with patch.object(httpx.AsyncClient, "post", fake_post):
@@ -110,7 +132,7 @@ async def test_ollama_backend_tool_use_response():
         }
     }
 
-    async def fake_post(self, url, json):
+    async def fake_post(self, url, json, headers=None):
         return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
 
     with patch.object(httpx.AsyncClient, "post", fake_post):
@@ -134,7 +156,7 @@ async def test_ollama_backend_malformed_tool_call_raises():
         }
     }
 
-    async def fake_post(self, url, json):
+    async def fake_post(self, url, json, headers=None):
         return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
 
     with patch.object(httpx.AsyncClient, "post", fake_post):
@@ -145,7 +167,7 @@ async def test_ollama_backend_malformed_tool_call_raises():
 
 @pytest.mark.asyncio
 async def test_ollama_backend_request_error_raises_tool_call_parsing_error():
-    async def fake_post(self, url, json):
+    async def fake_post(self, url, json, headers=None):
         raise httpx.ConnectError("connection refused", request=httpx.Request("POST", "http://test"))
 
     with patch.object(httpx.AsyncClient, "post", fake_post):

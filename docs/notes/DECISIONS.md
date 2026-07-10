@@ -613,6 +613,17 @@ Oncology → Relevant to all
 
 **Context:** DEC-009 chose Claude API as the *default* agentic backend, reasoned specifically from the dev machine's constraints (8GB RAM M3 can only run 4-bit quantized 7-8B Ollama models, which produce unreliable tool-calling). That reasoning is about the dev machine, not about what should ship as the default for end users generally — and it sits awkwardly next to the project's own privacy-first pitch (landing page, TDD): "stays on device" was the *opt-in* behavior, not the default, for the flow (visit prep) most likely to be used regularly. Separately, the `LLMBackend` abstraction built in DEC-013 only supported exactly two providers, and there was no way to change the provider without editing `.env` and restarting the server — no settings UI or API existed at all.
 
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Keep Claude as default, add a "custom" provider only | Smaller change; no default-provider risk | Default stays out of step with the local-first pitch; the flow most people use daily still defaults off-device |
+| Flip default to Ollama, add a "custom" provider | Privacy-first positioning holds by default; DEC-013's fallback already covers the reliability gap | More installs hit small-model tool-calling unreliability by default (mitigated by the existing fallback, not eliminated) |
+| Bespoke adapter per third-party provider (OpenAI, OpenRouter, Groq, etc.) individually | Could special-case quirks per provider | Unbounded maintenance surface for "any LLM you want"; almost all of these already speak the same OpenAI-compatible wire format, so per-provider adapters would mostly duplicate each other |
+| One generic OpenAI-compatible adapter (`CustomOpenAICompatibleBackend`) | One adapter covers the large majority of hosted and self-hosted options; consistent with DEC-013's bounded-scope precedent | Providers with a genuinely different wire format (e.g. a native Gemini/Vertex adapter) would still need their own class later |
+| Keep settings `.env`-only, just document the new default/provider | No new DB table, API routes, or frontend page | Switching still requires editing `.env` and restarting — not "easy" per the explicit ask, and a real barrier for non-terminal users (DEC-014) |
+| DB-backed runtime settings (`AppSettings` singleton row, overlaid on env defaults) | Switching takes effect on the next request, no restart; UI-editable | A second source of truth (DB overlay vs. env) that needs care to keep legible |
+
 **Decision:**
 1. Flip `llm_provider`'s default from `"claude"` to `"ollama"` (`src/config.py`). Claude remains fully supported, now as an explicit opt-in rather than the default.
 2. Add a third provider, `"custom"` — `CustomOpenAICompatibleBackend` (`src/agents/llm_backend.py`), for any endpoint speaking OpenAI's `/chat/completions` + tool-calling wire format (OpenAI itself, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio server, etc.). Ollama's `/api/chat` already mirrors this format, so the tool-spec adapter (`ollama_tools()`) and dispatch pattern needed no new shape, just a new branch.

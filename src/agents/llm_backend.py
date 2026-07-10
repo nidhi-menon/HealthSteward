@@ -1,10 +1,11 @@
-"""Pluggable LLM backend abstraction for agentic tool-use (DEC-009, DEC-013).
+"""Pluggable LLM backend abstraction for agentic tool-use (DEC-009, DEC-013, DEC-016).
 
-Provides a single interface (`LLMBackend`) that both Claude API and local
-Ollama can implement, so the agentic tool-use loop in `visit_prep.py` doesn't
-need to know which provider it's talking to.
+Provides a single interface (`LLMBackend`) that Claude API, local Ollama, and
+any custom OpenAI-compatible provider can implement, so the agentic tool-use
+loop in `visit_prep.py` doesn't need to know which provider it's talking to.
 """
 
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -42,6 +43,8 @@ class LLMTurnResult:
     tool_calls: list[ToolCall] = field(default_factory=list)
     raw_assistant_content: Any = None  # echoed back into the next turn's messages
     stop_reason: str = "end_turn"  # "end_turn" | "tool_use"
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class LLMBackend(ABC):
@@ -106,6 +109,8 @@ class ClaudeBackend(LLMBackend):
             tool_calls=tool_calls,
             raw_assistant_content=response.content,
             stop_reason="tool_use" if tool_calls else "end_turn",
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
         )
 
     def build_assistant_message(self, result: LLMTurnResult) -> dict[str, Any]:
@@ -124,86 +129,35 @@ class ClaudeBackend(LLMBackend):
         }
 
 
-class OllamaBackend(LLMBackend):
-    """LLMBackend implementation wrapping Ollama's /api/chat tool-calling support.
+class _OpenAIStyleHTTPBackend(LLMBackend):
+    """Shared implementation for backends that speak OpenAI-style tool-calling
+    over HTTP: same request/response shape, same tool-call-argument parsing
+    (including coercing a JSON-string `arguments` field, which some
+    OpenAI-compatible servers return instead of a parsed object). Subclasses
+    only need to say where the message lives in the response envelope, what
+    endpoint path to hit, and how to synthesize a tool-call id if the
+    provider doesn't supply one.
 
-    Not all local models support reliable tool calling (see DEC-009). Malformed
-    or missing tool-call data raises ToolCallParsingError so the caller can fall
+    Not all models support reliable tool calling (see DEC-009). Malformed or
+    missing tool-call data raises ToolCallParsingError so the caller can fall
     back to single-shot generation.
     """
 
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.base_url = settings.ollama_base_url
-        self.model = settings.ollama_model
+    _endpoint_path: str
+    _error_label: str
 
-    async def call(
-        self,
-        messages: list[dict[str, Any]],
-        system: str,
-        tools: Optional[list[dict[str, Any]]] = None,
-    ) -> LLMTurnResult:
-        ollama_messages = [{"role": "system", "content": system}, *messages]
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": ollama_messages,
-            "stream": False,
-            "options": {"temperature": 0.7},
-        }
-        if tools:
-            payload["tools"] = tools
+    def __init__(self, base_url: str, model: Optional[str], headers: Optional[dict[str, str]] = None):
+        self.base_url = base_url
+        self.model = model
+        self.headers = headers or {}
 
-        try:
-            async with httpx.AsyncClient(base_url=self.base_url, timeout=120.0) as client:
-                response = await client.post("/api/chat", json=payload)
-                response.raise_for_status()
-                data = response.json()
-        except (httpx.RequestError, httpx.HTTPStatusError) as e:
-            raise ToolCallParsingError(f"Ollama request failed: {e}") from e
+    def _extract_message(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Pull the assistant message out of the raw response body."""
+        raise NotImplementedError
 
-        message = data.get("message", {})
-        text = message.get("content") or None
-        raw_tool_calls = message.get("tool_calls") or []
-
-        tool_calls: list[ToolCall] = []
-        for i, raw in enumerate(raw_tool_calls):
-            try:
-                fn = raw["function"]
-                tool_calls.append(
-                    ToolCall(id=f"ollama-call-{i}", name=fn["name"], input=fn.get("arguments") or {})
-                )
-            except (KeyError, TypeError) as e:
-                raise ToolCallParsingError(f"Malformed tool_call from Ollama: {raw!r}") from e
-
-        return LLMTurnResult(
-            text=text,
-            tool_calls=tool_calls,
-            raw_assistant_content=message,
-            stop_reason="tool_use" if tool_calls else "end_turn",
-        )
-
-    def build_assistant_message(self, result: LLMTurnResult) -> dict[str, Any]:
-        return {"role": "assistant", "content": result.text or "", "tool_calls": result.raw_assistant_content.get("tool_calls")}
-
-    def build_tool_result_message(self, tool_call: ToolCall, result_content: str) -> dict[str, Any]:
-        return {"role": "tool", "content": result_content}
-
-
-class CustomOpenAICompatibleBackend(LLMBackend):
-    """LLMBackend implementation for any OpenAI-compatible /chat/completions endpoint.
-
-    Covers OpenAI itself, OpenRouter, Groq, Together, a self-hosted vLLM/LM
-    Studio server, etc. — anything speaking the same tool-calling wire format
-    Ollama already uses. Same fallback-on-malformed-tool-call behavior as
-    OllamaBackend (see DEC-009's caveat about unreliable tool-calling on small
-    models, which applies regardless of who's hosting the model).
-    """
-
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.base_url = (settings.custom_llm_base_url or "").rstrip("/")
-        self.model = settings.custom_llm_model
-        self.api_key = settings.custom_llm_api_key
+    def _tool_call_id(self, index: int, raw: dict[str, Any], fn: dict[str, Any]) -> str:
+        """Synthesize a tool-call id when the response doesn't include one."""
+        return f"call-{index}"
 
     async def call(
         self,
@@ -220,36 +174,39 @@ class CustomOpenAICompatibleBackend(LLMBackend):
         if tools:
             payload["tools"] = tools
 
-        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-
         try:
-            async with httpx.AsyncClient(base_url=self.base_url, timeout=120.0) as client:
-                response = await client.post("/chat/completions", json=payload, headers=headers)
+            # Fail fast (~5s) on an unreachable/hung host at the connect
+            # phase, while still allowing the full 120s for generation once
+            # connected — a misconfigured or unreachable endpoint shouldn't
+            # block a request for the full 120s before falling back.
+            timeout = httpx.Timeout(120.0, connect=5.0)
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=timeout) as client:
+                response = await client.post(self._endpoint_path, json=payload, headers=self.headers)
                 response.raise_for_status()
                 data = response.json()
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
-            raise ToolCallParsingError(f"Custom LLM request failed: {e}") from e
+            raise ToolCallParsingError(f"{self._error_label} request failed: {e}") from e
 
         try:
-            message = data["choices"][0]["message"]
+            message = self._extract_message(data)
         except (KeyError, IndexError, TypeError) as e:
-            raise ToolCallParsingError(f"Unexpected response shape from custom LLM: {data!r}") from e
+            raise ToolCallParsingError(f"Unexpected response shape from {self._error_label}: {data!r}") from e
 
         text = message.get("content") or None
         raw_tool_calls = message.get("tool_calls") or []
 
         tool_calls: list[ToolCall] = []
-        for raw in raw_tool_calls:
+        for i, raw in enumerate(raw_tool_calls):
             try:
                 fn = raw["function"]
                 args = fn.get("arguments") or {}
                 if isinstance(args, str):
-                    import json
-
                     args = json.loads(args) if args else {}
-                tool_calls.append(ToolCall(id=raw.get("id") or fn["name"], name=fn["name"], input=args))
+                tool_calls.append(
+                    ToolCall(id=raw.get("id") or self._tool_call_id(i, raw, fn), name=fn["name"], input=args)
+                )
             except (KeyError, TypeError, ValueError) as e:
-                raise ToolCallParsingError(f"Malformed tool_call from custom LLM: {raw!r}") from e
+                raise ToolCallParsingError(f"Malformed tool_call from {self._error_label}: {raw!r}") from e
 
         return LLMTurnResult(
             text=text,
@@ -267,6 +224,59 @@ class CustomOpenAICompatibleBackend(LLMBackend):
 
     def build_tool_result_message(self, tool_call: ToolCall, result_content: str) -> dict[str, Any]:
         return {"role": "tool", "tool_call_id": tool_call.id, "content": result_content}
+
+
+class OllamaBackend(_OpenAIStyleHTTPBackend):
+    """LLMBackend implementation wrapping Ollama's /api/chat tool-calling support."""
+
+    _endpoint_path = "/api/chat"
+    _error_label = "Ollama"
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        super().__init__(base_url=settings.ollama_base_url, model=settings.ollama_model)
+
+    def _extract_message(self, data: dict[str, Any]) -> dict[str, Any]:
+        return data.get("message", {})
+
+    def _tool_call_id(self, index: int, raw: dict[str, Any], fn: dict[str, Any]) -> str:
+        return f"ollama-call-{index}"
+
+
+class CustomOpenAICompatibleBackend(_OpenAIStyleHTTPBackend):
+    """LLMBackend implementation for any OpenAI-compatible /chat/completions endpoint.
+
+    Covers OpenAI itself, OpenRouter, Groq, Together, a self-hosted vLLM/LM
+    Studio server, etc. — anything speaking the same tool-calling wire format
+    Ollama already uses.
+    """
+
+    _endpoint_path = "/chat/completions"
+    _error_label = "custom LLM"
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        base_url = (settings.custom_llm_base_url or "").rstrip("/")
+        headers = {"Authorization": f"Bearer {settings.custom_llm_api_key}"} if settings.custom_llm_api_key else {}
+        super().__init__(base_url=base_url, model=settings.custom_llm_model, headers=headers)
+
+    def _extract_message(self, data: dict[str, Any]) -> dict[str, Any]:
+        return data["choices"][0]["message"]
+
+    def _tool_call_id(self, index: int, raw: dict[str, Any], fn: dict[str, Any]) -> str:
+        return fn["name"]
+
+
+def uses_openai_style_wire_format(provider: str) -> bool:
+    """Whether a provider speaks the OpenAI-style tool-calling wire format.
+
+    Single source of truth for the ollama/custom vs. claude split — used by
+    both `get_llm_backend` (which backend class) and
+    `get_tools_for_provider` (which tool-spec shape) so they can't disagree
+    on an unrecognized `llm_provider` value the way two independent
+    `== "ollama"` / `== "claude"` checks could.
+    """
+    return provider in ("ollama", "custom")
 
 
 def get_llm_backend(settings: Settings) -> LLMBackend:

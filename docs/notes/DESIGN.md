@@ -1,10 +1,10 @@
 # HealthSteward — Technical Design Document
 
-**Snapshot as of:** DEC-015 · 2026-07-08
+**Snapshot as of:** DEC-016 · 2026-07-09
 
 This is a point-in-time architecture snapshot, not a living doc — it reflects the system as understood at the DEC entry above and is re-written only when a subsequent DEC represents a genuine architectural shift (new/removed subsystem, changed trust boundary, deprecated core pattern), not on every change. See `CLAUDE.md` for the re-snapshot rule. For decision-by-decision detail, see `docs/notes/DECISIONS.md`; for narrative build history, see `docs/notes/DEVELOPMENT_LOG.md`.
 
-This doc borrows structure from ML technical design docs (problem framing, system design, evaluation, rollout, risks), but HealthSteward isn't a trained-model system — no feature store, no hyperparameter tuning, no offline precision/recall. It's an **LLM application**: prompting + agentic tool use + deterministic parsing layered over off-the-shelf models (Claude API, local Ollama). Sections below are reinterpreted accordingly rather than applied by template.
+This doc borrows structure from ML technical design docs (problem framing, system design, evaluation, rollout, risks), but HealthSteward isn't a trained-model system — no feature store, no hyperparameter tuning, no offline precision/recall. It's an **LLM application**: prompting + agentic tool use + deterministic parsing layered over off-the-shelf models (local Ollama, Claude API, or any custom OpenAI-compatible provider). Sections below are reinterpreted accordingly rather than applied by template.
 
 ---
 
@@ -76,13 +76,13 @@ Full component-level detail: `docs/notes/IMPLEMENTATION.md`.
 
 **Baseline:** single-shot prompt-in/JSON-out generation (pre-DEC-009) is the floor every enhancement must not regress below. This is why DEC-013's agentic loop is fallback-not-hard-failure by design — if the loop can't converge within `agent_max_turns` or a backend produces malformed tool calls, `prepare_visit()` falls back to the original single-shot call. No functional regression is possible, by construction.
 
-**Model selection:** Claude API (Sonnet) is the default agentic backend, not local Ollama, because the dev machine (M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool calls, non-convergence (DEC-009). Cost is negligible for personal use (~$1/month). Ollama remains available for simpler tasks that don't need reliable structured tool-calling: PDF parsing, context-selection relevance scoring, and as a fully-local `LLM_PROVIDER=ollama` option for visit prep with degraded reliability.
+**Model selection:** Local Ollama is the default agentic backend as of DEC-016, which supersedes DEC-009's original default choice (not its underlying finding). DEC-009's tool-reliability finding is still true — the dev machine (M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling (malformed JSON, wrong tool calls, non-convergence) — but defaulting the most-used flow to an external API sat awkwardly next to the project's local-first pitch. Claude API (Sonnet) and any custom OpenAI-compatible provider (OpenAI, OpenRouter, Groq, a self-hosted server, etc.) remain fully supported as explicit opt-ins, switchable at runtime from a Settings page (DB-backed, no `.env` edit or restart needed) rather than `.env`-only. Cost for the opt-in Claude path is negligible for personal use (~$1/month). Ollama also continues to handle simpler tasks that don't need reliable structured tool-calling: PDF parsing and context-selection relevance scoring.
 
 **Prompting:** two system prompt templates (specialty-aware and generic fallback) in `src/agents/visit_prep.py`, enriched with ICD-10 → specialty tagging, medication → prescribing-specialty tagging, and clinic-name specialty inference (DEC-011). These prompts are the actual product logic — see the prompt-change gap in §8.
 
 ## 6. Agentic Loop Design
 
-Bounded tool-use loop (`_run_agentic_loop`, DEC-009/DEC-013): send context + tool specs → execute any requested tool calls → anonymize results → append → repeat until final text or `agent_max_turns` (default 6) exhausted. Two read-only tools today, deliberately bounded scope for v1: `get_medication_details`, `lookup_past_visits`. `LLMBackend` abstraction makes this work identically for Claude and Ollama.
+Bounded tool-use loop (`_run_agentic_loop`, DEC-009/DEC-013): send context + tool specs → execute any requested tool calls → anonymize results → append → repeat until final text or `agent_max_turns` (default 6) exhausted. Two read-only tools today, deliberately bounded scope for v1: `get_medication_details`, `lookup_past_visits`. `LLMBackend` abstraction makes this work identically for Claude, Ollama, and any custom OpenAI-compatible provider (DEC-016).
 
 Follow-up tool work already scoped: widen `lookup_past_visits`'s default window (#21), lab results (#22), procedures/hospitalizations (#23), drug-interaction checker (#24).
 
@@ -106,6 +106,6 @@ Full detail lives in `docs/notes/DECISIONS.md` (DEC-001 through DEC-015) — thi
 ## 10. Risks
 
 - **Clinical safety.** Neither ML-eval nor typical software-design risk framing covers this: generated output is health-adjacent guidance, and the only safety mechanism is the patient reading it before a real appointment. No automated check exists for a plausible-but-wrong suggestion (e.g. a hallucinated drug interaction, or a misread lab trend). Framed as a permanent human-in-the-loop requirement, not a gap to close via eval — but worth stating outright rather than leaving implicit in "not a replacement for clinical judgment" (README).
-- **External dependency risk.** Anthropic API pricing/availability changes affect the default agentic backend directly (DEC-009 chose Claude specifically for reliable tool-calling — a price or access change has no equally-reliable local fallback today). Ollama model tags (`qwen2.5:7b`, `llama3.2`) are referenced by tag, not pinned digest — a silent upstream model update could change parsing/scoring behavior without any code change here.
+- **External dependency risk.** Ollama model tags (`qwen2.5:7b`, `llama3.2`) are referenced by tag, not pinned digest — a silent upstream model update could change parsing/scoring/visit-prep behavior without any code change here, and this now affects the default agentic backend directly since Ollama is the default (DEC-016). Anthropic API and any custom provider's pricing/availability changes only matter to whoever has opted into them from Settings.
 - **Prompt-change management.** The specialty-aware system prompts (`SYSTEM_PROMPT_TEMPLATE`, `SYSTEM_PROMPT_GENERIC`) are the actual product behavior, but changes to them go through normal code review with no dedicated process (no prompt versioning, no before/after quality comparison). Low-stakes at current scale; worth a lightweight convention (e.g. note prompt changes explicitly in the dev log, per existing discipline) if the loop gains more agentic freedom.
 - Standard risks already covered elsewhere: fallback-not-hard-failure removes most agentic-loop regression risk by construction (§5); PII anonymization gaps are `SECURITY.md`-reportable, not silent.

@@ -22,8 +22,8 @@ PROJECT CONTEXT: I'm building HealthSteward, a privacy-first health management a
 - Backend: Python, FastAPI, async, SQLAlchemy + SQLite
 - Frontend: React + TypeScript + Tailwind + Vite
 - Vector DB: ChromaDB (available, not yet populated)
-- LLM: Pluggable backend (Claude API Sonnet or local Ollama) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
-- PII: All patient data is anonymized before reaching Claude (names → "Patient", DOB → age, doctor names → "your cardiologist", etc.)
+- LLM: Pluggable backend (local Ollama by default, or Claude API Sonnet, or any custom OpenAI-compatible provider — DEC-016) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
+- PII: All patient data is anonymized before reaching Claude or a custom provider (names → "Patient", DOB → age, doctor names → "your cardiologist", etc.) — not needed for the local Ollama default, since nothing leaves the machine
 - Machine: Apple M3, 8GB RAM
 ```
 
@@ -116,8 +116,8 @@ PROJECT CONTEXT: I'm building HealthSteward, a privacy-first health management a
 - Backend: Python, FastAPI, async, SQLAlchemy + SQLite
 - Frontend: React + TypeScript + Tailwind + Vite
 - Vector DB: ChromaDB (available, not yet populated)
-- LLM: Pluggable backend (Claude API Sonnet or local Ollama) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
-- PII: All patient data is anonymized before reaching Claude (names → "Patient", DOB → age, doctor names → "your cardiologist", etc.)
+- LLM: Pluggable backend (local Ollama by default, or Claude API Sonnet, or any custom OpenAI-compatible provider — DEC-016) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
+- PII: All patient data is anonymized before reaching Claude or a custom provider (names → "Patient", DOB → age, doctor names → "your cardiologist", etc.) — not needed for the local Ollama default, since nothing leaves the machine
 - Machine: Apple M3, 8GB RAM
 
 ## Task

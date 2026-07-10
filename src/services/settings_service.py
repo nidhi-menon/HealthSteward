@@ -56,7 +56,10 @@ async def update_settings(db: AsyncSession, updates: dict) -> AppSettings:
 
     for field, value in updates.items():
         if field in _OVERLAY_FIELDS:
-            setattr(row, field, value)
+            # An empty string means "unset" (fall back to the env default),
+            # same as None — otherwise a cleared form field would silently
+            # override a working env default with a blank value.
+            setattr(row, field, value if value != "" else None)
 
     await db.flush()
     await db.refresh(row)

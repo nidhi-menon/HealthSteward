@@ -11,11 +11,16 @@ router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
 
 def _mask(secret: str | None) -> str | None:
-    """Mask a secret to its last 4 characters, e.g. 'sk-...ab12'."""
+    """Mask a secret, revealing at most its last 4 characters.
+
+    Secrets of 8 characters or fewer are fully redacted ('***') instead of
+    partially revealed — showing the last 4 of an 8-char-or-shorter secret
+    would leak half or more of it.
+    """
     if not secret:
         return None
-    if len(secret) <= 4:
-        return "...." + secret
+    if len(secret) <= 8:
+        return "***"
     return f"...{secret[-4:]}"
 
 
