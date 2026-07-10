@@ -32,7 +32,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 - **AI visit preparation** — an agentic loop generates personalized questions for upcoming doctor visits, with intelligent context selection from past visits and on-demand tools (medication lookup, past-visit lookup) it can call before finalizing; runs fully local via Ollama by default, or on Claude API or any OpenAI-compatible provider, switchable from the Settings page without restarting — with automatic fallback to single-shot generation if tool-calling isn't reliable
 - **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
 - **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab with flexible snooze (1w / 2w / 1m), one-click completion, previously-snoozed indicators, and a resolved history toggle
-- **PII anonymization** — data sent to Claude is anonymized via deterministic field replacement, regex, and spaCy NER (names, DOB, contact info); best-effort on free text, not a hard guarantee
+- **PII anonymization** — data sent to Claude or a custom provider is anonymized via deterministic field replacement, regex, and spaCy NER (names, DOB, contact info); best-effort on free text, not a hard guarantee
 - **Complete privacy** — health data stays local; PDF parsing uses only local Ollama (no PHI leaves your machine)
 
 ## Architecture
@@ -169,7 +169,7 @@ HealthSteward/
 │   ├── agents/
 │   │   ├── base.py          # BaseAgent with Claude API + conversation logging
 │   │   ├── visit_prep.py    # AI visit preparation agent
-│   │   ├── llm_backend.py   # Pluggable LLM backend (Claude + Ollama) for the agentic loop
+│   │   ├── llm_backend.py   # Pluggable LLM backend (Ollama default, Claude, custom OpenAI-compatible) for the agentic loop
 │   │   ├── tools.py         # Read-only tools for the agentic loop (medication lookup, past-visit lookup)
 │   │   └── ollama_client.py
 │   └── utils/
@@ -224,13 +224,13 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 1. Rules-based filtering (same doctor, PCP visits, related specialties)
 2. Local LLM relevance scoring (Ollama, if >5 past visits)
 3. Token budget management
-4. Anonymize, then run the agentic loop (Claude API or local Ollama, per `LLM_PROVIDER`) — the model can call tools (`get_medication_details`, `lookup_past_visits`) before finalizing questions, bounded by `agent_max_turns`; falls back to a single non-agentic call if the loop doesn't converge or tool-calling isn't reliable (see DEC-009, DEC-013)
+4. Anonymize, then run the agentic loop (local Ollama by default, or Claude API / a custom OpenAI-compatible provider, per `LLM_PROVIDER` — switchable at runtime from Settings) — the model can call tools (`get_medication_details`, `lookup_past_visits`) before finalizing questions, bounded by `agent_max_turns`; falls back to a single non-agentic call if the loop doesn't converge or tool-calling isn't reliable (see DEC-009, DEC-013, DEC-016)
 
 ## Documentation
 
 - `docs/notes/DESIGN.md` — technical design doc; point-in-time architecture snapshot (problem framing, system design, AI approach, evaluation gaps, risks)
 - `docs/SITE_STYLE_GUIDE.md` — palette, typography, layout, diagram, and accessibility conventions for the public site (`docs/index.html`, `docs/tdd.html`)
-- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-015)
+- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-016)
 - `docs/notes/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/notes/SANDBOX_PROMPT.md` — sandbox experiment prompts
 - `CONTRIBUTING.md` — how to contribute, including the privacy constraints PRs must respect
@@ -244,7 +244,7 @@ All health data stays local. The `.gitignore` protects:
 - `.env` files
 - Log files
 
-PDF parsing uses only local Ollama — no PHI is sent to external services. When visit prep is configured to use the Claude API, PII is anonymized before that call goes out (deterministic field replacement, regex, and spaCy NER — see `src/utils/anonymization.py`). This reduces exposure but isn't a guarantee: NER-based detection can miss names or identifying details in unusual free-text phrasing. When visit prep runs on local Ollama instead, no anonymization step is needed since nothing leaves the machine.
+PDF parsing uses only local Ollama — no PHI is sent to external services. When visit prep is configured to use Claude API or a custom provider, PII is anonymized before that call goes out (deterministic field replacement, regex, and spaCy NER — see `src/utils/anonymization.py`). This reduces exposure but isn't a guarantee: NER-based detection can miss names or identifying details in unusual free-text phrasing. Visit prep runs on local Ollama by default, needing no anonymization step since nothing leaves the machine (DEC-016).
 
 ## License
 
