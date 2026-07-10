@@ -266,6 +266,77 @@
   .arch-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .arch-legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
 
+  /* compact loop-cycle diagram, used inside Deep Dives accordion bodies —
+     same node/icon vocabulary as .arch-node, sized for the 820px reading
+     column rather than the full-width breakout diagram */
+  .loop-box {
+    border: 1.5px dashed var(--amber); border-radius: 6px;
+    padding: 14px; margin: 12px 0; background: var(--paper-raised);
+  }
+  .loop-box-label {
+    font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 10px;
+  }
+  .loop-steps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .loop-step {
+    display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); background: var(--paper); border-radius: 4px;
+    padding: 6px 9px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink);
+  }
+  .loop-step svg { flex: none; width: 14px; height: 14px; color: var(--ink-faint); }
+  .loop-arrow { color: var(--ink-faint); font-size: 12px; flex: none; }
+  .loop-cycle-back {
+    margin-top: 10px; font-family: ui-monospace, monospace; font-size: 10.5px;
+    color: var(--ink-faint); display: flex; align-items: center; gap: 6px;
+  }
+
+  .branch-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .branch-card { border: 1px solid var(--line); border-radius: 5px; padding: 12px 14px; }
+  .branch-card--ok { border-color: var(--teal-bright); }
+  .branch-card--fallback { border-color: var(--amber); }
+  .branch-card .bc-title {
+    display: flex; align-items: center; gap: 6px; font-weight: 700;
+    font-family: ui-monospace, monospace; font-size: 12px; margin-bottom: 6px;
+  }
+  .branch-card--ok .bc-title { color: var(--teal-bright); }
+  .branch-card--fallback .bc-title { color: var(--amber); }
+  .bc-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .branch-card--ok .bc-dot { background: var(--teal-bright); }
+  .branch-card--fallback .bc-dot { background: var(--amber); }
+  .branch-card p { font-size: 12.5px; margin: 0; max-width: 94ch; }
+  @media (max-width: 560px) { .branch-cards { grid-template-columns: 1fr; } }
+
+  .tool-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .tool-card { border: 1px solid var(--line); border-radius: 5px; padding: 12px 14px; }
+  .tool-card .tc-name {
+    font-family: ui-monospace, monospace; font-size: 12px; color: var(--teal-bright);
+    margin-bottom: 6px; display: block;
+  }
+  .tool-card p { font-size: 12.5px; margin: 0; max-width: 94ch; }
+  @media (max-width: 560px) { .tool-cards { grid-template-columns: 1fr; } }
+
+  /* compact ER-style schema diagram, Data Model deep dive */
+  .schema-diagram { display: flex; flex-direction: column; gap: 14px; margin: 12px 0; }
+  .schema-group {
+    border: 1px solid var(--line); border-radius: 6px; background: var(--paper-raised);
+    padding: 12px 14px 14px;
+  }
+  .schema-root {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1.5px solid var(--teal-bright); border-radius: 4px; background: var(--paper);
+    padding: 6px 10px; font-family: ui-monospace, monospace; font-size: 12px;
+    font-weight: 700; color: var(--teal-bright);
+  }
+  .schema-root svg { flex: none; width: 14px; height: 14px; color: var(--teal-bright); }
+  .schema-rel { font-family: ui-monospace, monospace; font-size: 10px; color: var(--ink-faint); margin: 8px 0 8px 4px; }
+  .schema-children { display: flex; flex-wrap: wrap; gap: 8px; }
+  .schema-node {
+    border: 1px solid var(--line); border-radius: 4px; background: var(--paper);
+    padding: 6px 9px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink);
+  }
+  .schema-node .schema-sub { color: var(--ink-faint); font-size: 10px; margin-left: 4px; }
+  .schema-group--support { background: none; border-style: dashed; }
+
   /* boundary cards, reused from landing page */
   .boundaries { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 14px 0; }
   .boundary { background: var(--paper); padding: 18px; }
@@ -299,9 +370,9 @@
   .dec-card { border: 1px solid var(--line); padding: 16px 18px; margin-bottom: 10px; }
   .dec-card .dec-id { font-family: ui-monospace, monospace; font-size: 11px; color: var(--teal-bright); letter-spacing: 0.04em; }
   .dec-card h4 { margin: 6px 0 8px; font-size: 15px; font-family: ui-monospace, monospace; }
-  .dec-card table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
-  .dec-card th, .dec-card td { text-align: left; padding: 6px 8px; border: 1px solid var(--line); vertical-align: top; color: var(--ink-soft); }
-  .dec-card th { color: var(--ink-faint); font-family: ui-monospace, monospace; font-weight: 600; font-size: 11.5px; text-transform: uppercase; }
+  .dec-card table, .mini-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  .dec-card th, .dec-card td, .mini-table th, .mini-table td { text-align: left; padding: 6px 8px; border: 1px solid var(--line); vertical-align: top; color: var(--ink-soft); }
+  .dec-card th, .mini-table th { color: var(--ink-faint); font-family: ui-monospace, monospace; font-weight: 600; font-size: 11.5px; text-transform: uppercase; }
   .dec-card .verdict { font-size: 13.5px; margin-top: 8px; }
   .dec-card .verdict strong { color: var(--teal-bright); }
 
@@ -657,10 +728,82 @@
         <summary>Agentic tool-use loop <span class="plus">+</span></summary>
         <div class="body">
           <p><code>_run_agentic_loop</code> in <code>src/agents/visit_prep.py</code>: send context + tool specs to the backend → if it returns tool calls, execute each against the DB, anonymize the result, append to the conversation, repeat → if it returns final text with no tool calls, that's the answer → if <code>agent_max_turns</code> is exhausted first, raise and let the caller fall back to single-shot.</p>
+
+          <div class="loop-box">
+            <div class="loop-box-label">repeats up to agent_max_turns (default 6)</div>
+            <div class="loop-steps">
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>Model responds</div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>Tool calls?</div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-lock"></use></svg>Execute, anonymize result</div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>Append, loop again</div>
+            </div>
+            <div class="loop-cycle-back">↺ no tool calls in the response → loop exits, that response is the final answer</div>
+          </div>
+
+          <div class="branch-cards">
+            <div class="branch-card branch-card--ok">
+              <div class="bc-title"><span class="bc-dot"></span>Converges</div>
+              <p>Model returns plain text before the turn cap. Logged to <code>ConversationLog</code>, parsed as the final JSON questions.</p>
+            </div>
+            <div class="branch-card branch-card--fallback">
+              <div class="bc-title"><span class="bc-dot"></span>Fails or times out</div>
+              <p>Parse error or turn cap hit → caught, and <code>prepare_visit()</code> silently falls back to a single-shot call.</p>
+            </div>
+          </div>
+
+          <div class="tool-cards">
+            <div class="tool-card">
+              <span class="tc-name">get_medication_details</span>
+              <p>On-demand structured lookup — dosage, frequency, purpose, side effects — for one or all current medications. Not a real interaction checker; that's a separate, bigger feature (issue #24).</p>
+            </div>
+            <div class="tool-card">
+              <span class="tc-name">lookup_past_visits</span>
+              <p>Deeper visit-history query beyond what's already in the context, filterable by specialty/keyword. Windowing to "since last visit with this provider" is scoped separately (issue #21).</p>
+            </div>
+          </div>
+
           <ul>
             <li><strong>Why bounded, not open-ended:</strong> an unbounded loop against a small/unreliable local model can spin. A hard turn cap makes worst-case latency and cost predictable.</li>
             <li><strong>Why Claude API as default, not local Ollama:</strong> the dev machine (Apple M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool selection, non-convergence. Claude API cost is negligible for personal use (~$1/month).</li>
-            <li><strong>Two tools today, deliberately bounded scope for v1:</strong> <code>get_medication_details</code> (on-demand medication lookup, not a real interaction checker) and <code>lookup_past_visits</code> (deeper visit history query). A real drug-interaction checker and a user-facing pause-to-ask-clarifying-questions flow were explicitly descoped as separate, bigger features.</li>
+            <li><strong>Two tools today, deliberately bounded scope for v1</strong> — a real drug-interaction checker and a user-facing pause-to-ask-clarifying-questions flow were explicitly descoped as separate, bigger features.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="accordion-item">
+        <summary>Pluggable LLM backend <span class="plus">+</span></summary>
+        <div class="body">
+          <p><code>src/agents/llm_backend.py</code>: an <code>LLMBackend</code> ABC with two implementations — <code>ClaudeBackend</code> (wraps <code>AsyncAnthropic</code>, uses Claude's native <code>tools=</code> parameter) and <code>OllamaBackend</code> (calls Ollama's <code>/api/chat</code> with OpenAI-style function-calling tool specs). Both providers normalize into the same <code>ToolCall</code>/<code>LLMTurnResult</code> shape, so <code>_run_agentic_loop</code> never branches on which provider it's talking to — it just calls <code>backend.call(...)</code> and reads a uniform result.</p>
+
+          <ul>
+            <li><strong>One canonical tool spec, two wire formats:</strong> <code>src/agents/tools.py</code> defines <code>TOOL_SPECS</code> once, then <code>claude_tools()</code> and <code>ollama_tools()</code> each adapt it into the shape that provider's API actually expects — adding a third tool means writing it once, not once per backend.</li>
+            <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes <code>LLM_PROVIDER=ollama</code> a real, fully-local option rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
+            <li><strong>Selected via a factory</strong>, <code>get_llm_backend(settings)</code>, keyed off <code>settings.llm_provider</code> — no conditional backend logic scattered through <code>visit_prep.py</code> itself.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="accordion-item">
+        <summary>Specialty-aware prompting <span class="plus">+</span></summary>
+        <div class="body">
+          <p>Before DEC-011, visit prep generated the same questions regardless of which specialist the appointment was with — it would suggest discussing a dermatology cream with a cardiologist. Fixed with two system prompt templates (<code>SYSTEM_PROMPT_TEMPLATE</code>, <code>SYSTEM_PROMPT_GENERIC</code> in <code>src/agents/visit_prep.py</code>) plus data enrichment that tags conditions and medications with the specialty that actually manages them.</p>
+
+          <table class="mini-table">
+            <tr><th>ICD-10 prefix/range</th><th>Mapped specialty</th></tr>
+            <tr><td>E08–E13</td><td>Endocrinology (diabetes)</td></tr>
+            <tr><td>I00–I99</td><td>Cardiology</td></tr>
+            <tr><td>L00–L99</td><td>Dermatology</td></tr>
+            <tr><td>E28</td><td>Endocrinology + Gynecology (e.g. PCOS)</td></tr>
+          </table>
+
+          <ul>
+            <li><strong>ICD-10 → specialty mapping</strong> (<code>ICD10_SPECIALTY_MAP</code>, prefix and range matching via <code>_icd10_to_specialties()</code>) — exact prefixes checked before ranges, so a specific code like E28 doesn't get swallowed by the broader E20–E35 range.</li>
+            <li><strong>Medication → prescriber specialty tagging</strong> — matches a medication's free-text <code>prescribing_doctor</code> against the profile's <code>Doctor</code> records to label it (e.g. "prescribed for Dermatology"), so the model can tell which meds are actually this specialist's business.</li>
+            <li><strong>Clinic-name inference fallback</strong> (<code>_infer_specialty_from_clinic()</code>) — keyword-matches the clinic name (e.g. "Sutter Endocrinology") when <code>doctor.specialty</code> is null.</li>
+            <li><strong>The prompt itself draws the line explicitly:</strong> don't suggest unrelated-specialty medications, but <em>do</em> surface real cross-condition interactions relevant to this specialty (its own worked example: Hashimoto's and PCOS interact hormonally, which matters for an endocrinologist even if a gynecologist made the original diagnosis).</li>
           </ul>
         </div>
       </details>
@@ -710,6 +853,51 @@
           <ul>
             <li>Snooze (1w/2w/1m) and completion state persist via <code>snoozed_until</code>/<code>completed_at</code> on <code>FollowUp</code>/<code>LabOrder</code>/<code>Referral</code>, plus a <code>NudgeState</code> table for computed nudges that have no natural row to attach state to (e.g. "past-due appointment").</li>
             <li>Scheduled push notifications for genuinely disengaged patients — reaching someone who isn't currently in the app — were considered and explicitly deferred; it's new infrastructure (a scheduler + notification channel) that arguably conflicts with the local-first architecture, not a pure addition on existing data like the two shipped surfaces are.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="accordion-item">
+        <summary>Data model &amp; schema design <span class="plus">+</span></summary>
+        <div class="body">
+          <p><code>src/data/models.py</code>: <code>HealthProfile</code> at the root, with <code>Condition</code>, <code>Medication</code>, <code>Doctor</code>, and <code>Appointment</code> hanging off it. AVS-parsed data nests under <code>Document</code> — <code>Vitals</code> (1:1), <code>LabOrder</code>/<code>Referral</code>/<code>FollowUp</code> (1:many) — so every parsed item traces back to the source PDF it came from. <code>VisitPrep</code> and <code>ConversationLog</code> record generated output and (anonymized) LLM call history; <code>NudgeState</code> persists snooze/dismiss state for the nudges that have no natural row of their own.</p>
+
+          <div class="schema-diagram">
+            <div class="schema-group">
+              <div class="schema-root"><svg aria-hidden="true"><use href="#icon-db"></use></svg>HealthProfile</div>
+              <div class="schema-rel">↓ has many</div>
+              <div class="schema-children">
+                <div class="schema-node">Condition<span class="schema-sub">icd_10</span></div>
+                <div class="schema-node">Medication<span class="schema-sub">prescribing_doctor</span></div>
+                <div class="schema-node">Doctor<span class="schema-sub">specialty</span></div>
+                <div class="schema-node">Appointment<span class="schema-sub">prep/visit notes</span></div>
+              </div>
+            </div>
+            <div class="schema-group">
+              <div class="schema-root"><svg aria-hidden="true"><use href="#icon-file"></use></svg>Document</div>
+              <div class="schema-rel">↓ every parsed item traces back to its source PDF</div>
+              <div class="schema-children">
+                <div class="schema-node">Vitals<span class="schema-sub">1:1</span></div>
+                <div class="schema-node">LabOrder<span class="schema-sub">1:many</span></div>
+                <div class="schema-node">Referral<span class="schema-sub">1:many</span></div>
+                <div class="schema-node">FollowUp<span class="schema-sub">1:many</span></div>
+              </div>
+            </div>
+            <div class="schema-group schema-group--support">
+              <div class="schema-rel" style="margin-top:0;">supporting / computed — no direct FK from the two roots above</div>
+              <div class="schema-children">
+                <div class="schema-node">VisitPrep<span class="schema-sub">generated output</span></div>
+                <div class="schema-node">ConversationLog<span class="schema-sub">anonymized LLM history</span></div>
+                <div class="schema-node">NudgeState<span class="schema-sub">snooze/dismiss state</span></div>
+              </div>
+            </div>
+          </div>
+
+          <ul>
+            <li><strong>UUID primary keys, not auto-increment integers</strong> (DEC-004) — a sequential ID leaks how many records exist and lets rows be enumerated by guessing. UUIDs cost a little storage/perf, which is a fine trade for health data specifically.</li>
+            <li><strong>Profile-nested API routes</strong> (<code>/api/profiles/{id}/conditions/</code>, etc.) — ownership is enforced by the URL structure itself, not left to an ad-hoc check in each handler.</li>
+            <li><strong><code>Condition.icd_10</code></strong> was added specifically to enable specialty-aware prompting (DEC-010/DEC-011) — the schema changed because a feature needed it, not speculatively ahead of time.</li>
+            <li><strong>Async throughout</strong> — SQLAlchemy 2.0 async sessions, <code>aiosqlite</code>, matching the async FastAPI route handlers end to end rather than mixing sync DB calls into an async app.</li>
           </ul>
         </div>
       </details>
