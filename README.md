@@ -11,10 +11,18 @@
 
 **[Website](https://nidhi-menon.github.io/HealthSteward/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues)**
 
+If HealthSteward is useful to you, consider giving it a ⭐ — it helps this reach more people navigating fragmented care.
+
 ---
 
 No cloud storage. No sync. Your health data never leaves your machine.
 PDF parsing runs on local Ollama. PII is stripped before anything touches an external model.
+
+<p align="center">
+  <img src="docs/assets/overview-needs-attention.png" alt="HealthSteward overview tab showing the Needs Attention panel with pending follow-ups, lab orders, and referrals" width="49%" />
+  <img src="docs/assets/visit-prep-questions.png" alt="HealthSteward visit prep page showing an AI-generated health context summary and categorized questions to ask a doctor" width="49%" />
+</p>
+<p align="center"><em>Left: the Needs Attention overview. Right: AI-generated visit prep, grounded in the patient's actual conditions, medications, and pending labs. (Screenshots use synthetic demo data.)</em></p>
 
 ## Motivation
 
@@ -237,6 +245,10 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 - `SECURITY.md` — how to report a vulnerability
 - `CODE_OF_CONDUCT.md` — community behavior expectations and enforcement
 - `CHANGELOG.md` — what shipped in each release
+
+## Support the Project
+
+The easiest way to support HealthSteward is to ⭐ the repo — it costs nothing and helps this reach people managing fragmented, multi-specialist care who need it. Bug reports, feature ideas, and PRs (see `CONTRIBUTING.md`) are welcome too.
 
 ## Data Privacy
 
