@@ -1,9 +1,9 @@
-"""Visit preparation agent using Claude or Ollama to generate personalized questions.
+"""Visit preparation agent using Ollama, Claude, or a custom provider to generate personalized questions.
 
 This module implements DEC-006 (PII Anonymization) and DEC-008 (Intelligent Context Selection):
 - All data is anonymized before sending to the LLM
 - Relevant past visit context is intelligently selected
-- Supports both Claude API and local Ollama
+- Supports local Ollama (default), Claude API, and any custom OpenAI-compatible provider (DEC-016)
 - Logs only anonymized content to ConversationLog
 """
 
@@ -362,8 +362,8 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
                     messages=messages,
                     response=result.text or "",
                     system=system,
-                    input_tokens=None,
-                    output_tokens=None,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens,
                     model=self._model_name_for_provider(),
                 )
                 return result.text or ""
@@ -393,8 +393,8 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             messages=messages,
             response=response,
             system=system,
-            input_tokens=None,
-            output_tokens=None,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
             model=self._model_name_for_provider(),
         )
 
