@@ -50,12 +50,12 @@ pnpm install
 cp .env.example .env
 ```
 
-Edit `.env` and add your Anthropic API key (needed for the default `LLM_PROVIDER=claude`):
+Visit prep runs fully locally via Ollama by default (`LLM_PROVIDER=ollama`, DEC-016) — requires `ollama pull llama3.2` and `ollama serve` running, no API key needed. To use Claude API or a custom OpenAI-compatible provider instead, either edit `.env`:
 ```
+LLM_PROVIDER=claude
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 ```
-
-To run visit prep fully locally instead, set `LLM_PROVIDER=ollama` (requires `ollama pull qwen2.5:7b` and `ollama serve` running) — no Anthropic key needed. See the README's Quick Start for the full list of agentic visit-prep settings (`AGENT_TOOL_USE_ENABLED`, `AGENT_MAX_TURNS`).
+or switch it from the **Settings** page in the app at any time, without restarting. See the README's Quick Start for the full list of agentic visit-prep settings (`AGENT_TOOL_USE_ENABLED`, `AGENT_MAX_TURNS`).
 
 ### Initialize Database
 
@@ -117,7 +117,7 @@ Click on a profile to open it, then use the tabs:
 
 1. On any appointment, click **"Prepare Visit"**
 2. Optionally add additional concerns
-3. Click **"Generate Questions with AI"** — this runs an agentic loop (Claude or local Ollama, per `LLM_PROVIDER`) that can look up medication details and past visits before finalizing; if the loop can't complete reliably, it automatically falls back to a single generation pass, so this step always produces questions
+3. Click **"Generate Questions with AI"** — this runs an agentic loop (Ollama by default, or Claude / a custom provider, whichever is set in Settings) that can look up medication details and past visits before finalizing; if the loop can't complete reliably, it automatically falls back to a single generation pass, so this step always produces questions
 4. Review the AI-generated questions organized by category
 5. Use **"Regenerate"** if you want different questions
 
@@ -225,8 +225,9 @@ alembic upgrade head
 ```
 
 ### AI features not working
-- If using `LLM_PROVIDER=claude` (default): check that `ANTHROPIC_API_KEY` is set in `.env` and valid at https://console.anthropic.com
-- If using `LLM_PROVIDER=ollama`: check `ollama serve` is running and `ollama pull qwen2.5:7b` has been run
+- If using `LLM_PROVIDER=ollama` (default): check `ollama serve` is running and `ollama pull llama3.2` has been run
+- If using `LLM_PROVIDER=claude`: check that `ANTHROPIC_API_KEY` is set in `.env` (or in Settings) and valid at https://console.anthropic.com
+- If using `LLM_PROVIDER=custom`: check the base URL/model/API key are correct in Settings, and that the endpoint is actually reachable
 - Note: visit prep's agentic tool-use loop automatically falls back to a single generation pass if tool-calling doesn't converge — this is expected behavior on smaller local models, not a failure. Questions should still generate; check logs if they don't
 
 ### CORS errors

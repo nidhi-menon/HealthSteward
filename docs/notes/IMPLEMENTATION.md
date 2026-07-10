@@ -29,7 +29,7 @@ This document tracks implementation details, architectural decisions, and how co
 - **Backend:** FastAPI (async)
 - **Frontend:** React + TypeScript + Tailwind CSS
 - **Database:** SQLite (dev) / PostgreSQL (prod) via SQLAlchemy 2.0 async
-- **AI:** Pluggable backend (Anthropic Claude API or local Ollama) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
+- **AI:** Pluggable backend (local Ollama by default, or Anthropic Claude API, or any custom OpenAI-compatible provider — DEC-016) for visit prep's agentic tool-use loop; Ollama also handles PDF parsing and context-selection relevance scoring
 - **Migrations:** Alembic
 - **Testing:** pytest with pytest-asyncio
 
@@ -219,7 +219,7 @@ tests/
 
 | Decision | Rationale |
 |----------|-----------|
-| **Fallback, not hard failure** | If the loop can't converge within `agent_max_turns` or a backend's tool-call output is malformed, `prepare_visit()` falls back to the pre-existing single-shot `_call_claude`/`_call_ollama` — no regression risk on either backend |
+| **Fallback, not hard failure** | If the loop can't converge within `agent_max_turns` or a backend's tool-call output is malformed, `prepare_visit()` falls back to the single-shot `_call_backend()` (consolidated across all three providers per DEC-016) — no regression risk on any backend |
 | **Descoped: real drug-interaction checker** | `get_medication_details` exposes existing structured medication data for the model to reason over; it is not a real interaction-checking API/DB (would need a licensed external service) — tracked in GitHub issue #24 |
 | **Descoped: user-facing clarifying-question pause** | Would need new DB state, a new API endpoint, and new frontend UI to resume a paused conversation — tracked in GitHub issue #15 |
 | **Anonymize tool results the same way for both backends** | Consistent with how the main context was already anonymized regardless of provider before this change — avoids fragile backend-aware branching |
@@ -277,19 +277,20 @@ POST /api/visits/{appt_id}/prepare
 └─────────────────────────────────┘
      │
      ▼
-┌─────────────────────────────────────────┐
-│ VisitPrepAgent._run_agentic_loop()       │
-│ - get_llm_backend(): Claude or Ollama    │
-│ - Model may call tools before finishing: │
-│   get_medication_details,                │
-│   lookup_past_visits (tool results       │
-│   anonymized before re-entering loop)    │
-│ - Bounded by agent_max_turns             │
-│ - Logs conversation to DB                │
-└─────────────────────────────────────────┘
-     │  (falls back to single-shot _call_claude/
-     │   _call_ollama if loop doesn't converge
-     │   or tool-calling fails — see DEC-013)
+┌───────────────────────────────────────────────────┐
+│ VisitPrepAgent._run_agentic_loop()                 │
+│ - get_llm_backend(): Ollama (default), Claude,     │
+│   or custom (DEC-016)                              │
+│ - Model may call tools before finishing:           │
+│   get_medication_details,                          │
+│   lookup_past_visits (tool results                 │
+│   anonymized before re-entering loop)              │
+│ - Bounded by agent_max_turns                       │
+│ - Logs conversation to DB                          │
+└───────────────────────────────────────────────────┘
+     │  (falls back to single-shot _call_backend()
+     │   if loop doesn't converge or tool-calling
+     │   fails — see DEC-013)
      ▼
 ┌─────────────────────────────────┐
 │ Parse JSON response             │
@@ -406,8 +407,8 @@ async def _call_claude(self, messages, system=None, max_tokens=None):
 Extends `BaseAgent` with:
 - System prompt requesting categorized, prioritized questions
 - `_build_anonymized_context()` to format patient data as markdown, after 4-stage context selection and anonymization
-- `_run_agentic_loop()` (per DEC-009/DEC-013) — drives the tool-use loop via a pluggable `LLMBackend` (`src/agents/llm_backend.py`, Claude or Ollama), executing `get_medication_details`/`lookup_past_visits` tool calls (`src/agents/tools.py`) as requested, bounded by `settings.agent_max_turns`
-- Falls back to the original single-shot `_call_claude`/`_call_ollama` if the agentic loop doesn't converge, tool-calling fails (`ToolCallParsingError`), or `agent_tool_use_enabled=False`
+- `_run_agentic_loop()` (per DEC-009/DEC-013) — drives the tool-use loop via a pluggable `LLMBackend` (`src/agents/llm_backend.py`, Ollama by default, or Claude or a custom OpenAI-compatible provider, DEC-016), executing `get_medication_details`/`lookup_past_visits` tool calls (`src/agents/tools.py`) as requested, bounded by `settings.agent_max_turns`
+- Falls back to the single-shot `_call_backend()` (provider-agnostic since DEC-016) if the agentic loop doesn't converge, tool-calling fails (`ToolCallParsingError`), or `agent_tool_use_enabled=False`
 - Fallback questions if the LLM call fails entirely
 
 Expected Claude response format:
@@ -448,7 +449,7 @@ Expected Claude response format:
 ### Visit Preparation
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/visits/{appt_id}/prepare` | Generate visit prep (agentic loop, Claude or Ollama per `LLM_PROVIDER`) |
+| POST | `/api/visits/{appt_id}/prepare` | Generate visit prep (agentic loop, Ollama by default, or Claude / custom per `LLM_PROVIDER`, switchable from Settings) |
 | GET | `/api/visits/{appt_id}/prep` | Get existing visit prep |
 
 ### Documents
@@ -687,7 +688,7 @@ server: {
 
 3. **VisitPrep** (`/profiles/:profileId/appointments/:appointmentId/prep`)
    - Shows appointment details
-   - Generate button triggers the agentic visit-prep loop (Claude or Ollama, per server config)
+   - Generate button triggers the agentic visit-prep loop (Ollama by default, or Claude / custom, switchable at runtime from Settings)
    - Displays categorized questions
    - Regenerate option
 

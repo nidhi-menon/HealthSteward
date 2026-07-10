@@ -10,6 +10,14 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 - `CONTRIBUTING.md`, `SECURITY.md`, this changelog
 - DEC-015: visit-prep tool scope audit — scoped follow-ups for lab results, visit-notes windowing, and procedures/hospitalizations (issues #21–23), plus a drug-interaction checker and scheduled push notifications (issues #24–25)
 - `docs/tdd.html` — public technical design doc (system architecture diagram, decisions/tradeoffs, walkthrough, risks/gaps linked to issues #27/#29/#30/#31) and `docs/SITE_STYLE_GUIDE.md`, the living style reference for it and the landing page
+- DEC-016: local Ollama is now the default agentic backend for visit prep (Claude and a new custom OpenAI-compatible provider are opt-ins); provider choice is now a runtime, DB-backed setting editable from a new Settings page, instead of `.env`-only
+
+### Fixed
+- Secrets of 8 characters or fewer returned unredacted from `GET /api/settings/` instead of masked
+- An empty-string settings field (e.g. a cleared "Ollama Base URL") could silently override a working default instead of falling back to it
+- `get_llm_backend()` and the agentic loop's tool-spec selection could disagree on which wire format to use for an unrecognized `llm_provider` value
+- Restored a fast (~5s) connect-timeout for Ollama requests, lost when the agentic loop's HTTP client was consolidated — an unreachable/hung Ollama host no longer blocks a request for the full 120s generation timeout
+- Token usage counts were no longer logged for the single-shot fallback path after the per-provider dispatch was consolidated
 
 ## [0.1.0-alpha] - 2026-07-06
 

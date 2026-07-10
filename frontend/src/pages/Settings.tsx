@@ -58,11 +58,14 @@ export default function Settings() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Drop empty-string secret fields so we don't overwrite a saved key
-    // with blank just because the masked placeholder wasn't touched.
-    const payload = { ...form };
-    if (!payload.anthropic_api_key) delete payload.anthropic_api_key;
-    if (!payload.custom_llm_api_key) delete payload.custom_llm_api_key;
+    // Drop empty-string fields entirely rather than sending them — for
+    // secret fields this avoids overwriting a saved key with blank just
+    // because the masked placeholder wasn't touched; for every other field
+    // it avoids persisting a blank override that would shadow a working
+    // env default (e.g. clearing "Ollama Base URL" shouldn't break Ollama).
+    const payload = Object.fromEntries(
+      Object.entries(form).filter(([, value]) => value !== '')
+    ) as AppSettingsUpdate;
     updateMutation.mutate(payload);
   };
 
