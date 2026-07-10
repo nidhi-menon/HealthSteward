@@ -492,7 +492,7 @@
           </div>
           <div class="chart-line">
             <div class="tag">Prep</div>
-            <div><h4>AI visit preparation</h4><p>An agentic loop drafts personalized questions for an upcoming visit — pulling relevant history and calling tools before finalizing. Runs on Claude API or fully local Ollama.</p></div>
+            <div><h4>AI visit preparation</h4><p>An agentic loop drafts personalized questions for an upcoming visit — pulling relevant history and calling tools before finalizing. Runs fully local via Ollama by default; Claude API and other OpenAI-compatible providers are opt-in.</p></div>
           </div>
           <div class="chart-line">
             <div class="tag">Ingest</div>
@@ -530,7 +530,7 @@
         <div class="chart-lines">
           <div class="chart-line"><div class="tag">Backend</div><div><p>FastAPI + SQLAlchemy (async) + SQLite, migrations via Alembic</p></div></div>
           <div class="chart-line"><div class="tag">Frontend</div><div><p>React 19 + TypeScript + Tailwind CSS + Vite</p></div></div>
-          <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Claude API (Sonnet) or local Ollama — for visit prep's tool-use loop</p></div></div>
+          <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Ollama (local) by default, or Claude API (Sonnet), or any OpenAI-compatible provider — for visit prep's tool-use loop, switchable at runtime from Settings</p></div></div>
           <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama (qwen2.5:7b) for PDF parsing and context-selection relevance scoring</p></div></div>
         </div>
       </section>
@@ -649,7 +649,7 @@
                   <div class="arch-inline-arrow">→</div>
                   <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Query DB, anonymize result<span class="arch-sub">tool calls</span></div></div>
                 </div>
-                <div class="arch-branch-tag">⇄ optionally calls out to Claude API — see right</div>
+                <div class="arch-branch-tag">⇄ optionally calls out to Claude or a custom provider — see right</div>
               </div>
 
               <div class="arch-spine-arrow">↓</div>
@@ -680,9 +680,9 @@
 
           <div class="arch-side">
             <div class="arch-external">
-              <div class="arch-node arch-node--external"><svg aria-hidden="true"><use href="#icon-cloud"></use></svg><div>Claude API<span class="arch-sub">Sonnet — optional, leaves this box</span></div></div>
+              <div class="arch-node arch-node--external"><svg aria-hidden="true"><use href="#icon-cloud"></use></svg><div>Claude API or custom provider<span class="arch-sub">optional, leaves this box</span></div></div>
             </div>
-            <p class="arch-crossing-label">Only if <code>LLM_PROVIDER=claude</code> — anonymized context and tool results only. Response returns to Orchestrate; Serve continues either way.</p>
+            <p class="arch-crossing-label">Only if <code>LLM_PROVIDER=claude</code> or <code>custom</code> — anonymized context and tool results only. Response returns to Orchestrate; Serve continues either way.</p>
           </div>
         </div>
 
@@ -700,14 +700,14 @@
         <h2>Two trust boundaries</h2>
         <div class="boundaries">
           <div class="boundary">
-            <div class="eyebrow">Stays on device</div>
+            <div class="eyebrow">Stays on device — default</div>
             <h4>Ollama, local</h4>
-            <p>PDF parsing and visit-relevance scoring run on a local model. Raw records never touch the network — enforced by a hard localhost-only safety check in the Ollama client, not just convention.</p>
+            <p>PDF parsing always runs on a local model, and visit prep's agentic loop does too by default (DEC-016). Raw records never touch the network — enforced by a hard localhost-only safety check in the Ollama client, not just convention.</p>
           </div>
           <div class="boundary">
             <div class="eyebrow">Anonymized first</div>
-            <h4>Pluggable backend (Claude or local Ollama)</h4>
-            <p>Only ever receives already-anonymized data. Anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way, for both backends.</p>
+            <h4>Pluggable backend (Claude or any custom provider)</h4>
+            <p>Only ever receives already-anonymized data, when opted into. Anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way, regardless of backend.</p>
           </div>
         </div>
       </section>
@@ -767,7 +767,7 @@
 
           <ul>
             <li><strong>Why bounded, not open-ended:</strong> an unbounded loop against a small/unreliable local model can spin. A hard turn cap makes worst-case latency and cost predictable.</li>
-            <li><strong>Why Claude API as default, not local Ollama:</strong> the dev machine (Apple M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool selection, non-convergence. Claude API cost is negligible for personal use (~$1/month).</li>
+            <li><strong>Why Ollama as default, not Claude API (DEC-016, superseding DEC-009's default):</strong> the dev machine (Apple M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool selection, non-convergence — which is still true and exactly why the fallback-to-single-shot behavior below matters. But defaulting the primary, most-used flow to an external API sat awkwardly next to the project's local-first pitch. Claude (and any custom OpenAI-compatible provider) remain fully supported, now as explicit opt-ins from Settings rather than the default.</li>
             <li><strong>Two tools today, deliberately bounded scope for v1</strong> — a real drug-interaction checker and a user-facing pause-to-ask-clarifying-questions flow were explicitly descoped as separate, bigger features.</li>
           </ul>
         </div>
@@ -776,12 +776,13 @@
       <details class="accordion-item">
         <summary>Pluggable LLM backend <span class="plus">+</span></summary>
         <div class="body">
-          <p><code>src/agents/llm_backend.py</code>: an <code>LLMBackend</code> ABC with two implementations — <code>ClaudeBackend</code> (wraps <code>AsyncAnthropic</code>, uses Claude's native <code>tools=</code> parameter) and <code>OllamaBackend</code> (calls Ollama's <code>/api/chat</code> with OpenAI-style function-calling tool specs). Both providers normalize into the same <code>ToolCall</code>/<code>LLMTurnResult</code> shape, so <code>_run_agentic_loop</code> never branches on which provider it's talking to — it just calls <code>backend.call(...)</code> and reads a uniform result.</p>
+          <p><code>src/agents/llm_backend.py</code>: an <code>LLMBackend</code> ABC with three implementations — <code>ClaudeBackend</code> (wraps <code>AsyncAnthropic</code>, uses Claude's native <code>tools=</code> parameter), <code>OllamaBackend</code> (calls Ollama's <code>/api/chat</code> with OpenAI-style function-calling tool specs), and <code>CustomOpenAICompatibleBackend</code> (DEC-016 — any endpoint speaking OpenAI's <code>/chat/completions</code> + tool-calling format: OpenAI, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio server, etc.). All three normalize into the same <code>ToolCall</code>/<code>LLMTurnResult</code> shape, so <code>_run_agentic_loop</code> never branches on which provider it's talking to — it just calls <code>backend.call(...)</code> and reads a uniform result.</p>
 
           <ul>
-            <li><strong>One canonical tool spec, two wire formats:</strong> <code>src/agents/tools.py</code> defines <code>TOOL_SPECS</code> once, then <code>claude_tools()</code> and <code>ollama_tools()</code> each adapt it into the shape that provider's API actually expects — adding a third tool means writing it once, not once per backend.</li>
-            <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes <code>LLM_PROVIDER=ollama</code> a real, fully-local option rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
-            <li><strong>Selected via a factory</strong>, <code>get_llm_backend(settings)</code>, keyed off <code>settings.llm_provider</code> — no conditional backend logic scattered through <code>visit_prep.py</code> itself.</li>
+            <li><strong>One canonical tool spec, reused wire format:</strong> <code>src/agents/tools.py</code> defines <code>TOOL_SPECS</code> once, then <code>claude_tools()</code> adapts it for Claude and <code>ollama_tools()</code> covers both Ollama and the custom provider — Ollama's <code>/api/chat</code> already mirrors OpenAI's function-calling shape, so the custom backend needed no third adapter.</li>
+            <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes <code>LLM_PROVIDER=ollama</code> a real, fully-local <em>default</em> rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
+            <li><strong>Selected via a factory</strong>, <code>get_llm_backend(settings)</code>, keyed off <code>settings.llm_provider</code>. DEC-016 also consolidated dispatch inside <code>visit_prep.py</code> itself — it previously checked <code>llm_provider == "ollama"</code> via string equality in three separate places; all three now route through <code>get_llm_backend()</code>/<code>get_tools_for_provider()</code>.</li>
+            <li><strong>Runtime-editable, not just env-configured:</strong> <code>settings.llm_provider</code> is now overlaid from a DB-backed <code>AppSettings</code> singleton row (<code>src/services/settings_service.py</code>), so switching providers from the Settings page takes effect on the next request — no <code>.env</code> edit or restart needed.</li>
           </ul>
         </div>
       </details>
@@ -961,7 +962,18 @@
           <tr><td>Local Ollama (7-8B, quantized)</td><td>Free, maximum privacy — but only 4-5GB RAM available after OS on an 8GB M3, so only 4-bit quantized models fit, and those produce unreliable tool-calling (malformed JSON, wrong tools, loops)</td></tr>
           <tr><td>Claude API (Sonnet)</td><td>Reliable tool use out of the box, ~$0.03-0.10 per visit prep (~$1/month typical use) — but leaves the local-first ideal for this one call path</td></tr>
         </table>
-        <div class="verdict"><strong>Chose:</strong> Claude API as default, Ollama as an explicit opt-in via <code>LLM_PROVIDER=ollama</code> with documented reduced reliability. Anonymization make the Claude path privacy-acceptable rather than privacy-ideal.</div>
+        <div class="verdict"><strong>Chose (at the time):</strong> Claude API as default, Ollama as an explicit opt-in via <code>LLM_PROVIDER=ollama</code> with documented reduced reliability. Anonymization made the Claude path privacy-acceptable rather than privacy-ideal. <strong>Superseded by DEC-016</strong> (below) — the default flipped, this card's tool-reliability finding did not.</div>
+      </div>
+
+      <div class="dec-card" data-tags="ai privacy">
+        <div class="dec-id">DEC-016</div>
+        <h4>Flip the default agentic backend to Ollama; add a custom OpenAI-compatible provider</h4>
+        <table>
+          <tr><th>Option</th><th>Tradeoff</th></tr>
+          <tr><td>Keep Claude as default</td><td>Reliable tool-calling out of the box — but sits awkwardly next to a project pitched as local-first when the most-used flow defaults off-device</td></tr>
+          <tr><td>Flip default to Ollama, keep Claude opt-in</td><td>Privacy-first positioning holds by default — but more installs hit the small-model tool-calling unreliability DEC-009 documented, leaning harder on the existing single-shot fallback (DEC-013)</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> Ollama as default; Claude and a new <code>CustomOpenAICompatibleBackend</code> (any OpenAI-compatible endpoint — OpenAI, OpenRouter, Groq, self-hosted, etc.) as explicit opt-ins, switchable at runtime from a new Settings page (DB-backed, no <code>.env</code> edit or restart needed) rather than <code>.env</code>-only. DEC-009's reliability finding is unchanged — this supersedes its default choice, not its technical conclusion.</div>
       </div>
 
       <div class="dec-card" data-tags="data">
@@ -1098,7 +1110,7 @@ Lab Orders:
         </div>
         <div class="callout risk">
           <span class="callout-label">External dependency risk</span>
-          <p>Anthropic API pricing/availability changes affect the default agentic backend directly, with no equally-reliable local fallback today. Ollama model tags (<code>qwen2.5:7b</code>, <code>llama3.2</code>) are referenced by tag, not pinned digest — a silent upstream re-tag could change parsing/scoring behavior with no code change to explain why. <a href="https://github.com/nidhi-menon/HealthSteward/issues/31">Tracked in issue #31.</a></p>
+          <p>Ollama model tags (<code>qwen2.5:7b</code>, <code>llama3.2</code>) are referenced by tag, not pinned digest — a silent upstream re-tag could change parsing/scoring/visit-prep behavior with no code change to explain why, and this now affects the default agentic backend directly, not just an opt-in path. Anthropic API and any custom provider's pricing/availability changes only matter to whoever has opted into them from Settings. <a href="https://github.com/nidhi-menon/HealthSteward/issues/31">Tracked in issue #31.</a></p>
         </div>
         <div class="callout risk">
           <span class="callout-label">Prompt-change management</span>
@@ -1138,7 +1150,7 @@ Lab Orders:
         <div class="gterm"><dt>Anonymization boundary</dt><dd>The point in the pipeline (after context selection, before the agentic loop starts) past which no unredacted PII should exist — a hard constraint (DEC-006), not a best-effort nicety.</dd></div>
         <div class="gterm"><dt>Specialty-aware prompting</dt><dd>System prompts that constrain generated questions to what's relevant to the specific doctor's specialty, using ICD-10 → specialty mapping and medication → prescriber tagging (DEC-011).</dd></div>
         <div class="gterm"><dt>Section-routing</dt><dd>The AVS parser's architecture: deterministic parsers handle structured PDF sections, local LLM calls handle unstructured ones — routed by section type, not one monolithic LLM call over the whole document.</dd></div>
-        <div class="gterm"><dt>Pluggable backend</dt><dd><code>LLMBackend</code> abstraction (<code>src/agents/llm_backend.py</code>) that normalizes Claude API and Ollama tool-calling into one interface, so the agentic loop code doesn't branch on provider.</dd></div>
+        <div class="gterm"><dt>Pluggable backend</dt><dd><code>LLMBackend</code> abstraction (<code>src/agents/llm_backend.py</code>) that normalizes Ollama, Claude API, and any custom OpenAI-compatible provider's tool-calling into one interface, so the agentic loop code doesn't branch on provider (DEC-013, DEC-016).</dd></div>
         <div class="gterm"><dt>NudgeState</dt><dd>DB table persisting snooze/dismiss state for computed action items that have no natural row of their own to attach state to (e.g. "appointment is past-due").</dd></div>
         <div class="gterm"><dt>DEC-XXX</dt><dd>An entry in <code>docs/notes/DECISIONS.md</code>'s architectural decision log — Date / Topic / Context / Options Considered / Decision / Reasoning / Status.</dd></div>
       </dl>
@@ -1166,7 +1178,7 @@ Lab Orders:
       </div>
       <div class="faq-item">
         <div class="q">What happens if Ollama isn't running at all?</div>
-        <p class="a">PDF parsing simply can't proceed (surfaced to the user). Context-selection relevance scoring skips stage 2 and falls back to rules-based filtering plus truncation. Visit prep itself is unaffected unless <code>LLM_PROVIDER=ollama</code> is explicitly set.</p>
+        <p class="a">PDF parsing simply can't proceed (surfaced to the user). Context-selection relevance scoring skips stage 2 and falls back to rules-based filtering plus truncation. Visit prep — Ollama by default as of DEC-016 — falls back to its own single-shot path per DEC-013's convergence handling; switching to Claude or a custom provider in Settings avoids the dependency on Ollama for visit prep specifically.</p>
       </div>
     </section>
 

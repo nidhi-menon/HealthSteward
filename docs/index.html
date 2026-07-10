@@ -374,7 +374,7 @@
         <div class="tag">Prep</div>
         <div>
           <h3>AI visit preparation</h3>
-          <p>An agentic loop drafts personalized questions for an upcoming visit, pulling relevant history and calling tools (medication lookup, past-visit lookup) before it finalizes anything. Runs on Claude or fully local via Ollama.</p>
+          <p>An agentic loop drafts personalized questions for an upcoming visit, pulling relevant history and calling tools (medication lookup, past-visit lookup) before it finalizes anything. Runs fully local via Ollama by default — Claude API and other providers are opt-in.</p>
         </div>
       </div>
       <div class="chart-line">
@@ -402,20 +402,20 @@
     <p>Health data is sensitive by default, so nothing crosses a boundary un-redacted.</p>
     <div class="boundaries">
       <div class="boundary">
-        <div class="eyebrow">Stays on device</div>
+        <div class="eyebrow">Stays on device — default</div>
         <h3>Ollama, local</h3>
-        <p>PDF parsing and visit-relevance scoring run on a local model. Your raw records never touch the network.</p>
+        <p>PDF parsing always runs on a local model, and visit prep does too by default. Your raw records never touch the network unless you opt out.</p>
       </div>
       <div class="boundary">
         <div class="eyebrow">Anonymized first</div>
-        <h3>Claude API, optional</h3>
-        <p>If you opt into cloud-quality visit prep, names, DOB, and contact info are stripped — deterministically and via NER — before anything is sent.</p>
+        <h3>Claude, or any provider you choose — optional</h3>
+        <p>Switch visit prep to Claude API or any OpenAI-compatible provider from Settings — names, DOB, and contact info are stripped — deterministically and via NER — before anything is sent.</p>
       </div>
     </div>
     <p style="margin-top:16px; font-size:14.5px;">
       This reduces exposure but isn't a guarantee — NER-based detection can miss names or
       identifying details in unusual free-text phrasing. Local-only mode (Ollama for both
-      parsing and visit prep) needs no anonymization step, since nothing leaves the machine.
+      parsing and visit prep, the default) needs no anonymization step, since nothing leaves the machine.
     </p>
   </div>
 </section>
