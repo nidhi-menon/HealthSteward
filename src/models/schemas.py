@@ -477,3 +477,35 @@ class NudgeStateResponse(BaseModel):
     nudge_type: str
     item_id: str
     snoozed_until: datetime
+
+
+# ============================================================================
+# App Settings Schemas (DEC-016)
+# ============================================================================
+
+
+class AppSettingsUpdate(BaseModel):
+    """Fields a user can change from the Settings page. Omitted/None fields
+    are left as-is (or fall back to the env default) — not cleared."""
+
+    llm_provider: Optional[str] = Field(None, pattern="^(claude|ollama|custom)$")
+    anthropic_api_key: Optional[str] = None
+    anthropic_model: Optional[str] = None
+    ollama_base_url: Optional[str] = None
+    ollama_model: Optional[str] = None
+    custom_llm_base_url: Optional[str] = None
+    custom_llm_api_key: Optional[str] = None
+    custom_llm_model: Optional[str] = None
+
+
+class AppSettingsResponse(BaseModel):
+    """Effective settings as they'll actually be used. API keys are masked."""
+
+    llm_provider: str
+    anthropic_api_key: Optional[str] = None
+    anthropic_model: str
+    ollama_base_url: str
+    ollama_model: str
+    custom_llm_base_url: Optional[str] = None
+    custom_llm_api_key: Optional[str] = None
+    custom_llm_model: Optional[str] = None
