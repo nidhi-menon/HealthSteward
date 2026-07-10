@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import ProfileList from './pages/ProfileList';
 import ProfileDetail from './pages/ProfileDetail';
 import VisitPrep from './pages/VisitPrep';
+import Settings from './pages/Settings';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/" element={<ProfileList />} />
             <Route path="/profiles/:profileId" element={<ProfileDetail />} />
             <Route path="/profiles/:profileId/appointments/:appointmentId/prep" element={<VisitPrep />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
       </BrowserRouter>

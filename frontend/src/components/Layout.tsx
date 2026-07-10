@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 
 const navigation = [
   { name: 'Profiles', href: '/' },
+  { name: 'Settings', href: '/settings' },
 ];
 
 export default function Layout() {
