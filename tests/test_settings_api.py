@@ -65,3 +65,31 @@ async def test_update_settings_custom_provider_fields(client: AsyncClient):
 async def test_update_settings_empty_payload_rejected(client: AsyncClient):
     response = await client.put("/api/settings/", json={})
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_short_secret_is_fully_redacted_not_leaked(client: AsyncClient):
+    """A secret of 8 chars or fewer must never come back readable — showing
+    its last 4 characters would leak half or more of it."""
+    await client.put(
+        "/api/settings/",
+        json={"llm_provider": "claude", "anthropic_api_key": "abcd"},
+    )
+    response = await client.get("/api/settings/")
+    assert response.json()["anthropic_api_key"] == "***"
+
+
+@pytest.mark.asyncio
+async def test_clearing_a_field_to_empty_string_falls_back_to_default(client: AsyncClient):
+    """Persisting an empty-string override must behave like never having set
+    it — not like overriding the default with a blank value."""
+    default_response = await client.get("/api/settings/")
+    default_base_url = default_response.json()["ollama_base_url"]
+
+    await client.put("/api/settings/", json={"ollama_base_url": "http://example.com:1234"})
+    changed = await client.get("/api/settings/")
+    assert changed.json()["ollama_base_url"] == "http://example.com:1234"
+
+    await client.put("/api/settings/", json={"ollama_base_url": ""})
+    reset = await client.get("/api/settings/")
+    assert reset.json()["ollama_base_url"] == default_base_url
