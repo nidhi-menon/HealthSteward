@@ -605,4 +605,28 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-08*
+### DEC-016: Default LLM Provider Flipped to Ollama; Add Custom OpenAI-Compatible Provider; Runtime-Editable Settings
+
+**Date:** 2026-07-09
+
+**Topic:** Which LLM backend visit prep uses by default, whether users can connect any LLM they want (not just Claude/Ollama), and whether switching providers requires editing `.env` and restarting.
+
+**Context:** DEC-009 chose Claude API as the *default* agentic backend, reasoned specifically from the dev machine's constraints (8GB RAM M3 can only run 4-bit quantized 7-8B Ollama models, which produce unreliable tool-calling). That reasoning is about the dev machine, not about what should ship as the default for end users generally — and it sits awkwardly next to the project's own privacy-first pitch (landing page, TDD): "stays on device" was the *opt-in* behavior, not the default, for the flow (visit prep) most likely to be used regularly. Separately, the `LLMBackend` abstraction built in DEC-013 only supported exactly two providers, and there was no way to change the provider without editing `.env` and restarting the server — no settings UI or API existed at all.
+
+**Decision:**
+1. Flip `llm_provider`'s default from `"claude"` to `"ollama"` (`src/config.py`). Claude remains fully supported, now as an explicit opt-in rather than the default.
+2. Add a third provider, `"custom"` — `CustomOpenAICompatibleBackend` (`src/agents/llm_backend.py`), for any endpoint speaking OpenAI's `/chat/completions` + tool-calling wire format (OpenAI itself, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio server, etc.). Ollama's `/api/chat` already mirrors this format, so the tool-spec adapter (`ollama_tools()`) and dispatch pattern needed no new shape, just a new branch.
+3. Consolidated the LLM-provider dispatch in `src/agents/visit_prep.py`, which previously checked `settings.llm_provider == "ollama"` via string equality in three separate places (agentic-loop tool selection, single-shot fallback, model-name-for-logging). All three now go through `get_llm_backend()` / `get_tools_for_provider()`, so adding the third provider required one new backend class instead of a fourth branch in three places.
+4. Made provider choice a **runtime, DB-backed setting** rather than `.env`-only: new singleton `AppSettings` table (`src/data/models.py`), `src/services/settings_service.py` (`get_effective_settings()` overlays non-null DB values onto the env-based `Settings`), and `GET`/`PUT /api/settings` (`src/api/settings.py`, secrets masked on read). A new frontend Settings page (`frontend/src/pages/Settings.tsx`) lets a user switch providers and re-run visit prep without restarting the backend.
+
+**Reasoning:**
+- DEC-009's tool-reliability finding (small quantized local models are unreliable at function-calling) is still true and unchanged — it's exactly why DEC-013's fallback-to-single-shot behavior exists and now matters more, since more installs will hit it by default. This decision supersedes DEC-009's *default provider choice*, not its technical finding.
+- End-user hardware varies; defaulting to the option that's honest about the privacy trade-off (fully local, at the cost of potentially flakier tool use with the fallback covering that gap) is more consistent with the project's stated positioning than defaulting to the option that's more reliable on one specific underpowered dev machine.
+- "Any LLM the user wants" was interpreted as "any OpenAI-compatible endpoint" rather than building bespoke adapters per provider — this covers the overwhelming majority of hosted and self-hosted options with one adapter, consistent with DEC-013's bounded-scope precedent.
+- Settings needed to be runtime-editable (not `.env`-only) for switching to actually be "easy," per the user's explicit ask — a `.env` edit + restart is a real barrier for anyone not comfortable with a terminal, which cuts against the same non-terminal-user consideration raised in DEC-014.
+
+**Status:** Implemented
+
+---
+
+*Last updated: 2026-07-09*

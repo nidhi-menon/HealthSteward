@@ -29,7 +29,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 ## What It Does
 
 - **Health profile management** — conditions (with ICD-10 codes), medications, doctors, appointments
-- **AI visit preparation** — an agentic loop generates personalized questions for upcoming doctor visits, with intelligent context selection from past visits and on-demand tools (medication lookup, past-visit lookup) it can call before finalizing; runs on Claude API or fully local Ollama, with automatic fallback to single-shot generation if tool-calling isn't reliable
+- **AI visit preparation** — an agentic loop generates personalized questions for upcoming doctor visits, with intelligent context selection from past visits and on-demand tools (medication lookup, past-visit lookup) it can call before finalizing; runs fully local via Ollama by default, or on Claude API or any OpenAI-compatible provider, switchable from the Settings page without restarting — with automatic fallback to single-shot generation if tool-calling isn't reliable
 - **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
 - **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab with flexible snooze (1w / 2w / 1m), one-click completion, previously-snoozed indicators, and a resolved history toggle
 - **PII anonymization** — data sent to Claude is anonymized via deterministic field replacement, regex, and spaCy NER (names, DOB, contact info); best-effort on free text, not a hard guarantee
@@ -41,7 +41,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 |-------|-----------|
 | Backend | FastAPI + SQLAlchemy (async) + SQLite |
 | Frontend | React 19 + TypeScript + Tailwind CSS + Vite |
-| AI (agentic) | Pluggable backend (Claude API Sonnet, or local Ollama) for visit prep's tool-use loop |
+| AI (agentic) | Pluggable backend (Ollama by default, or Claude API Sonnet, or any OpenAI-compatible provider) for visit prep's tool-use loop, switchable at runtime from Settings |
 | AI (local) | Ollama (qwen2.5:7b) for PDF parsing and context-selection relevance scoring |
 | Database | SQLite via aiosqlite, migrations via Alembic |
 
@@ -57,7 +57,7 @@ flowchart TD
     Select -->|stage 4: anonymize| Anon[PII Anonymization]
     Anon --> Loop[Agentic Tool-Use Loop]
 
-    Loop -->|prompt + tools| Backend[Pluggable LLM Backend<br/>Claude API or local Ollama]
+    Loop -->|prompt + tools| Backend[Pluggable LLM Backend<br/>Ollama default, or Claude / custom]
     Backend -->|tool call: get_medication_details<br/>or lookup_past_visits| Tools[Visit Prep Tools]
     Tools -->|query, then anonymize| DB
     Tools -->|anonymized tool result| Backend
@@ -74,7 +74,7 @@ flowchart TD
     style Tools fill:#5a2d5a,color:#fff
 ```
 
-Two LLMs, two trust boundaries: **Ollama runs locally** and never sees the network — it parses raw PDFs and also scores relevance of raw (pre-anonymization) visit history during context selection. **The pluggable backend (Claude or local Ollama) only ever receives already-anonymized data** — anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way for both backends, not just for Claude. If the loop can't converge (bounded by `agent_max_turns`) or a backend's tool-calling isn't reliable (a known risk on small local models per DEC-009), it falls back to the original single-shot call — no functional regression either way.
+Two LLMs, two trust boundaries: **Ollama runs locally** and never sees the network — it parses raw PDFs and also scores relevance of raw (pre-anonymization) visit history during context selection. **The pluggable backend (Ollama by default, or Claude, or any OpenAI-compatible custom provider) only ever receives already-anonymized data** — anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way regardless of backend. If the loop can't converge (bounded by `agent_max_turns`) or a backend's tool-calling isn't reliable (a known risk on small local models per DEC-009), it falls back to the original single-shot call — no functional regression either way.
 
 ## Quick Start
 
@@ -109,26 +109,29 @@ pnpm install
 pnpm dev  # starts on http://localhost:3000
 ```
 
-### Ollama (for PDF parsing, and optionally for visit prep)
+### Ollama (for PDF parsing, and visit prep by default)
 
 ```bash
 ollama serve
 ollama pull qwen2.5:7b   # AVS_PARSER_MODEL — used for PDF parsing
+ollama pull llama3.2     # OLLAMA_MODEL — used for visit prep by default (DEC-016)
 ```
 
-Set `LLM_PROVIDER=ollama` to run visit prep's agentic tool-use loop fully locally instead of via Claude API. This uses a separate model, configured via `OLLAMA_MODEL` (default `llama3.2`) — pull whichever model you set there too, e.g. `ollama pull llama3.2`. Tool-calling reliability varies by model size — on constrained hardware (see DEC-009), small quantized models can produce malformed tool calls; when that happens, visit prep automatically falls back to a single-shot (non-agentic) response rather than failing.
+Visit prep's agentic tool-use loop runs fully locally via Ollama by default (`LLM_PROVIDER=ollama`). Tool-calling reliability varies by model size — on constrained hardware (see DEC-009), small quantized models can produce malformed tool calls; when that happens, visit prep automatically falls back to a single-shot (non-agentic) response rather than failing. Switch to Claude API or a custom OpenAI-compatible provider (OpenAI, OpenRouter, Groq, a self-hosted server, etc.) from the **Settings** page in the app at any time, without editing `.env` or restarting — see DEC-016.
 
 ### Environment
 
 Create a `.env` file in the project root:
 
 ```env
-# Required for AI visit prep (optional if only using PDF parsing)
-ANTHROPIC_API_KEY=your_key_here
-
-# Defaults (override as needed)
-LLM_PROVIDER=claude
+# Defaults (override as needed) — can also be changed at runtime from Settings
+LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+
+# Required only if using Claude for visit prep (set from Settings, or here)
+# ANTHROPIC_API_KEY=your_key_here
+
 AVS_PARSER_MODEL=qwen2.5:7b
 DATABASE_URL=sqlite+aiosqlite:///data/healthsteward.db
 

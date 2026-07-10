@@ -1061,4 +1061,23 @@ Left unchanged: "Stays on device," "Anonymized first," the three "terminal — .
 
 ---
 
+## 23. Local-First Default + Custom OpenAI-Compatible Provider + Runtime Settings
+
+**Date:** 2026-07-09
+
+**Context:** The default LLM provider for visit prep was Claude API, decided in DEC-009 specifically because the dev machine (8GB RAM M3) can't run quantized local models reliably enough for tool-calling. That's a real constraint, but it made the *default* out of step with the project's own privacy-first framing — "stays on device" was the opt-in, not the default, on exactly the feature (visit prep) people would use most. On top of that, there was no way to change the LLM provider without hand-editing `.env` and restarting the backend, and only two providers existed at all (Claude, Ollama) — no path to "point this at whatever model I actually want to use."
+
+**What was built:**
+- Flipped `llm_provider`'s default to `"ollama"` in `src/config.py`. Claude is now an explicit opt-in.
+- Added a third provider, `CustomOpenAICompatibleBackend` in `src/agents/llm_backend.py`, for any endpoint speaking OpenAI's `/chat/completions` + tool-calling format — covers OpenAI, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio server, etc. Reused the existing `ollama_tools()` adapter (Ollama's tool-spec shape is already OpenAI-style) rather than writing a third adapter.
+- Consolidated three separate `settings.llm_provider == "ollama"` string checks in `visit_prep.py` (agentic-loop tool selection, single-shot fallback dispatch, model-name-for-logging) into single dispatch through `get_llm_backend()`/`get_tools_for_provider()`. Folded the old provider-specific `_call_claude`/`_call_ollama` single-shot methods into one `_call_backend()`.
+- Added a DB-backed settings layer so the provider can be switched at runtime, not just via `.env`: a singleton `AppSettings` row (`src/data/models.py` + Alembic migration), `src/services/settings_service.py` (`get_effective_settings()` overlays non-null DB values onto the env-based `Settings`, `update_settings()` upserts), and `GET`/`PUT /api/settings` (`src/api/settings.py`, API keys masked to last-4-chars on read). `VisitPrepAgent.prepare_visit()` now pulls effective settings fresh at the start of each call instead of caching env-only settings at construction time.
+- New frontend Settings page (`frontend/src/pages/Settings.tsx`) with a provider selector (Ollama / Claude / Custom) and provider-specific connection fields, linked from the nav (`Layout.tsx`).
+
+**Reasoning:** DEC-009's tool-reliability finding didn't change — it's still true that small quantized local models are unreliable at function-calling, which is exactly why the DEC-013 fallback-to-single-shot path exists and now matters more broadly, since more installs will default into hitting it. What changed is the judgment about which trade-off should be the *default* for users generally, versus what was true of one specific underpowered dev machine. "Connect any LLM" was scoped to "any OpenAI-compatible endpoint" — one adapter covers the large majority of hosted and self-hosted options without per-provider bespoke code, consistent with DEC-013's bounded-scope pattern. Full reasoning in DEC-016.
+
+**Files changed:** `src/config.py`, `src/agents/llm_backend.py`, `src/agents/tools.py`, `src/agents/visit_prep.py`, `src/data/models.py`, `src/services/settings_service.py` (new), `src/api/settings.py` (new), `src/models/schemas.py`, `src/main.py`, `alembic/versions/a1b2c3d4e5f6_add_app_settings.py` (new), `tests/test_llm_backend.py`, `tests/test_visit_prep.py`, `frontend/src/pages/Settings.tsx` (new), `frontend/src/App.tsx`, `frontend/src/components/Layout.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `.env.example`.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

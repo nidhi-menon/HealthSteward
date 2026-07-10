@@ -440,3 +440,29 @@ class NudgeState(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class AppSettings(Base):
+    """Singleton row of runtime-editable app settings (DEC-016).
+
+    Overlays `src/config.py`'s env-based Settings so the LLM provider (and
+    its connection details) can be changed from the UI without editing .env
+    or restarting the server. A NULL column means "fall back to the env
+    default." Fixed id ("app-settings") instead of a generated UUID since
+    there is intentionally only ever one row.
+    """
+
+    __tablename__ = "app_settings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: "app-settings")
+    llm_provider: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    anthropic_api_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    anthropic_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ollama_base_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ollama_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    custom_llm_base_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    custom_llm_api_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    custom_llm_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

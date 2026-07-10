@@ -19,6 +19,8 @@ import type {
   ActionItems,
   VitalsAlert,
   NudgeState,
+  AppSettings,
+  AppSettingsUpdate,
 } from '../types';
 
 const API_BASE = '/api';
@@ -221,4 +223,14 @@ export const visitPrep = {
     }),
   get: (appointmentId: string) =>
     request<VisitPrep>(`/visits/${appointmentId}/prep`),
+};
+
+// App Settings (DEC-016)
+export const appSettings = {
+  get: () => request<AppSettings>('/settings/'),
+  update: (data: AppSettingsUpdate) =>
+    request<AppSettings>('/settings/', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
