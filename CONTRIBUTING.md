@@ -2,10 +2,14 @@
 
 HealthSteward is early-stage and the codebase evolves through a handful of documented conventions. This doc explains them so a PR fits in without a round of back-and-forth.
 
+By participating in this project, you're expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Before you start
 
 - Check [open issues](https://github.com/nidhi-menon/HealthSteward/issues) first — most non-trivial work is scoped there before it's built, including open questions and explicit non-goals.
 - For anything architectural (new dependency, new external service, a schema change, a new subsystem), open an issue or start a [Discussion](https://github.com/nidhi-menon/HealthSteward/discussions) before writing code. See "Decision log" below for why.
+- New issues use the **Enhancement** or **Bug report** templates (`.github/ISSUE_TEMPLATE/`) — they mirror the Context / Change / Open questions / Scope shape most existing issues already follow, so fill them in rather than deleting sections that don't seem to apply.
+- PRs use `.github/pull_request_template.md` — Summary / Test plan, plus a checklist for the DEC/dev-log/migration/privacy conventions below.
 
 ## Decision log and development log
 
