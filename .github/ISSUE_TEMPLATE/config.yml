@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Not sure if it's a bug, feature, or intentional?
+    url: https://github.com/nidhi-menon/HealthSteward/discussions
+    about: Use a Discussion instead — issues are for scoped, actionable work (see CONTRIBUTING.md).

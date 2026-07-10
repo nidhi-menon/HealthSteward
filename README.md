@@ -235,6 +235,7 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 - `docs/notes/SANDBOX_PROMPT.md` — sandbox experiment prompts
 - `CONTRIBUTING.md` — how to contribute, including the privacy constraints PRs must respect
 - `SECURITY.md` — how to report a vulnerability
+- `CODE_OF_CONDUCT.md` — community behavior expectations and enforcement
 - `CHANGELOG.md` — what shipped in each release
 
 ## Data Privacy
