@@ -6,11 +6,18 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 
 ## [Unreleased]
 
+## [0.2.0-alpha] - 2026-07-10
+
 ### Added
 - `CONTRIBUTING.md`, `SECURITY.md`, this changelog
 - DEC-015: visit-prep tool scope audit — scoped follow-ups for lab results, visit-notes windowing, and procedures/hospitalizations (issues #21–23), plus a drug-interaction checker and scheduled push notifications (issues #24–25)
 - `docs/tdd.html` — public technical design doc (system architecture diagram, decisions/tradeoffs, walkthrough, risks/gaps linked to issues #27/#29/#30/#31) and `docs/SITE_STYLE_GUIDE.md`, the living style reference for it and the landing page
+- `docs/DESIGN.md` — point-in-time technical design snapshot, plus a rewritten Personal Note centered on the coordination failure rather than specific diagnoses
+- Deep-dive visuals for `docs/tdd.html`'s accordion sections, including a pipeline diagram for the 4-stage context selection walkthrough
 - DEC-016: local Ollama is now the default agentic backend for visit prep (Claude and a new custom OpenAI-compatible provider are opt-ins); provider choice is now a runtime, DB-backed setting editable from a new Settings page, instead of `.env`-only
+- `CODE_OF_CONDUCT.md` and `.github/` issue/PR templates, wired into the README and CONTRIBUTING
+- README screenshots and a star ask for visibility
+- Documented the five computed nudge types (past-due appointments, upcoming-without-prep, 14-day no-AVS window, vitals-trend alerts, unresolved follow-ups/labs/referrals) in `docs/tdd.html`'s proactive action items section (#40)
 
 ### Fixed
 - Secrets of 8 characters or fewer returned unredacted from `GET /api/settings/` instead of masked
@@ -33,5 +40,6 @@ Initial working build. Core feature set:
 - PII anonymization for external LLM calls — deterministic field replacement, regex, spaCy NER (DEC-006)
 - Public landing page and brand mark (DEC-014)
 
-[Unreleased]: https://github.com/nidhi-menon/HealthSteward/compare/v0.1.0-alpha...HEAD
+[Unreleased]: https://github.com/nidhi-menon/HealthSteward/compare/v0.2.0-alpha...HEAD
+[0.2.0-alpha]: https://github.com/nidhi-menon/HealthSteward/compare/v0.1.0-alpha...v0.2.0-alpha
 [0.1.0-alpha]: https://github.com/nidhi-menon/HealthSteward/releases/tag/v0.1.0-alpha
