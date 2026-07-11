@@ -6,6 +6,9 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 
 ## [Unreleased]
 
+### Added
+- `.github/dependabot.yml` — weekly automated dependency-update scanning for pip (root) and npm (`frontend/`) (DEC-017)
+
 ## [0.2.0-alpha] - 2026-07-10
 
 ### Added
