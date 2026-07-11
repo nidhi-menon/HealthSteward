@@ -1080,4 +1080,18 @@ Left unchanged: "Stays on device," "Anonymized first," the three "terminal — .
 
 ---
 
+## 24. Enable Dependabot for Dependency Vulnerability Scanning
+
+**Date:** 2026-07-10
+
+**Context:** User shared general health-tech repo-hygiene guidance — since FAANG legal teams audit health-tech repos for data-privacy compliance before engaging, enabling GitHub's Dependabot is a cheap way to show the repo isn't carrying known-vulnerable dependencies.
+
+**What was built:** Added `.github/dependabot.yml` with weekly update checks for `pip` (root `requirements.txt`) and `npm` (`frontend/`), `open-pull-requests-limit: 10` each. No `github-actions` entry yet since the repo has no CI workflows.
+
+**Reasoning:** Full reasoning in DEC-017.
+
+**Files changed:** `.github/dependabot.yml` (new).
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

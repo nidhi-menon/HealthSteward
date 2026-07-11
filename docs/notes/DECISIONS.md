@@ -640,4 +640,28 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-09*
+### DEC-017: Enable Dependabot for Dependency Vulnerability Scanning
+
+**Date:** 2026-07-10
+
+**Topic:** Whether to enable GitHub's automated dependency-update/vulnerability scanning, and how to scope it.
+
+**Context:** User pasted general health-tech repo-hygiene guidance noting that FAANG legal teams audit health-tech repos for data-privacy compliance before engaging with them, and that enabling Dependabot is a low-cost way to demonstrate the repo isn't carrying known-vulnerable dependencies. The repo has two dependency surfaces — root `requirements.txt` (pip) and `frontend/package.json` (npm) — and no GitHub Actions workflows yet, so there's no `github-actions` ecosystem to cover.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Do nothing, rely on manual dependency review | No config to maintain | No visibility into known CVEs in dependencies; nothing to point an auditor at |
+| Enable Dependabot security alerts only (repo setting, no config file) | Zero-config | No automated update PRs; still requires someone to notice and act on alerts |
+| Add `.github/dependabot.yml` covering pip + npm, weekly | Automated PRs keep both ecosystems current; version-controlled and auditable | Weekly PR volume needs periodic triage |
+
+**Decision:** Added `.github/dependabot.yml` with weekly update checks for both `pip` (root `requirements.txt`) and `npm` (`frontend/`), `open-pull-requests-limit: 10` each. No `github-actions` ecosystem entry since no workflows exist yet — add one if/when CI is introduced.
+
+**Reasoning:** Weekly cadence balances staying current against PR-review overhead for a project with no CI to auto-run against these PRs yet. Scoping to the two ecosystems that actually exist keeps the config honest rather than pre-declaring coverage for infrastructure (Actions) that isn't there.
+
+**Status:** Implemented
+
+---
+
+*Last updated: 2026-07-10*
