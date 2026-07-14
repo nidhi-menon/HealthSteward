@@ -1101,4 +1101,24 @@ Related: issue #56.
 
 ---
 
+## 25. Context Selection: Stage 2 Was Never Actually Wired Up
+
+**Date:** 2026-07-14
+
+**Context:** While auditing the context-selection deep dive in `docs/tdd.html` for accuracy (following entry 24's fixes), traced through where `ContextSelector`'s `ollama_client` actually comes from in production. `VisitPrepAgent.__init__` constructs `ContextSelector(anonymizer=..., stage2_threshold=..., relevance_cutoff=..., stage2_max_candidates=...)` — never passing `ollama_client`. Since `ContextSelector.__init__` defaults it to `None`, and `stage2_llm_scoring()` unconditionally skips (`if not self.ollama_client: return [(appt, None) for appt in candidates]`) when it's `None`, **Stage 2 relevance scoring has never actually run in the shipped app**, regardless of Ollama's availability or model. It's only ever been exercised in unit tests, which inject a mock client directly. In production, context selection has always been a 3-stage pipeline (rules filter → budget pack → anonymize), not the documented 4-stage one — entry 24's pinning/cap/priority-packing fixes were all correct code, just unreachable.
+
+**What was built:**
+- `visit_prep.py` now calls `get_ollama_client()` (`src/agents/ollama_client.py`) and assigns it to `self.context_selector.ollama_client` fresh on every `prepare_visit()` call, right before Stage 2 would run. That function already existed specifically for this purpose (its own module docstring says "Relevance scoring in context selection (Stage 2)") and already does a live availability check, returning `None` if Ollama isn't reachable — which `select_context()` already treats as "skip Stage 2," so no new fallback logic was needed, just the missing wiring.
+- Added a regression test (`test_prepare_visit_wires_ollama_client_into_stage2_scoring`) that creates enough past visits to trigger Stage 2, mocks the Ollama client, and asserts it's actually called during a real `prepare_visit()` run — this is the test that would have caught the original bug.
+- Along the way, found the existing test suite's `get_ollama_client()` singleton doesn't survive pytest-asyncio's per-test event loops when a real local Ollama happens to be running (dev-machine-dependent "Event loop is closed" failures on teardown). Added an autouse fixture in `test_visit_prep.py` to stub it out for the existing tests (none of which create past appointments, so Stage 2 was never meant to be exercised by them anyway).
+- Corrected `docs/tdd.html` in two more places that assumed PDF parsing and context-selection scoring share one model (`qwen2.5:7b`) — they don't. Parsing has its own dedicated setting (`avs_parser_model`); scoring reuses whatever `ollama_model` is configured as (`llama3.2` by default, the same model the agentic loop uses). This was already wrong before today's fix and remains a separate configurability gap (issue #59) — the wiring fix makes Stage 2 *run*, it doesn't give it its own model setting.
+
+**Reasoning:** This was found by tracing "why does the AI (local) row say qwen2.5:7b for scoring" all the way to source, not by looking for bugs directly — a reminder that doc-accuracy audits surface real functional bugs, not just stale prose. No DEC entry: this restores DEC-008's already-decided 4-stage design, it isn't a new architectural choice.
+
+**Files changed:** `src/agents/visit_prep.py`, `tests/test_visit_prep.py`, `docs/tdd.html`.
+
+Related: DEC-008, entry 24, issue #59.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

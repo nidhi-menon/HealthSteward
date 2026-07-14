@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from src.agents.base import BaseAgent
 from src.agents.llm_backend import ToolCallParsingError, get_llm_backend
+from src.agents.ollama_client import get_ollama_client
 from src.agents.tools import VisitPrepTools, get_tools_for_provider
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
@@ -261,7 +262,16 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             appointment.id
         )
 
-        # Step 2: Select relevant context (4-stage pipeline)
+        # Step 2: Select relevant context (4-stage pipeline). Stage 2's local
+        # relevance scoring needs a live Ollama client — this is independent
+        # of settings.llm_provider (Stage 2 is always local, per DEC-008,
+        # even when the agentic loop itself runs on Claude or a custom
+        # provider). get_ollama_client() does its own availability check and
+        # returns None if Ollama isn't reachable, which select_context()
+        # already treats as "skip Stage 2" — fetched fresh each call since
+        # availability can change between requests.
+        self.context_selector.ollama_client = await get_ollama_client()
+
         context_result = await self.context_selector.select_context(
             target_appointment=appointment,
             all_past_appointments=past_appointments,
