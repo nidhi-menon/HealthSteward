@@ -89,6 +89,22 @@ Hand-built HTML/CSS/inline-SVG — not mermaid. Rationale: full control over bra
 - **Shrinking a whole diagram**: use `zoom`, not `transform: scale()`, for the final implementation — `zoom` triggers real layout reflow (no leftover reserved blank space), while `transform: scale()` leaves the original untransformed box size reserved in the flow. `transform: scale()` is fine for a quick visual preview during iteration, but swap to `zoom` once a size is settled. Always keep the smallest text at or above the accessibility floor (**10.5px**, see below) regardless of scale factor.
 - **Never let a diagram force a horizontal scrollbar as the fix for overflow.** Use `flex-wrap: wrap` (same font size, content reflows) instead.
 
+## Status/strategy badges
+
+Small inline `<span>` badges (e.g. `.strat-tag` on `tdd.html`, used to mark a pipeline stage as deterministic/llm/hybrid) follow the same "keep semantic color scarce" rule as diagrams — reuse existing tokens, don't introduce a new color per badge variant:
+
+- Neutral/default variant: `var(--ink-faint)` text, `var(--line)` border.
+- "Local AI call" variant: `var(--teal-bright)` text and border — same meaning as teal everywhere else on the page.
+- "Mixed/hybrid" variant: `var(--teal-bright)` border but **dashed** instead of solid, `var(--ink-soft)` text — border *style*, not a new color, carries the "partial/conditional" meaning.
+
+## Deep Dives: group by system-design phase, not insertion order
+
+`tdd.html`'s Deep Dives accordion is grouped under `.dd-group-label` headers that mirror the phase names used in the System Design diagram's vertical stack (Ingest → Select → Anonymize → Orchestrate → Backend → Serve), so a reader can trace "the box I'm looking at in the diagram" straight to "the accordion section that explains it," rather than a flat list in whatever order sections were written.
+
+- Not every deep dive maps to a pipeline phase. Ones that don't (e.g. data model/schema, a cross-cutting feature like nudging) go in a trailing **Cross-cutting** group rather than being force-fit into a phase they don't belong to, or silently dropped from grouping.
+- `.dd-group-label` reuses the sidebar nav's existing group-label typography (`ui-monospace`, 11px, uppercase, `letter-spacing: 0.08em`, `var(--ink-faint)`) rather than introducing a new heading style — the same "this is a grouping label, not new heading hierarchy" visual role in both places.
+- When a phase's diagram box covers ground handled by more than one deep dive (e.g. "Orchestrate" spans both the agentic tool-use loop and specialty-aware prompting), put both accordion items under that one group rather than splitting the group further — the diagram phase is the grouping unit, not a 1:1 mapping to accordion items.
+
 ## Accessibility checklist
 
 Apply this to any new page or component in this family, not just re-fixing things already caught here:
