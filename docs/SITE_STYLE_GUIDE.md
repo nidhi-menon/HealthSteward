@@ -129,6 +129,6 @@ Apply this to any new page or component in this family, not just re-fixing thing
 
 ## Content principles
 
-- **Show known gaps and risks, don't sanitize them.** For a technical-interview-facing doc, "here's what I haven't solved yet" reads as more credible than a page that implies everything's finished. Cross-link every gap to its actual GitHub issue — but only after confirming the issue number via `gh issue view`, never guess/hardcode one.
+- **Show known gaps and risks, don't sanitize them.** "Here's what I haven't solved yet" reads as more credible than a page that implies everything's finished. Cross-link every gap to its actual GitHub issue — but only after confirming the issue number via `gh issue view`, never guess/hardcode one.
 - **Synthetic example data must be visibly flagged as synthetic** (a tag/badge, not just a caption) — especially in a health-data context, never let a walkthrough example read as if it could be real captured patient output.
 - `docs/notes/DESIGN.md` and this file follow different update rules: `DESIGN.md` is a point-in-time snapshot re-written only on genuine architectural shifts (see `CLAUDE.md`); this style guide is a living reference — update it whenever a new durable pattern is introduced, same discipline as adding a DEC entry.
