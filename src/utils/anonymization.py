@@ -7,7 +7,8 @@ before sending data to external LLM APIs (like Claude). It uses a combination of
 - spaCy NER for detecting names in free-text fields
 
 Per DEC-006:
-- Patient name → "Patient"
+- Patient name → omitted entirely (AnonymizedProfile has no name field at
+  all, rather than substituting a placeholder like "Patient")
 - Date of birth → Exact age (e.g., "39 years old")
 - Emergency contact → Remove entirely
 - Doctor name → "your [specialty]" or "Doctor"
@@ -34,7 +35,11 @@ except ImportError:
 
 @dataclass
 class AnonymizedProfile:
-    """Anonymized health profile data ready for LLM consumption."""
+    """Anonymized health profile data ready for LLM consumption.
+
+    Deliberately has no name field — the patient's name is omitted
+    entirely rather than replaced with a placeholder string.
+    """
 
     age_description: Optional[str]  # e.g., "39 years old"
     blood_type: Optional[str]
