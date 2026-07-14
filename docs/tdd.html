@@ -547,8 +547,8 @@
         <div class="chart-lines">
           <div class="chart-line"><div class="tag">Backend</div><div><p>FastAPI + SQLAlchemy (async) + SQLite, migrations via Alembic</p></div></div>
           <div class="chart-line"><div class="tag">Frontend</div><div><p>React 19 + TypeScript + Tailwind CSS + Vite</p></div></div>
-          <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Ollama (local) by default, or Claude API (Sonnet), or any OpenAI-compatible provider — for visit prep's tool-use loop, switchable at runtime from Settings</p></div></div>
-          <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama (qwen2.5:7b) for PDF parsing and context-selection relevance scoring</p></div></div>
+          <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Ollama (<code>llama3.2</code> by default) locally, or Claude API (Sonnet), or any OpenAI-compatible provider — for visit prep's tool-use loop, switchable at runtime from Settings. <code>llama3.2</code> specifically for reliable multi-turn tool-calling, since this loop is conversational.</p></div></div>
+          <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama (<code>qwen2.5:7b</code>) for PDF parsing and context-selection relevance scoring — a different model than the agentic loop above, since this is single-shot text→JSON extraction rather than multi-turn tool-calling, and Qwen2.5 at this size is generally considered strong at structured-output extraction. Both models fit the same 8GB-RAM/4-bit-quantized ceiling DEC-009 established. Not a benchmarked choice — no documented comparison against alternatives (<a href="https://github.com/nidhi-menon/HealthSteward/issues/59">issue #59</a>).</p></div></div>
         </div>
       </section>
     </section>
