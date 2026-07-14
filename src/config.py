@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     context_stage2_threshold: int = 5  # Run LLM scoring if more than N visits
     context_relevance_cutoff: float = 7.0  # Keep visits scoring >= this
     context_max_tokens: int = 2000  # Max tokens for visit context
+    # Cap on how many candidates get sent to Stage 2's sequential, unbatched
+    # LLM scoring calls — provisional default, not measured against real
+    # per-call latency yet. See issue #56 to ground this in an actual
+    # p50/p95 measurement (and evaluate batching scoring into one call).
+    context_stage2_max_candidates: int = 15
 
     # Agentic Visit Prep (DEC-009 / DEC-013)
     agent_tool_use_enabled: bool = True  # Kill switch: falls back to single-shot if False

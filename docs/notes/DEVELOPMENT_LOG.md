@@ -1080,4 +1080,25 @@ Left unchanged: "Stays on device," "Anonymized first," the three "terminal — .
 
 ---
 
+## 24. Context Selection: Priority-Based Stage 3 Packing, Stage 2 Candidate Cap, Pinning
+
+**Date:** 2026-07-13
+
+**Context:** Writing a deeper technical-design-doc explanation of DEC-008's 4-stage context selection pipeline (`src/utils/context_selection.py`) surfaced that the shipped code didn't match its own module docstring or the TDD's description. Stage 3's docstring/comment both claimed it would "summarize older visits with the local LLM if still over budget" — it never did; it just stopped adding visits (`break`) the moment one didn't fit, silently dropping everything after that point in whatever order it happened to receive them (recency, from Stage 1). Separately, Stage 2 calls Ollama once per candidate, sequentially, with no cap — an unbounded number of candidates could mean an unbounded number of sequential local-LLM round trips before question generation even starts.
+
+**What was built:**
+- Stage 3 (`stage3_token_budget`) now packs by priority (pinned visit first, then Stage 2's relevance score descending, then recency as a tiebreaker/fallback when no score exists) instead of by whatever order it received. It also keeps evaluating past an over-budget visit instead of stopping there, so a smaller later visit can still be packed in. Returns a third value, `dropped` count, instead of silently discarding the rest.
+- Stage 2 (`stage2_llm_scoring`) now returns `(appointment, score)` pairs instead of a filtered list, so the score survives into Stage 3's packing order rather than being thrown away the moment it's used as a pass/fail filter.
+- Added `context_stage2_max_candidates` (default 15, provisional — see issue #56) — caps how many candidates get sent to Stage 2's scoring calls, applied in `select_context` before calling `stage2_llm_scoring`.
+- Added pinning: `select_context` identifies the Stage-1 same-doctor visit (there's at most one, by construction) and threads its id through as `pinned_ids` to both Stage 2 (exempt from the cap and from the relevance-cutoff filter) and Stage 3 (packed first, regardless of score). Previously this visit's "always include" guarantee from Stage 1 didn't actually survive Stage 2 or 3 — it could be capped out or scored below the cutoff like any other candidate.
+- `ContextSelectionResult` gained `visits_dropped_stage2_cap` and `visits_dropped_stage3_budget` fields; `visit_prep.py` logs both instead of the drop being invisible everywhere.
+
+**Reasoning:** Summarization was rejected as the fix for Stage 3, not just deferred — for medical context specifically, a lossy/hallucinated summary from a small quantized model is a worse failure mode than an honestly-truncated list (see issue #56 discussion). Priority-based packing plus visible drop counts solves the actual problems (arbitrary drop order, invisible data loss) without introducing a new LLM call or a new way for the pipeline to be subtly wrong. The candidate cap's default (15) is a placeholder, not a measurement — issue #56 tracks grounding it in real per-call Ollama latency and evaluating whether to batch Stage 2's scoring into one call instead of N sequential ones.
+
+**Files changed:** `src/utils/context_selection.py`, `src/agents/visit_prep.py`, `src/config.py`, `tests/test_context_selection.py`.
+
+Related: issue #56.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
