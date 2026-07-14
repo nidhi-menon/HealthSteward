@@ -3,7 +3,8 @@
 This module implements the 4-stage context selection logic per DEC-008:
 
 STAGE 1: Rules-Based Filter (instant, free)
-├── ✓ Include: Same doctor's last visit
+├── ✓ Include: Same doctor's last visit (pinned — never dropped by Stage 2's
+│     candidate cap or relevance filter, or by Stage 3's budget packing)
 ├── ✓ Include: All PCP/Internal Medicine visits
 ├── ✓ Include: Related specialties (mapping)
 └── ✗ Exclude: Doctors with exclude_from_prep flag
@@ -11,15 +12,24 @@ STAGE 1: Rules-Based Filter (instant, free)
         ↓ If > 5 visits remain
 
 STAGE 2: Local LLM Relevance Scoring (Ollama)
-├── Score each visit 1-10 for relevance
-├── Keep visits scoring >= 7
-└── Fallback: Skip if Ollama unavailable
+├── Candidates beyond context_stage2_max_candidates are capped before
+│   scoring (cost control — one sequential, unbatched Ollama call per
+│   candidate; see issue #56), pinned candidate exempted from the cap
+├── Score each remaining visit 1-10 for relevance
+├── Keep visits scoring >= 7 (pinned visit always kept regardless of score)
+└── Fallback: Skip entirely if Ollama unavailable or below stage2_threshold
 
         ↓
 
 STAGE 3: Token Budget Check
-├── If over budget: summarize older visits
-└── Use local LLM for summarization
+├── Packs visits by priority (Stage 2 relevance score, pinned visit always
+│   first; recency as a fallback/tiebreaker when no score is available)
+├── Visits that don't fit are dropped, not summarized or truncated — the
+│   count of dropped visits is surfaced on ContextSelectionResult and
+│   logged, not silent. Summarization was designed but never implemented
+│   (see issue #56); this stage has always been pure truncation.
+└── Continues past an over-budget visit instead of stopping, so a smaller
+    later visit can still be packed in
 
         ↓
 
@@ -84,6 +94,8 @@ SPECIALTY_MAPPING: dict[str, set[str]] = {
 # Configuration
 STAGE_2_THRESHOLD = 5  # Run Stage 2 if more than 5 visits after Stage 1
 RELEVANCE_SCORE_CUTOFF = 7  # Keep visits scoring >= 7
+# Provisional — not measured against real per-call Ollama latency. See issue #56.
+STAGE_2_MAX_CANDIDATES = 15
 
 
 @dataclass
@@ -109,6 +121,10 @@ class ContextSelectionResult:
     visits_after_stage2: Optional[int]
     used_local_llm: bool
     token_estimate: int
+    # Visibility into visits Stage 2/3 dropped, rather than leaving it silent —
+    # see issue #56 for the follow-up on grounding/reducing these.
+    visits_dropped_stage2_cap: int = 0
+    visits_dropped_stage3_budget: int = 0
 
 
 def normalize_specialty(specialty: Optional[str]) -> Optional[str]:
@@ -225,6 +241,7 @@ class ContextSelector:
         ollama_client=None,
         stage2_threshold: int = STAGE_2_THRESHOLD,
         relevance_cutoff: float = RELEVANCE_SCORE_CUTOFF,
+        stage2_max_candidates: int = STAGE_2_MAX_CANDIDATES,
     ):
         """Initialize the context selector.
 
@@ -233,11 +250,15 @@ class ContextSelector:
             ollama_client: Optional Ollama client for Stage 2/3
             stage2_threshold: Number of visits that triggers Stage 2
             relevance_cutoff: Minimum relevance score to keep (1-10)
+            stage2_max_candidates: Cap on candidates sent to Stage 2's
+                sequential, unbatched scoring calls (cost control, not a
+                relevance judgment — see issue #56)
         """
         self.anonymizer = anonymizer or Anonymizer()
         self.ollama_client = ollama_client
         self.stage2_threshold = stage2_threshold
         self.relevance_cutoff = relevance_cutoff
+        self.stage2_max_candidates = stage2_max_candidates
 
     def stage1_rules_filter(
         self,
@@ -305,19 +326,31 @@ class ContextSelector:
         self,
         target_appointment,
         candidates: list,
-    ) -> list:
+        pinned_ids: Optional[set] = None,
+    ) -> list[tuple]:
         """Stage 2: Use local LLM to score relevance.
 
         Args:
             target_appointment: The appointment we're preparing for
-            candidates: Candidates from Stage 1
+            candidates: Candidates to score (already capped by the caller —
+                see select_context — this method doesn't cap on its own)
+            pinned_ids: Appointment ids that must survive regardless of
+                score (e.g. Stage 1's same-doctor pin). Still scored, so
+                Stage 3 has a real priority to sort by, but never dropped
+                by the relevance_cutoff filter here.
 
         Returns:
-            Filtered list with only high-relevance visits
+            List of (appointment, score) pairs for visits that passed the
+            relevance cutoff (or are pinned). score is None if Stage 2 was
+            skipped for that candidate — callers shouldn't see that here
+            since this method either scores everything it's given or (if
+            no Ollama client) returns everything unscored.
         """
+        pinned_ids = pinned_ids or set()
+
         if not self.ollama_client:
             # Skip Stage 2 if no Ollama client available
-            return candidates
+            return [(appt, None) for appt in candidates]
 
         target_specialty = target_appointment.doctor.specialty if target_appointment.doctor else "general"
         target_purpose = target_appointment.purpose or "routine visit"
@@ -340,14 +373,17 @@ Rate from 1-10 where:
 
 Respond with just the number."""
 
+            is_pinned = appt.id in pinned_ids
             try:
                 response = await self.ollama_client.generate(prompt)
                 score = float(response.strip())
-                if score >= self.relevance_cutoff:
-                    scored.append(appt)
             except (ValueError, AttributeError):
-                # If scoring fails, include the appointment to be safe
-                scored.append(appt)
+                # If scoring fails, include the appointment to be safe —
+                # borderline score, not top priority, not dropped either.
+                score = self.relevance_cutoff
+
+            if is_pinned or score >= self.relevance_cutoff:
+                scored.append((appt, score))
 
         return scored
 
@@ -355,24 +391,62 @@ Respond with just the number."""
         self,
         appointments: list,
         max_tokens: int = 2000,
-    ) -> tuple[list, int]:
-        """Stage 3: Apply token budget and summarize if needed.
+        score_map: Optional[dict] = None,
+        pinned_ids: Optional[set] = None,
+    ) -> tuple[list, int, int]:
+        """Stage 3: Apply token budget, packing by priority.
+
+        Does NOT summarize — visits that don't fit are dropped, not
+        shortened. (The module docstring/this method's own prior comment
+        both claimed summarization would happen "for now" — it never was
+        implemented; see issue #56.) What this does do: pack by priority
+        (pinned first, then Stage 2 relevance score, then recency as a
+        tiebreaker/fallback) and keep evaluating past the first visit that
+        doesn't fit, so a smaller later one can still be packed in — the
+        previous version stopped at the first miss regardless of order.
 
         Args:
-            appointments: Appointments to include
+            appointments: Appointments to include (in their incoming order —
+                used as the recency tiebreaker/fallback when no score exists)
             max_tokens: Maximum token budget
+            score_map: Optional {appointment.id: score} from Stage 2. Missing
+                entries sort after scored ones, in their original order.
+            pinned_ids: Appointment ids that must be packed first regardless
+                of score (e.g. Stage 1's same-doctor pin) — protects them
+                from being dropped by budget the same way Stage 2's cap and
+                relevance filter already protect them.
 
         Returns:
-            Tuple of (appointments or summaries, estimated tokens)
+            Tuple of (selected appointments, estimated tokens used, count of
+            visits that didn't fit and were dropped).
         """
+        score_map = score_map or {}
+        pinned_ids = pinned_ids or set()
+
         # Rough token estimation (4 chars per token average)
         def estimate_tokens(text: str) -> int:
             return len(text) // 4 if text else 0
 
+        # Priority order: pinned first, then by Stage 2 score (descending),
+        # then original/recency order as a stable tiebreaker for ties or
+        # visits with no score at all (e.g. Stage 2 was skipped entirely).
+        def priority_key(indexed_appt: tuple) -> tuple:
+            index, appt = indexed_appt
+            is_pinned = appt.id in pinned_ids
+            score = score_map.get(appt.id)
+            return (
+                0 if is_pinned else 1,
+                -(score if score is not None else float("-inf")),
+                index,
+            )
+
+        ordered = [appt for _, appt in sorted(enumerate(appointments), key=priority_key)]
+
         total_tokens = 0
         selected = []
+        dropped = 0
 
-        for appt in appointments:
+        for appt in ordered:
             visit_text = f"""
 Visit with {appt.doctor.specialty if appt.doctor else 'Doctor'}
 Date: {appt.scheduled_date}
@@ -385,11 +459,12 @@ Notes: {appt.visit_notes or 'N/A'}
                 selected.append(appt)
                 total_tokens += tokens
             else:
-                # Over budget - could summarize here with local LLM
-                # For now, just stop adding
-                break
+                # Doesn't fit — drop it, but keep evaluating the rest of the
+                # priority order instead of stopping here (a later, smaller
+                # visit may still fit).
+                dropped += 1
 
-        return selected, total_tokens
+        return selected, total_tokens, dropped
 
     async def select_context(
         self,
@@ -416,24 +491,53 @@ Notes: {appt.visit_notes or 'N/A'}
         )
         visits_after_stage1 = len(stage1_results)
 
+        # Identify the pinned same-doctor visit (if any) from Stage 1's output —
+        # at most one, since stage1_rules_filter only ever keeps the most recent
+        # visit per same doctor. Tracked by id so it survives Stage 2's cap and
+        # relevance filter, and Stage 3's budget packing, unconditionally.
+        pinned_ids: set = set()
+        target_doctor = getattr(target_appointment, "doctor", None)
+        if target_doctor:
+            for appt in stage1_results:
+                if appt.doctor and appt.doctor.id == target_doctor.id:
+                    pinned_ids.add(appt.id)
+                    break
+
         # Stage 2: LLM scoring (only if > threshold and Ollama available)
         used_local_llm = False
         visits_after_stage2 = None
+        visits_dropped_stage2_cap = 0
+        score_map: dict = {}
 
         if len(stage1_results) > self.stage2_threshold and self.ollama_client:
-            stage2_results = await self.stage2_llm_scoring(
+            pinned = [a for a in stage1_results if a.id in pinned_ids]
+            rest = [a for a in stage1_results if a.id not in pinned_ids]
+
+            # Cap candidates sent to Stage 2's sequential, unbatched scoring
+            # calls (cost control, not a relevance judgment — issue #56).
+            # The pinned visit doesn't count against the cap.
+            room = max(self.stage2_max_candidates - len(pinned), 0)
+            capped_rest = rest[:room]
+            visits_dropped_stage2_cap = len(rest) - len(capped_rest)
+
+            scored_pairs = await self.stage2_llm_scoring(
                 target_appointment,
-                stage1_results
+                pinned + capped_rest,
+                pinned_ids=pinned_ids,
             )
+            stage2_results = [appt for appt, _ in scored_pairs]
+            score_map = {appt.id: score for appt, score in scored_pairs if score is not None}
             visits_after_stage2 = len(stage2_results)
             used_local_llm = True
         else:
             stage2_results = stage1_results
 
-        # Stage 3: Token budget
-        stage3_results, token_estimate = self.stage3_token_budget(
+        # Stage 3: Token budget, priority-packed (pinned, then score, then recency)
+        stage3_results, token_estimate, visits_dropped_stage3_budget = self.stage3_token_budget(
             stage2_results,
-            max_tokens
+            max_tokens,
+            score_map=score_map,
+            pinned_ids=pinned_ids,
         )
 
         # Stage 4: Anonymize
@@ -449,6 +553,8 @@ Notes: {appt.visit_notes or 'N/A'}
             visits_after_stage2=visits_after_stage2,
             used_local_llm=used_local_llm,
             token_estimate=token_estimate,
+            visits_dropped_stage2_cap=visits_dropped_stage2_cap,
+            visits_dropped_stage3_budget=visits_dropped_stage3_budget,
         )
 
 
