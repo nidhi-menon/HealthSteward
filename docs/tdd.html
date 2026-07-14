@@ -490,9 +490,9 @@
 
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
-      <div class="eyebrow">Snapshot as of DEC-015 · 2026-07-08</div>
+      <div class="eyebrow">Snapshot as of DEC-016 · 2026-07-09</div>
       <h1>HealthSteward — Technical Design Document</h1>
-      <p class="dek">A point-in-time architecture snapshot, written up for anyone who wants to go deep on how it's built — reviewers, collaborators, or a technical interview. Re-written on architectural shifts, not on every change; see the note at the bottom of this page.</p>
+      <p class="dek">A point-in-time architecture snapshot, written up for anyone who wants to go deep on how it's built. Re-written on architectural shifts, not on every change; see the note at the bottom of this page.</p>
 
       <section class="block">
         <h2>Problem &amp; motivation</h2>
@@ -547,8 +547,8 @@
         <div class="chart-lines">
           <div class="chart-line"><div class="tag">Backend</div><div><p>FastAPI + SQLAlchemy (async) + SQLite, migrations via Alembic</p></div></div>
           <div class="chart-line"><div class="tag">Frontend</div><div><p>React 19 + TypeScript + Tailwind CSS + Vite</p></div></div>
-          <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Ollama (local) by default, or Claude API (Sonnet), or any OpenAI-compatible provider — for visit prep's tool-use loop, switchable at runtime from Settings</p></div></div>
-          <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama (qwen2.5:7b) for PDF parsing and context-selection relevance scoring</p></div></div>
+          <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Ollama (<code>llama3.2</code> by default) locally, or Claude API (Sonnet), or any OpenAI-compatible provider — for visit prep's tool-use loop, switchable at runtime from Settings. <code>llama3.2</code> specifically for reliable multi-turn tool-calling, since this loop is conversational.</p></div></div>
+          <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama (<code>qwen2.5:7b</code>) for PDF parsing and context-selection relevance scoring — a different model than the agentic loop above, since this is single-shot text→JSON extraction rather than multi-turn tool-calling, and Qwen2.5 at this size is generally considered strong at structured-output extraction. Both models fit the same 8GB-RAM/4-bit-quantized ceiling DEC-009 established. Not a benchmarked choice — no documented comparison against alternatives (<a href="https://github.com/nidhi-menon/HealthSteward/issues/59">issue #59</a>).</p></div></div>
         </div>
       </section>
     </section>
@@ -731,7 +731,7 @@
 
       <section class="block">
         <h2>Reliability design</h2>
-        <p>The agentic tool-use loop is <strong>fallback-not-hard-failure by construction</strong>: if it can't converge within <code>agent_max_turns</code> (default 6) or a backend produces a malformed tool call, the system falls back to the pre-existing single-shot prompt-in/JSON-out call. The single-shot path is the floor every enhancement is built on top of — no functional regression is possible by design, only degraded quality on failure.</p>
+        <p>The agentic tool-use loop is <strong>fallback-not-hard-failure by construction</strong>, three layers deep: if it can't converge within <code>agent_max_turns</code> (default 6) or a backend produces a malformed tool call, it falls back to the pre-existing single-shot prompt-in/JSON-out call; if <em>that</em> fails too — or anything else in <code>prepare_visit()</code> raises, LLM-related or not — an outer catch-all returns a fixed set of generic questions rather than an error. That hardcoded fallback, not the single-shot call, is the real floor: no functional regression is possible by design, only degraded quality on failure, and <code>prepare_visit()</code> never raises to its caller.</p>
       </section>
     </section>
 
@@ -869,9 +869,10 @@
       <details class="accordion-item">
         <summary>PII anonymization <span class="plus">+</span></summary>
         <div class="body">
-          <p>Hybrid approach in <code>src/utils/anonymization.py</code>: structured fields get deterministic replacement (patient name → "Patient", DOB → exact age, doctor name → "your [specialty]"), free text goes through regex (phone/email/SSN patterns) plus spaCy NER for names.</p>
+          <p>Hybrid approach in <code>src/utils/anonymization.py</code>: structured fields get deterministic handling (patient name omitted entirely — not substituted, just never included in <code>AnonymizedProfile</code>; DOB → exact age; doctor name → "your [specialty]"; prescribing doctor → "Prescribing physician"; doctor phone/email dropped, clinic kept), free text goes through regex (phone/email/SSN patterns) plus spaCy NER for names.</p>
           <ul>
             <li><strong>Documented as best-effort on free text, not a guarantee</strong> — NER can miss names in unusual phrasing. This is stated explicitly rather than implied, since silently overstating a privacy guarantee is worse than none.</li>
+            <li><strong>The free-text date regex is deliberately over-inclusive</strong> — it redacts anything MM/DD/YYYY-shaped, not just birthdates, so a visit date mentioned inside notes prose gets swept up too. Same safe-by-default philosophy as this doc's other fail-open designs: better to over-redact than risk a real date slipping through.</li>
             <li><strong>Applies uniformly regardless of provider</strong> — even when running fully local Ollama (where anonymization is technically unnecessary since nothing leaves the machine), the same code path is used for consistency and to avoid two divergent implementations.</li>
             <li><strong>Tool results are anonymized too</strong>, not just the initial context — a result from <code>lookup_past_visits</code> mid-loop goes through the same <code>Anonymizer</code> before re-entering the conversation.</li>
           </ul>
@@ -925,6 +926,7 @@
             <li><strong>Why bounded, not open-ended:</strong> an unbounded loop against a small/unreliable local model can spin. A hard turn cap makes worst-case latency and cost predictable.</li>
             <li><strong>Why Ollama as default, not Claude API (DEC-016, superseding DEC-009's default):</strong> the dev machine (Apple M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool selection, non-convergence — which is still true and exactly why the fallback-to-single-shot behavior below matters. But defaulting the primary, most-used flow to an external API sat awkwardly next to the project's local-first pitch. Claude (and any custom OpenAI-compatible provider) remain fully supported, now as explicit opt-ins from Settings rather than the default.</li>
             <li><strong>Two tools today, deliberately bounded scope for v1</strong> — a real drug-interaction checker and a user-facing pause-to-ask-clarifying-questions flow were explicitly descoped as separate, bigger features.</li>
+            <li><strong>This loop's fallback isn't the last line of defense</strong> — if single-shot generation fails too (or anything else in <code>prepare_visit()</code> raises), an outer catch-all returns a fixed set of generic questions rather than an error. See Reliability Design in System Design for the full three-layer chain.</li>
           </ul>
         </div>
       </details>
@@ -960,6 +962,7 @@
 
           <ul>
             <li><strong>One canonical tool spec, reused wire format:</strong> <code>src/agents/tools.py</code> defines <code>TOOL_SPECS</code> once, then <code>claude_tools()</code> adapts it for Claude and <code>ollama_tools()</code> covers both Ollama and the custom provider — Ollama's <code>/api/chat</code> already mirrors OpenAI's function-calling shape, so the custom backend needed no third adapter.</li>
+            <li><strong>One classification, shared by both call sites:</strong> <code>uses_openai_style_wire_format(provider)</code> is the single source of truth for the Ollama/custom-vs-Claude split, used by both <code>get_llm_backend()</code> (which class to instantiate) and <code>get_tools_for_provider()</code> (which tool-spec shape to build). Two independent <code>== "ollama"</code> checks could drift out of sync if a provider were added later; one shared function can't disagree with itself.</li>
             <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes <code>LLM_PROVIDER=ollama</code> a real, fully-local <em>default</em> rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
             <li><strong>Selected via a factory</strong>, <code>get_llm_backend(settings)</code>, keyed off <code>settings.llm_provider</code>. DEC-016 also consolidated dispatch inside <code>visit_prep.py</code> itself — it previously checked <code>llm_provider == "ollama"</code> via string equality in three separate places; all three now route through <code>get_llm_backend()</code>/<code>get_tools_for_provider()</code>.</li>
             <li><strong>Runtime-editable, not just env-configured:</strong> <code>settings.llm_provider</code> is now overlaid from a DB-backed <code>AppSettings</code> singleton row (<code>src/services/settings_service.py</code>), so switching providers from the Settings page takes effect on the next request — no <code>.env</code> edit or restart needed.</li>
