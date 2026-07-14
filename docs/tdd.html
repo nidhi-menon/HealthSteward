@@ -306,6 +306,15 @@
   .branch-card p { font-size: 12.5px; margin: 0; max-width: 94ch; }
   @media (max-width: 560px) { .branch-cards { grid-template-columns: 1fr; } }
 
+  /* strategy badges, AVS parsing pipeline table — reuses existing tokens, no new colors */
+  .strat-tag {
+    display: inline-block; font-family: ui-monospace, monospace; font-size: 11px;
+    padding: 2px 7px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-soft);
+  }
+  .strat-tag.strat-llm { border-color: var(--teal-bright); color: var(--teal-bright); }
+  .strat-tag.strat-hybrid { border-color: var(--teal-bright); border-style: dashed; color: var(--ink-soft); }
+  .strat-tag.strat-det { color: var(--ink-faint); }
+
   .tool-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
   .tool-card { border: 1px solid var(--line); border-radius: 5px; padding: 12px 14px; }
   .tool-card .tc-name {
@@ -346,6 +355,14 @@
   @media (max-width: 700px) { .boundaries { grid-template-columns: 1fr; } }
 
   /* deep dive accordion */
+  /* Deep Dives groups mirror the System Design diagram's phase names (Ingest → Serve),
+     plus a trailing group for the two dives that aren't on that pipeline at all. */
+  .dd-group-label {
+    font-family: ui-monospace, monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin: 28px 0 8px;
+  }
+  .dd-group-label:first-child { margin-top: 0; }
   .accordion-item { border: 1px solid var(--line); margin-bottom: 8px; }
   .accordion-item summary {
     cursor: pointer; padding: 14px 16px; font-family: ui-monospace, monospace;
@@ -724,7 +741,141 @@
       <h1>Deep Dives</h1>
       <p class="dek">Expand any section — these are written to be answerable as "walk me through how X works" in a technical conversation.</p>
 
+      <div class="dd-group-label">Ingest</div>
+
       <details class="accordion-item" open>
+        <summary>AVS PDF parsing <span class="plus">+</span></summary>
+        <div class="body">
+          <p><strong>Section-routing architecture</strong> in <code>src/parsers/</code>: rather than sending the whole document to an LLM, the text is split into named sections and each one is handled by whichever strategy actually fits it — deterministic regex where the shape of the data is predictable (a medication list, a header line), a focused local-LLM call only where it isn't (freeform vitals prose, referral mentions).</p>
+
+          <div class="loop-box">
+            <div class="loop-box-label">parse_avs_pdf() — src/parsers/__init__.py</div>
+            <div class="loop-steps">
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-file"></use></svg>Raw PDF text</div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>SectionSplitter<span class="arch-sub" style="margin-left:4px;">header regexes</span></div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>SectionRouter<span class="arch-sub" style="margin-left:4px;">walks PIPELINE, one section at a time</span></div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>Ollama<span class="arch-sub" style="margin-left:4px;">llm / hybrid sections only</span></div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>postprocess_safety()</div>
+            </div>
+          </div>
+
+          <p><strong>SectionSplitter</strong> (<code>src/parsers/agent/section_splitter.py</code>) is what turns raw PDF text into the named chunks the router hands off — a table of regexes (<code>SECTION_HEADERS</code>) matched against the text to find where each section starts, covering two structurally different export formats side by side:</p>
+
+          <table class="mini-table">
+            <tr><th>Format</th><th>Example header pattern</th><th>Section key</th></tr>
+            <tr><td>Sutter Health AVS</td><td><code>Today'?s\s+Visit</code></td><td>todays_visit</td></tr>
+            <tr><td>Sutter Health AVS</td><td><code>(?:Tests\s+ordered|New\s+orders\s+ordered|Lab\s+order)</code></td><td>lab_orders</td></tr>
+            <tr><td>Tebra clinical note</td><td><code>^Assessment$</code></td><td>assessment</td></tr>
+            <tr><td>Tebra clinical note</td><td><code>^Vitals\b</code></td><td>vitals_section</td></tr>
+          </table>
+
+          <ul>
+            <li><strong>Order matters</strong> — <code>SECTION_HEADERS</code> is a list, not a dict; earlier patterns are matched first when two headers could plausibly overlap on section boundaries.</li>
+            <li><strong>Truncated to <code>MAX_SECTION_CHARS = 2000</code> chars per section</strong> — this, not just the section-routing split itself, is what keeps each LLM call small and focused rather than re-feeding a bloated chunk of the document.</li>
+            <li><strong>Cached after first access</strong> — <code>.get()</code>/<code>.all_sections()</code> only run the regex table once per document, even though multiple router stages (e.g. <code>vitals</code> pulls from <code>todays_visit</code>, <code>vitals_section</code>, <em>and</em> <code>physical_exam</code>) request overlapping sections.</li>
+            <li><strong>A section can feed more than one router stage, and a stage can pull from more than one section</strong> — the split and the routing are deliberately decoupled layers; <code>SectionSplitter</code> doesn't know which stage strategy is deterministic vs. LLM, it just answers "give me the text under header X."</li>
+          </ul>
+
+          <p>The router's strategy per section is a fixed table, decided up front by a human reading real Sutter Health and Tebra export samples — not inferred at runtime:</p>
+
+          <table class="mini-table">
+            <tr><th>Section</th><th>Strategy</th><th>Why</th></tr>
+            <tr><td>patient_provider</td><td><span class="strat-tag strat-det">deterministic</span></td><td>Header line has a fixed shape: date, facility, phone.</td></tr>
+            <tr><td>medication_changes</td><td><span class="strat-tag strat-det">deterministic</span></td><td>Structured med-change section, cross-referenced against the medication list.</td></tr>
+            <tr><td>follow_up</td><td><span class="strat-tag strat-det">deterministic</span></td><td>Regex for "recheck/follow-up in N weeks/months", target date computed from the visit date.</td></tr>
+            <tr><td>upcoming_appointments</td><td><span class="strat-tag strat-det">deterministic</span></td><td>Semi-tabular block keyed off month abbreviations, walked line by line.</td></tr>
+            <tr><td>diagnoses</td><td><span class="strat-tag strat-hybrid">deterministic → llm</span></td><td>Regex looks for an <code>Assessment</code> section formatted as <code>Condition (ICD-code)</code>; only calls the LLM if that section is missing — the one runtime (not format-time) branch in the pipeline.</td></tr>
+            <tr><td>vitals</td><td><span class="strat-tag strat-llm">llm</span></td><td>Buried in freeform "Today's Visit" / physical-exam prose, no fixed shape.</td></tr>
+            <tr><td>lab_orders</td><td><span class="strat-tag strat-llm">llm</span></td><td>Same — unstructured "tests ordered" narrative text.</td></tr>
+            <tr><td>notes</td><td><span class="strat-tag strat-hybrid">hybrid</span></td><td>Deterministic extraction first, LLM supplements, results de-duped by word-overlap before merging.</td></tr>
+            <tr><td>referrals</td><td><span class="strat-tag strat-llm">llm</span></td><td>Referral mentions are scattered through instructions/plan/impression text.</td></tr>
+          </table>
+
+          <div class="branch-cards">
+            <div class="branch-card branch-card--ok">
+              <div class="bc-title"><span class="bc-dot"></span>Diagnoses: Assessment section found</div>
+              <p><code>extract_diagnoses()</code> regex-matches <code>Condition (ICD-code)</code> pairs. No LLM call for this section at all.</p>
+            </div>
+            <div class="branch-card branch-card--fallback">
+              <div class="bc-title"><span class="bc-dot"></span>Diagnoses: no Assessment section</div>
+              <p>Regex returns <code>None</code> (not <code>[]</code>) — the router reads that as "use the LLM" and routes to the <code>diagnoses</code> llm config instead.</p>
+            </div>
+          </div>
+
+          <p>Each <code>llm</code>/<code>hybrid</code> section only receives the specific chunk(s) of text it needs (from <code>SectionSplitter</code>, capped at 2000 chars each) — never the full document — via a focused system prompt (<code>src/parsers/agent/prompts.py</code>) and a single <code>direct_chat()</code> call (<code>src/parsers/agent/ollama_chat.py</code>).</p>
+
+          <ul>
+            <li><strong>Local-only, enforced not just documented</strong> — <code>ollama_chat.py</code> has a safety check that blocks any non-localhost URL, so a misconfiguration can't silently route PHI externally.</li>
+            <li><strong>Two document formats, one pipeline</strong> — the deterministic regexes carry parallel fallback chains for Sutter Health AVS exports and Tebra clinical-note exports, since the two look structurally different (e.g. header parsing tries the Sutter header-line pattern first, then falls back to Tebra's "Visited on:" / "MRN :" patterns).</li>
+            <li><strong>Review before apply</strong> — parsed items are always presented for user confirmation with per-section checkboxes; nothing is auto-applied to the profile.</li>
+            <li><strong>Deduplication</strong> — diagnoses dedupe by name on apply (existing conditions get ICD-10 backfilled if missing); medication stops match by name.</li>
+          </ul>
+        </div>
+      </details>
+
+      <div class="dd-group-label">Select</div>
+
+      <details class="accordion-item">
+        <summary>4-stage context selection <span class="plus">+</span></summary>
+        <div class="body">
+          <p>Before generating visit-prep questions, relevant past-visit history is selected via a 4-stage pipeline in <code>src/utils/context_selection.py</code>:</p>
+
+          <div class="loop-box">
+            <div class="loop-box-label">runs once per visit prep, in order</div>
+            <div class="loop-steps">
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Rules-based filter</div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>2. Local LLM scoring</div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>3. Token budget check</div>
+              <div class="loop-arrow">→</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-lock"></use></svg>4. Anonymize</div>
+            </div>
+            <div class="loop-cycle-back">↺ stage 4 is the only point data crosses into what the external-capable backend will see</div>
+          </div>
+
+          <div class="branch-cards">
+            <div class="branch-card branch-card--ok">
+              <div class="bc-title"><span class="bc-dot"></span>Stage 2 runs</div>
+              <p>More than 5 visits remain after stage 1, and Ollama is available. Each is scored 1–10; only ≥7 survives.</p>
+            </div>
+            <div class="branch-card branch-card--fallback">
+              <div class="bc-title"><span class="bc-dot"></span>Stage 2 skipped</div>
+              <p>≤5 visits remain, or Ollama is unavailable — falls straight through to rules-based results plus truncation.</p>
+            </div>
+          </div>
+
+          <ol>
+            <li><strong>Rules-based filter</strong> (instant, free) — always include same-doctor's last visit and PCP/Internal Medicine visits; apply a specialty-relevance mapping (e.g. Endocrinology ↔ Cardiology, Nephrology); exclude doctors flagged out of prep context.</li>
+            <li><strong>Local LLM relevance scoring</strong> (Ollama) — only runs if more than 5 visits remain after stage 1; scores each 1-10, keeps ≥7. Skipped if Ollama is unavailable, falling back to rules + truncation.</li>
+            <li><strong>Token budget check</strong> — summarizes older visits with the local LLM if still over budget.</li>
+            <li><strong>Anonymize</strong> — the only stage where data crosses into what the external-capable backend will see.</li>
+          </ol>
+          <p>Stage 2's relevance scoring deliberately runs on <em>raw, pre-anonymization</em> text — it's a local-only call, so there's no privacy reason to anonymize before it, and doing so first would degrade the local model's ability to judge relevance from real names/context.</p>
+        </div>
+      </details>
+
+      <div class="dd-group-label">Anonymize</div>
+
+      <details class="accordion-item">
+        <summary>PII anonymization <span class="plus">+</span></summary>
+        <div class="body">
+          <p>Hybrid approach in <code>src/utils/anonymization.py</code>: structured fields get deterministic replacement (patient name → "Patient", DOB → exact age, doctor name → "your [specialty]"), free text goes through regex (phone/email/SSN patterns) plus spaCy NER for names.</p>
+          <ul>
+            <li><strong>Documented as best-effort on free text, not a guarantee</strong> — NER can miss names in unusual phrasing. This is stated explicitly rather than implied, since silently overstating a privacy guarantee is worse than none.</li>
+            <li><strong>Applies uniformly regardless of provider</strong> — even when running fully local Ollama (where anonymization is technically unnecessary since nothing leaves the machine), the same code path is used for consistency and to avoid two divergent implementations.</li>
+            <li><strong>Tool results are anonymized too</strong>, not just the initial context — a result from <code>lookup_past_visits</code> mid-loop goes through the same <code>Anonymizer</code> before re-entering the conversation.</li>
+          </ul>
+        </div>
+      </details>
+
+      <div class="dd-group-label">Orchestrate</div>
+
+      <details class="accordion-item">
         <summary>Agentic tool-use loop <span class="plus">+</span></summary>
         <div class="body">
           <p><code>_run_agentic_loop</code> in <code>src/agents/visit_prep.py</code>: send context + tool specs to the backend → if it returns tool calls, execute each against the DB, anonymize the result, append to the conversation, repeat → if it returns final text with no tool calls, that's the answer → if <code>agent_max_turns</code> is exhausted first, raise and let the caller fall back to single-shot.</p>
@@ -774,20 +925,6 @@
       </details>
 
       <details class="accordion-item">
-        <summary>Pluggable LLM backend <span class="plus">+</span></summary>
-        <div class="body">
-          <p><code>src/agents/llm_backend.py</code>: an <code>LLMBackend</code> ABC with three implementations — <code>ClaudeBackend</code> (wraps <code>AsyncAnthropic</code>, uses Claude's native <code>tools=</code> parameter), <code>OllamaBackend</code> (calls Ollama's <code>/api/chat</code> with OpenAI-style function-calling tool specs), and <code>CustomOpenAICompatibleBackend</code> (DEC-016 — any endpoint speaking OpenAI's <code>/chat/completions</code> + tool-calling format: OpenAI, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio server, etc.). All three normalize into the same <code>ToolCall</code>/<code>LLMTurnResult</code> shape, so <code>_run_agentic_loop</code> never branches on which provider it's talking to — it just calls <code>backend.call(...)</code> and reads a uniform result.</p>
-
-          <ul>
-            <li><strong>One canonical tool spec, reused wire format:</strong> <code>src/agents/tools.py</code> defines <code>TOOL_SPECS</code> once, then <code>claude_tools()</code> adapts it for Claude and <code>ollama_tools()</code> covers both Ollama and the custom provider — Ollama's <code>/api/chat</code> already mirrors OpenAI's function-calling shape, so the custom backend needed no third adapter.</li>
-            <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes <code>LLM_PROVIDER=ollama</code> a real, fully-local <em>default</em> rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
-            <li><strong>Selected via a factory</strong>, <code>get_llm_backend(settings)</code>, keyed off <code>settings.llm_provider</code>. DEC-016 also consolidated dispatch inside <code>visit_prep.py</code> itself — it previously checked <code>llm_provider == "ollama"</code> via string equality in three separate places; all three now route through <code>get_llm_backend()</code>/<code>get_tools_for_provider()</code>.</li>
-            <li><strong>Runtime-editable, not just env-configured:</strong> <code>settings.llm_provider</code> is now overlaid from a DB-backed <code>AppSettings</code> singleton row (<code>src/services/settings_service.py</code>), so switching providers from the Settings page takes effect on the next request — no <code>.env</code> edit or restart needed.</li>
-          </ul>
-        </div>
-      </details>
-
-      <details class="accordion-item">
         <summary>Specialty-aware prompting <span class="plus">+</span></summary>
         <div class="body">
           <p>Before DEC-011, visit prep generated the same questions regardless of which specialist the appointment was with — it would suggest discussing a dermatology cream with a cardiologist. Fixed with two system prompt templates (<code>SYSTEM_PROMPT_TEMPLATE</code>, <code>SYSTEM_PROMPT_GENERIC</code> in <code>src/agents/visit_prep.py</code>) plus data enrichment that tags conditions and medications with the specialty that actually manages them.</p>
@@ -809,69 +946,23 @@
         </div>
       </details>
 
+      <div class="dd-group-label">Backend</div>
+
       <details class="accordion-item">
-        <summary>PII anonymization <span class="plus">+</span></summary>
+        <summary>Pluggable LLM backend <span class="plus">+</span></summary>
         <div class="body">
-          <p>Hybrid approach in <code>src/utils/anonymization.py</code>: structured fields get deterministic replacement (patient name → "Patient", DOB → exact age, doctor name → "your [specialty]"), free text goes through regex (phone/email/SSN patterns) plus spaCy NER for names.</p>
+          <p><code>src/agents/llm_backend.py</code>: an <code>LLMBackend</code> ABC with three implementations — <code>ClaudeBackend</code> (wraps <code>AsyncAnthropic</code>, uses Claude's native <code>tools=</code> parameter), <code>OllamaBackend</code> (calls Ollama's <code>/api/chat</code> with OpenAI-style function-calling tool specs), and <code>CustomOpenAICompatibleBackend</code> (DEC-016 — any endpoint speaking OpenAI's <code>/chat/completions</code> + tool-calling format: OpenAI, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio server, etc.). All three normalize into the same <code>ToolCall</code>/<code>LLMTurnResult</code> shape, so <code>_run_agentic_loop</code> never branches on which provider it's talking to — it just calls <code>backend.call(...)</code> and reads a uniform result.</p>
+
           <ul>
-            <li><strong>Documented as best-effort on free text, not a guarantee</strong> — NER can miss names in unusual phrasing. This is stated explicitly rather than implied, since silently overstating a privacy guarantee is worse than none.</li>
-            <li><strong>Applies uniformly regardless of provider</strong> — even when running fully local Ollama (where anonymization is technically unnecessary since nothing leaves the machine), the same code path is used for consistency and to avoid two divergent implementations.</li>
-            <li><strong>Tool results are anonymized too</strong>, not just the initial context — a result from <code>lookup_past_visits</code> mid-loop goes through the same <code>Anonymizer</code> before re-entering the conversation.</li>
+            <li><strong>One canonical tool spec, reused wire format:</strong> <code>src/agents/tools.py</code> defines <code>TOOL_SPECS</code> once, then <code>claude_tools()</code> adapts it for Claude and <code>ollama_tools()</code> covers both Ollama and the custom provider — Ollama's <code>/api/chat</code> already mirrors OpenAI's function-calling shape, so the custom backend needed no third adapter.</li>
+            <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes <code>LLM_PROVIDER=ollama</code> a real, fully-local <em>default</em> rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
+            <li><strong>Selected via a factory</strong>, <code>get_llm_backend(settings)</code>, keyed off <code>settings.llm_provider</code>. DEC-016 also consolidated dispatch inside <code>visit_prep.py</code> itself — it previously checked <code>llm_provider == "ollama"</code> via string equality in three separate places; all three now route through <code>get_llm_backend()</code>/<code>get_tools_for_provider()</code>.</li>
+            <li><strong>Runtime-editable, not just env-configured:</strong> <code>settings.llm_provider</code> is now overlaid from a DB-backed <code>AppSettings</code> singleton row (<code>src/services/settings_service.py</code>), so switching providers from the Settings page takes effect on the next request — no <code>.env</code> edit or restart needed.</li>
           </ul>
         </div>
       </details>
 
-      <details class="accordion-item">
-        <summary>4-stage context selection <span class="plus">+</span></summary>
-        <div class="body">
-          <p>Before generating visit-prep questions, relevant past-visit history is selected via a 4-stage pipeline in <code>src/utils/context_selection.py</code>:</p>
-
-          <div class="loop-box">
-            <div class="loop-box-label">runs once per visit prep, in order</div>
-            <div class="loop-steps">
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Rules-based filter</div>
-              <div class="loop-arrow">→</div>
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>2. Local LLM scoring</div>
-              <div class="loop-arrow">→</div>
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>3. Token budget check</div>
-              <div class="loop-arrow">→</div>
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-lock"></use></svg>4. Anonymize</div>
-            </div>
-            <div class="loop-cycle-back">↺ stage 4 is the only point data crosses into what the external-capable backend will see</div>
-          </div>
-
-          <div class="branch-cards">
-            <div class="branch-card branch-card--ok">
-              <div class="bc-title"><span class="bc-dot"></span>Stage 2 runs</div>
-              <p>More than 5 visits remain after stage 1, and Ollama is available. Each is scored 1–10; only ≥7 survives.</p>
-            </div>
-            <div class="branch-card branch-card--fallback">
-              <div class="bc-title"><span class="bc-dot"></span>Stage 2 skipped</div>
-              <p>≤5 visits remain, or Ollama is unavailable — falls straight through to rules-based results plus truncation.</p>
-            </div>
-          </div>
-
-          <ol>
-            <li><strong>Rules-based filter</strong> (instant, free) — always include same-doctor's last visit and PCP/Internal Medicine visits; apply a specialty-relevance mapping (e.g. Endocrinology ↔ Cardiology, Nephrology); exclude doctors flagged out of prep context.</li>
-            <li><strong>Local LLM relevance scoring</strong> (Ollama) — only runs if more than 5 visits remain after stage 1; scores each 1-10, keeps ≥7. Skipped if Ollama is unavailable, falling back to rules + truncation.</li>
-            <li><strong>Token budget check</strong> — summarizes older visits with the local LLM if still over budget.</li>
-            <li><strong>Anonymize</strong> — the only stage where data crosses into what the external-capable backend will see.</li>
-          </ol>
-          <p>Stage 2's relevance scoring deliberately runs on <em>raw, pre-anonymization</em> text — it's a local-only call, so there's no privacy reason to anonymize before it, and doing so first would degrade the local model's ability to judge relevance from real names/context.</p>
-        </div>
-      </details>
-
-      <details class="accordion-item">
-        <summary>AVS PDF parsing <span class="plus">+</span></summary>
-        <div class="body">
-          <p>Section-routing architecture in <code>src/parsers/</code>: deterministic parsers handle structured sections (patient info, medication changes, follow-ups, appointments, diagnoses with ICD codes); local Ollama handles unstructured sections (vitals, lab orders, notes, referrals, diagnoses without a structured Assessment section).</p>
-          <ul>
-            <li><strong>Local-only, enforced not just documented</strong> — <code>ollama_chat.py</code> has a safety check that blocks any non-localhost URL, so a misconfiguration can't silently route PHI externally.</li>
-            <li><strong>Review before apply</strong> — parsed items are always presented for user confirmation with per-section checkboxes; nothing is auto-applied to the profile.</li>
-            <li><strong>Deduplication</strong> — diagnoses dedupe by name on apply (existing conditions get ICD-10 backfilled if missing); medication stops match by name.</li>
-          </ul>
-        </div>
-      </details>
+      <div class="dd-group-label">Cross-cutting</div>
 
       <details class="accordion-item">
         <summary>Proactive action items &amp; nudging <span class="plus">+</span></summary>
