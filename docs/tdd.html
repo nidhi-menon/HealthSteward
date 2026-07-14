@@ -473,6 +473,7 @@
       <button class="tab" id="tab-system-design" role="tab" aria-selected="false" aria-controls="panel-system-design" tabindex="-1" data-panel="system-design">System Design</button>
       <button class="tab" id="tab-deep-dives" role="tab" aria-selected="false" aria-controls="panel-deep-dives" tabindex="-1" data-panel="deep-dives">Deep Dives</button>
       <button class="tab" id="tab-decisions" role="tab" aria-selected="false" aria-controls="panel-decisions" tabindex="-1" data-panel="decisions">Decisions &amp; Tradeoffs</button>
+      <button class="tab" id="tab-evaluation" role="tab" aria-selected="false" aria-controls="panel-evaluation" tabindex="-1" data-panel="evaluation">Evaluation Plan</button>
     </div>
     <div class="group">
       <div class="group-label" id="group-practice">In practice</div>
@@ -1119,6 +1120,195 @@
         </table>
         <div class="verdict"><strong>Chose:</strong> ship the smallest version of the loop that's actually useful — two tools buildable entirely from existing schema data, both read-only, both anonymized — rather than block the whole agentic architecture on the bigger features.</div>
       </div>
+    </section>
+
+    <!-- EVALUATION PLAN -->
+    <section class="panel" id="panel-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0">
+      <div class="eyebrow">Proposed, not built</div>
+      <h1>Evaluation Plan</h1>
+      <p class="dek">None of this is implemented yet — the test suite verifies plumbing (loop convergence, tool execution, anonymization boundaries hold), not output quality. Grounded in the actual pipeline (<code>context_selection.py</code>'s 4-stage selector, <code>visit_prep.py</code>'s prompt + agentic loop, <code>tools.py</code>'s two read-only tools), not a generic eval template. Tracked in <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>.</p>
+
+      <section class="block">
+        <h2>Two eval surfaces inside visit prep</h2>
+        <p>Retrieval and generation are separate AI decisions that fail differently — a generation eval can't tell you retrieval missed something, because the LLM never saw it to begin with. They need separate ground truth and separate metrics.</p>
+        <div class="branch-cards">
+          <div class="branch-card branch-card--ok">
+            <div class="bc-title"><span class="bc-dot"></span>Retrieval — ContextSelector, stages 1-2</div>
+            <p>Which past visits/facts reach the prompt. Fails by <strong>omission</strong> (a relevant visit never reaches the LLM) or <strong>dilution</strong> (irrelevant history crowds the 2000-token budget).</p>
+          </div>
+          <div class="branch-card branch-card--fallback">
+            <div class="bc-title"><span class="bc-dot"></span>Generation — VisitPrepAgent.prepare_visit</div>
+            <p>The questions themselves. Fails by <strong>hallucination</strong> (states a fact not in the anonymized context) or <strong>scope violation</strong> (asks the endocrinologist about a dermatology cream, which the system prompt explicitly forbids).</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Retrieval eval</h2>
+        <p>Stage 1 is a deterministic function of <code>SPECIALTY_MAPPING</code> + flags — checkable by exact assertion, not fuzzy eval. Stage 2's LLM scoring is where real judgment is needed.</p>
+        <table class="mini-table">
+          <tr><th>Judge?</th><th>What</th><th>Ground truth</th><th>Metric</th><th>Method</th></tr>
+          <tr>
+            <td><span class="strat-tag strat-det">deterministic</span></td>
+            <td>Stage 1 rules</td>
+            <td>Pure function of specialty mapping + flags — exact, not fuzzy</td>
+            <td>Pass/fail assertion</td>
+            <td>Unit test, no LLM involved (cheap — close this gap first if it isn't covered)</td>
+          </tr>
+          <tr>
+            <td><span class="strat-tag strat-det">deterministic</span></td>
+            <td>End-to-end selection (Stages 1-3)</td>
+            <td>~30-50 synthetic profiles, human-labeled <code>(target, past_visits[]) → expected_ids</code></td>
+            <td><strong>Recall@selected</strong> (primary — Stage 3's token budget makes recall the scarce resource), Precision@selected (secondary)</td>
+            <td>Deterministic replay of <code>select_context()</code> against fixtures — the full pipeline's output, not Stage 2 in isolation</td>
+          </tr>
+          <tr>
+            <td><span class="strat-tag strat-det">deterministic</span></td>
+            <td>Stage-attribution</td>
+            <td>Same labels as above</td>
+            <td>Stage-of-death histogram — count of missed gold visits per stage (Stage 1 rule miss / Stage 2 scored low / Stage 3 budget cutoff)</td>
+            <td>Log which stage discarded each gold visit — turns "recall is 70%" into a root cause</td>
+          </tr>
+          <tr>
+            <td><span class="strat-tag strat-hybrid">local llm ± judge</span></td>
+            <td>Stage 2 calibration</td>
+            <td>Borderline visits with human relevance labels</td>
+            <td>Score distribution (1-10) for true-relevant vs. true-irrelevant — catches a badly-calibrated <code>llama3.2</code> before it silently degrades recall</td>
+            <td>Offline scoring against real Ollama, or a stronger model (Claude) re-scoring the same visits as a cheap proxy without full human labels</td>
+          </tr>
+        </table>
+      </section>
+
+      <section class="block">
+        <h2>Generation eval</h2>
+        <p>The system prompt (<code>SYSTEM_PROMPT_TEMPLATE</code>) specifies several independent correctness properties — scoring them as one "quality" number hides which one is actually breaking.</p>
+        <table class="mini-table">
+          <tr><th>Judge?</th><th>Dimension</th><th>Ground truth</th><th>Metric</th><th>Method</th></tr>
+          <tr>
+            <td><span class="strat-tag strat-hybrid">det ± judge</span></td>
+            <td>Groundedness</td>
+            <td>The anonymized context actually sent (logged verbatim in <code>ConversationLog</code>) — the safety-critical dimension</td>
+            <td>Unsupported-claim rate (unsupported facts / total factual claims)</td>
+            <td>Cheap pass: extract entities (drug/date/lab names, reusing <code>anonymization.py</code>'s regex/NER), verify each appears in the logged context. Deeper pass: NLI-style LLM judge (supported/contradicted/unsupported) for softer inferential claims, scored by a <em>different</em> model than generated it to avoid self-grading bias.</td>
+          </tr>
+          <tr>
+            <td><span class="strat-tag strat-det">deterministic</span></td>
+            <td>Specialty scope</td>
+            <td>The target appointment's specialty vs. each referenced condition/med's tagged specialty</td>
+            <td>Violation rate (out-of-scope questions / total)</td>
+            <td>Fully programmatic, no judge needed — reuses <code>med_specialty_map</code>/ICD-10 tags and <code>are_specialties_related()</code> already computed in code</td>
+          </tr>
+          <tr>
+            <td><span class="strat-tag strat-llm">llm judge</span></td>
+            <td>Relevance/usefulness</td>
+            <td>No cheap proxy — needs a rubric</td>
+            <td>1-5 rubric score, rubric anchored with 2-3 example ratings for cross-run comparability</td>
+            <td>LLM-judge, supplemented by periodic human spot-check (the dimension most likely to drift from what a judge model rewards)</td>
+          </tr>
+          <tr>
+            <td><span class="strat-tag strat-hybrid">det ± judge</span></td>
+            <td>Non-redundancy</td>
+            <td>The generated question set itself</td>
+            <td>Duplicate rate (near-duplicate pairs / total questions)</td>
+            <td>Embedding similarity or judge — cheap to check programmatically</td>
+          </tr>
+          <tr>
+            <td><span class="strat-tag strat-det">deterministic</span></td>
+            <td>Format validity</td>
+            <td>The response schema (JSON, 8-15 questions, one of 5 categories)</td>
+            <td>Pass/fail</td>
+            <td>Simple assertion, near-zero cost</td>
+          </tr>
+        </table>
+      </section>
+
+      <section class="block">
+        <h2>AVS parsing &amp; PII anonymization eval</h2>
+        <div class="chart-lines">
+          <div class="chart-line">
+            <div class="tag">Ingest</div>
+            <div><h4>AVS parsing</h4><p>Golden-set PDFs, hand-labeled JSON, diffed per field. Only needs to cover the <code>llm</code>/<code>hybrid</code> section-routing rows (vitals, lab orders, notes, referrals, diagnoses-without-Assessment) — deterministic sections are exact-match by construction.</p></div>
+          </div>
+          <div class="chart-line">
+            <div class="tag">Anonymize</div>
+            <div><h4>PII anonymization</h4><p>Synthetic notes with PII injected at known character offsets — recall (missed PII) and precision (over-redaction) are a span-overlap computation, no judge needed. The one component where ground truth is fully knowable.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Harness shape</h2>
+        <pre class="snippet">eval/
+  fixtures/                    # synthetic profiles + appointments + labeled gold context
+    patient_001/
+      profile.json
+      appointments.json
+      gold_retrieval.json      # {target_appointment_id: [expected_visit_ids]}
+      gold_claims.json         # optional: hand-labeled "these facts are grounded"
+  retrieval_eval.py            # replays select_context() — Stage 1 needs no LLM call
+  generation_eval.py           # replays prepare_visit(), captures output
+  judges/
+    groundedness_judge.py      # NLI-style judge + entity-extraction pass
+    scope_judge.py             # deterministic, no LLM
+    relevance_judge.py         # rubric-based LLM judge
+  report.py                    # per-dimension metrics, stage-attribution table</pre>
+        <p>Runs against real <code>ConversationLog</code> entries too, not just synthetic fixtures — every real call is already logged (anonymized content + tokens), so periodically sampling N real conversations through the groundedness/scope judges is a second, zero-new-data-collection eval mode. Regression gate: run the fixture set through old-prompt vs. new-prompt and diff scores per dimension before merging a prompt change — there's no before/after quality comparison today.</p>
+      </section>
+
+      <section class="block">
+        <h2>Offline vs. online</h2>
+        <p>Single-user local app, not a service with traffic — "online" doesn't mean A/B-testing a population (already a non-goal). Reinterpreted at this project's actual scale:</p>
+        <div class="boundaries">
+          <div class="boundary">
+            <div class="eyebrow">Run on-demand</div>
+            <h4>Offline — the fixture harness</h4>
+            <p>Synthetic labeled data, run whenever prompts or context-selection logic change. This is where recall/precision/hallucination-rate/scope-violation-rate live as repeatable numbers.</p>
+          </div>
+          <div class="boundary">
+            <div class="eyebrow">Passive, on real usage</div>
+            <h4>"Online" — ConversationLog monitoring</h4>
+            <p>Currently write-only. Add: <strong>fallback rate</strong> (% of calls hitting single-shot instead of completing the agentic loop — see <a href="https://github.com/nidhi-menon/HealthSteward/issues/30">issue #30</a>), <strong>retroactive judge sampling</strong> on real logged conversations, and a <strong>human-in-the-loop signal</strong> — noting a wrong/off-scope/fabricated question and feeding it back as a new regression fixture. The realistic substitute for population-scale online eval at single-user scale.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Build order</h2>
+        <p>One ranked list across all four components, not four separate ones — by value/effort, cheapest and most deterministic first.</p>
+
+        <div class="loop-box">
+          <div class="loop-box-label">tier 1 — deterministic, no judge model, build first</div>
+          <div class="loop-steps">
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Scope checker<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-arrow">→</div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>2. Format validation<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-arrow">→</div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>3. Stage 1 unit tests<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
+            <div class="loop-arrow">→</div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>4. PII span-overlap<span class="arch-sub" style="margin-left:4px;">anonymize</span></div>
+            <div class="loop-arrow">→</div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>5. AVS golden-set diff<span class="arch-sub" style="margin-left:4px;">ingest</span></div>
+          </div>
+        </div>
+
+        <div class="loop-box">
+          <div class="loop-box-label">tier 2 — cheap, no judge, but not a pure assertion</div>
+          <div class="loop-steps">
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>6. Groundedness entity-match<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+          </div>
+        </div>
+
+        <div class="loop-box">
+          <div class="loop-box-label">tier 3 — needs fixtures and/or a judge model, build last</div>
+          <div class="loop-steps">
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>7. Retrieval recall/precision<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
+            <div class="loop-arrow">→</div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>8. LLM-judge relevance<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+          </div>
+        </div>
+
+        <p style="margin-top:14px;"><strong>#1 (scope checker) is the standout</strong> — reuses <code>med_specialty_map</code>/ICD-10 tags already computed in code, so it's near-zero new infrastructure for a rule the system prompt already claims to enforce but never verifies. <strong>#4 (PII)</strong> is the highest-stakes item in tier 1 despite being just as cheap — it's the actual privacy boundary.</p>
+      </section>
     </section>
 
     <!-- WALKTHROUGH -->
