@@ -20,6 +20,24 @@ def _mock_text_response(text: str) -> MagicMock:
     return mock_message
 
 
+@pytest.fixture(autouse=True)
+def _no_ollama_client(monkeypatch):
+    """None of these tests create past appointments, so Stage 2 relevance
+    scoring is never actually exercised (stage1_results is always empty,
+    well below stage2_threshold) — but get_ollama_client() still runs its
+    real availability check and, if Ollama happens to be running locally,
+    caches a shared httpx client across the module-level singleton. That
+    singleton doesn't survive pytest-asyncio's per-event-loop-per-test
+    isolation and causes "Event loop is closed" failures on teardown.
+    Stub it out entirely rather than depend on the dev machine's local
+    Ollama state, which these tests don't need in the first place.
+    """
+    monkeypatch.setattr(
+        "src.agents.visit_prep.get_ollama_client",
+        AsyncMock(return_value=None),
+    )
+
+
 @pytest.fixture
 def mock_claude_response():
     """Mock Claude API response for visit preparation."""
@@ -296,6 +314,108 @@ async def test_prepare_visit_agentic_tool_use(
         "Medication Review": ["Is Metformin still working well?"]
     }
     assert mock_client.messages.create.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_wires_ollama_client_into_stage2_scoring(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+):
+    """Stage 2 relevance scoring should actually run when Ollama is available
+    and there are enough past visits — regression test for the bug where
+    ContextSelector.ollama_client was never wired in from VisitPrepAgent, so
+    Stage 2 silently no-opped in production regardless of Ollama's state.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from src.agents.visit_prep import VisitPrepAgent
+    from src.data.models import Appointment
+    from src.config import get_settings
+
+    # Single-shot generation only, not the agentic loop — irrelevant to this test.
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+    monkeypatch.setattr(get_settings(), "agent_tool_use_enabled", False)
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    # Target doctor is a specialist; past visits are with a *different*,
+    # Primary Care doctor so they pass Stage 1 via the PCP rule rather than
+    # collapsing into the (single-visit-only) same-doctor pin.
+    target_doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    target_doctor_id = target_doctor_response.json()["id"]
+
+    pcp_doctor_data = {**sample_doctor_data, "name": "Dr. Primary Care", "specialty": "Primary Care"}
+    pcp_doctor_response = await client.post(f"/api/profiles/{profile_id}/doctors/", json=pcp_doctor_data)
+    pcp_doctor_id = pcp_doctor_response.json()["id"]
+
+    # More than stage2_threshold (5) completed past visits, to trigger Stage 2.
+    for i in range(6):
+        await client.post(
+            f"/api/profiles/{profile_id}/appointments/",
+            json={
+                "doctor_id": pcp_doctor_id,
+                "scheduled_date": f"2024-0{(i % 9) + 1}-10T10:00:00",
+                "purpose": f"Checkup {i}",
+                "status": "completed",
+                "notes": "Routine visit",
+            },
+        )
+
+    target_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/",
+        json={
+            "doctor_id": target_doctor_id,
+            "scheduled_date": "2025-06-01T10:00:00",
+            "purpose": "Annual physical",
+            "status": "scheduled",
+        },
+    )
+    target_id = target_response.json()["id"]
+
+    mock_ollama = AsyncMock()
+    mock_ollama.generate = AsyncMock(return_value="9")
+    monkeypatch.setattr(
+        "src.agents.visit_prep.get_ollama_client",
+        AsyncMock(return_value=mock_ollama),
+    )
+
+    mock_message = _mock_text_response(
+        '{"questions": {"General": ["Test question"]}, "context_summary": "Test summary"}'
+    )
+
+    from src.data.models import HealthProfile
+
+    result = await db_session.execute(
+        select(Appointment)
+        .options(
+            selectinload(Appointment.doctor),
+            selectinload(Appointment.profile).selectinload(HealthProfile.conditions),
+            selectinload(Appointment.profile).selectinload(HealthProfile.medications),
+            selectinload(Appointment.profile).selectinload(HealthProfile.doctors),
+        )
+        .where(Appointment.id == target_id)
+    )
+    target_appointment = result.scalar_one()
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic_backend.return_value = mock_client
+
+        agent = VisitPrepAgent(db_session)
+        result = await agent.prepare_visit(target_appointment)
+
+    assert "questions" in result
+    # Stage 2 must have actually scored candidates via the wired-in client —
+    # this is the crux of the regression test.
+    assert mock_ollama.generate.call_count > 0
 
 
 @pytest.mark.asyncio
