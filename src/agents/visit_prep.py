@@ -182,6 +182,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             anonymizer=self.anonymizer,
             stage2_threshold=self.settings.context_stage2_threshold,
             relevance_cutoff=self.settings.context_relevance_cutoff,
+            stage2_max_candidates=self.settings.context_stage2_max_candidates,
         )
 
     async def _get_past_appointments(self, profile_id: str, current_appointment_id: str) -> list[Appointment]:
@@ -270,7 +271,9 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         logger.info(
             f"Context selection: {context_result.total_visits_considered} total, "
             f"{context_result.visits_after_stage1} after rules, "
-            f"selected {len(context_result.selected_visits)} visits"
+            f"selected {len(context_result.selected_visits)} visits "
+            f"(dropped {context_result.visits_dropped_stage2_cap} at Stage 2 cap, "
+            f"{context_result.visits_dropped_stage3_budget} at Stage 3 budget)"
         )
 
         # Step 3: Load clinical data (labs, vitals, follow-ups, referrals)

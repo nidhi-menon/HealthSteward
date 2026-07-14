@@ -841,21 +841,26 @@
           <div class="branch-cards">
             <div class="branch-card branch-card--ok">
               <div class="bc-title"><span class="bc-dot"></span>Stage 2 runs</div>
-              <p>More than 5 visits remain after stage 1, and Ollama is available. Each is scored 1–10; only ≥7 survives.</p>
+              <p>More than 5 visits remain after stage 1, and Ollama is available. Each is scored 1–10; ≥7 survives, plus the pinned visit regardless of score.</p>
             </div>
             <div class="branch-card branch-card--fallback">
               <div class="bc-title"><span class="bc-dot"></span>Stage 2 skipped</div>
-              <p>≤5 visits remain, or Ollama is unavailable — falls straight through to rules-based results plus truncation.</p>
+              <p>≤5 visits remain, or Ollama is unavailable — stage 3 packs by recency instead of score, since none exists.</p>
             </div>
           </div>
 
           <ol>
-            <li><strong>Rules-based filter</strong> (instant, free) — always include same-doctor's last visit and PCP/Internal Medicine visits; apply a specialty-relevance mapping (e.g. Endocrinology ↔ Cardiology, Nephrology); exclude doctors flagged out of prep context.</li>
-            <li><strong>Local LLM relevance scoring</strong> (Ollama) — only runs if more than 5 visits remain after stage 1; scores each 1-10, keeps ≥7. Skipped if Ollama is unavailable, falling back to rules + truncation.</li>
-            <li><strong>Token budget check</strong> — summarizes older visits with the local LLM if still over budget.</li>
+            <li><strong>Rules-based filter</strong> (instant, free) — always include same-doctor's last visit and PCP/Internal Medicine visits; apply a specialty-relevance mapping (e.g. Endocrinology ↔ Cardiology, Nephrology); exclude doctors flagged out of prep context. The same-doctor visit is <strong>pinned</strong> — its id is tracked through stages 2 and 3 so it can't be capped, score-filtered, or budget-dropped later, unlike every other candidate.</li>
+            <li><strong>Local LLM relevance scoring</strong> (Ollama) — only runs if more than 5 visits remain after stage 1; scores each 1-10, keeps ≥7 (pinned visit kept regardless). Candidates beyond <code>context_stage2_max_candidates</code> (default 15, the pinned visit exempt) are cut before scoring even happens — one sequential, unbatched Ollama call per candidate makes this a real cost, not just a formality.</li>
+            <li><strong>Token budget check</strong> — packs visits by priority: pinned first, then stage 2's relevance score (highest first), then recency as a fallback when no score exists (stage 2 was skipped). Visits that don't fit are dropped, not summarized — see the callout below.</li>
             <li><strong>Anonymize</strong> — the only stage where data crosses into what the external-capable backend will see.</li>
           </ol>
           <p>Stage 2's relevance scoring deliberately runs on <em>raw, pre-anonymization</em> text — it's a local-only call, so there's no privacy reason to anonymize before it, and doing so first would degrade the local model's ability to judge relevance from real names/context.</p>
+
+          <div class="callout gap">
+            <span class="callout-label">Known gap</span>
+            <p>Stage 3 doesn't summarize — visits that don't fit the token budget are dropped (priority-ordered, with the count surfaced on <code>ContextSelectionResult</code> and logged), not condensed. That's deliberate: a lossy or hallucinated summary from a small quantized local model is a worse failure mode for medical context than an honestly-truncated list. Separately, <code>context_stage2_max_candidates</code> (default 15) is a placeholder, not a measured value, and stage 2 scores one candidate per Ollama call with no batching — <a href="https://github.com/nidhi-menon/HealthSteward/issues/56">issue #56</a> tracks grounding the cap in real latency and evaluating batched scoring.</p>
+          </div>
         </div>
       </details>
 
