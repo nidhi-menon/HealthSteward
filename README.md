@@ -54,7 +54,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 | Backend | FastAPI + SQLAlchemy (async) + SQLite |
 | Frontend | React 19 + TypeScript + Tailwind CSS + Vite |
 | AI (agentic) | Pluggable backend (Ollama by default, or Claude API Sonnet, or any OpenAI-compatible provider) for visit prep's tool-use loop, switchable at runtime from Settings |
-| AI (local) | Ollama (qwen2.5:7b) for PDF parsing and context-selection relevance scoring |
+| AI (local) | Ollama for PDF parsing (`qwen2.5:7b`, `AVS_PARSER_MODEL`) and context-selection relevance scoring (reuses `OLLAMA_MODEL`, `llama3.2` by default — not a dedicated scoring model) |
 | Database | SQLite via aiosqlite, migrations via Alembic |
 
 ```mermaid
@@ -64,7 +64,7 @@ flowchart TD
     Review --> DB[(SQLite)]
 
     DB -->|raw past visits| Select[Context Selection]
-    Select -->|stage 2: relevance scoring<br/>on raw, unanonymized text| OllamaScore[Ollama<br/>local, qwen2.5:7b]
+    Select -->|stage 2: relevance scoring<br/>on raw, unanonymized text| OllamaScore[Ollama<br/>local, llama3.2 default]
     OllamaScore --> Select
     Select -->|stage 4: anonymize| Anon[PII Anonymization]
     Anon --> Loop[Agentic Tool-Use Loop]
@@ -121,12 +121,12 @@ pnpm install
 pnpm dev  # starts on http://localhost:3000
 ```
 
-### Ollama (for PDF parsing, and visit prep by default)
+### Ollama (for PDF parsing, context-selection scoring, and visit prep by default)
 
 ```bash
 ollama serve
-ollama pull qwen2.5:7b   # AVS_PARSER_MODEL — used for PDF parsing
-ollama pull llama3.2     # OLLAMA_MODEL — used for visit prep by default (DEC-016)
+ollama pull qwen2.5:7b   # AVS_PARSER_MODEL — used for PDF parsing only
+ollama pull llama3.2     # OLLAMA_MODEL — used for visit prep by default (DEC-016) and context-selection's Stage 2 relevance scoring (not a dedicated model)
 ```
 
 Visit prep's agentic tool-use loop runs fully locally via Ollama by default (`LLM_PROVIDER=ollama`). Tool-calling reliability varies by model size — on constrained hardware (see DEC-009), small quantized models can produce malformed tool calls; when that happens, visit prep automatically falls back to a single-shot (non-agentic) response rather than failing. Switch to Claude API or a custom OpenAI-compatible provider (OpenAI, OpenRouter, Groq, a self-hosted server, etc.) from the **Settings** page in the app at any time, without editing `.env` or restarting — see DEC-016.

@@ -638,7 +638,7 @@
                   <div class="arch-inline-arrow">→</div>
                   <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Context selection<span class="arch-sub">4-stage pipeline</span></div></div>
                   <div class="arch-inline-arrow">→</div>
-                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama scoring<span class="arch-sub">raw, pre-anonymization</span></div></div>
+                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama scoring<span class="arch-sub">raw, pre-anonymization · llama3.2 default</span></div></div>
                 </div>
               </div>
 
@@ -647,7 +647,7 @@
               <div class="arch-phase">
                 <div class="arch-phase-title">Anonymize</div>
                 <div class="arch-phase-row">
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Deterministic replacement<span class="arch-sub">name → "Patient", DOB → age</span></div></div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Deterministic replacement<span class="arch-sub">name omitted, DOB → age</span></div></div>
                   <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Regex patterns<span class="arch-sub">phone, email, SSN</span></div></div>
                   <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>spaCy NER<span class="arch-sub">names in free text</span></div></div>
                 </div>
@@ -674,7 +674,7 @@
               <div class="arch-phase">
                 <div class="arch-phase-title">Backend</div>
                 <div class="arch-phase-row">
-                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, default — stays inside this box</span></div></div>
+                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, llama3.2 default — stays inside this box</span></div></div>
                 </div>
               </div>
 
@@ -1149,7 +1149,7 @@ Lab Orders:
         <div class="stepnum">2</div>
         <div class="stepbody">
           <h4>Context selection + anonymization</h4>
-          <p>4-stage pipeline includes the same-doctor's last visit and PCP visits automatically; a past OB-GYN visit surfaces via the Endocrinology ↔ Gynecology specialty-relevance mapping (PCOS/thyroid cross-relevance) rather than being excluded as off-specialty. Before this reaches the LLM, patient name → "Patient", DOB → "39 years old", doctor names → "your Endocrinologist".</p>
+          <p>4-stage pipeline includes the same-doctor's last visit and PCP visits automatically; a past OB-GYN visit surfaces via the Endocrinology ↔ Gynecology specialty-relevance mapping (PCOS/thyroid cross-relevance) rather than being excluded as off-specialty. Before this reaches the LLM, patient name is omitted entirely, DOB → "39 years old", doctor names → "your Endocrinologist".</p>
         </div>
       </div>
 
