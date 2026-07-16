@@ -124,7 +124,7 @@ export default function VisitPrep() {
             <div>
               <p className="text-sm text-gray-500">Doctor</p>
               <p className="font-medium">{doctor?.name || 'Unknown'}</p>
-              {doctor?.specialty && <p className="text-sm text-emerald-600">{doctor.specialty}</p>}
+              {doctor?.specialty && <p className="text-sm text-brand-teal-bright">{doctor.specialty}</p>}
             </div>
             <div>
               <p className="text-sm text-gray-500">Date & Time</p>
@@ -223,7 +223,7 @@ export default function VisitPrep() {
                     <ul className="space-y-3">
                       {(questions as string[]).map((question, idx) => (
                         <li key={idx} className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center text-sm font-medium">
+                          <span className="flex-shrink-0 w-6 h-6 bg-brand-teal-bright/15 text-brand-teal rounded-full flex items-center justify-center text-sm font-medium">
                             {idx + 1}
                           </span>
                           <span className="text-gray-700">{question}</span>

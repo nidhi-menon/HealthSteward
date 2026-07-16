@@ -110,7 +110,7 @@ function ActionButtons({
       <button
         onClick={onAction}
         disabled={isPending}
-        className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+        className="text-xs px-2.5 py-1 bg-brand-teal-bright text-white rounded hover:bg-brand-teal disabled:opacity-50"
       >
         {actionLabel}
       </button>
@@ -377,7 +377,7 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                     />
                     <button
                       onClick={() => navigate(`/profiles/${profileId}/appointments/${appt.id}/prep`)}
-                      className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex-shrink-0"
+                      className="text-xs px-2.5 py-1 bg-brand-teal-bright text-white rounded hover:bg-brand-teal flex-shrink-0"
                     >
                       Prepare
                     </button>

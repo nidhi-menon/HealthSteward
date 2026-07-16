@@ -147,7 +147,7 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
                 <button
                   onClick={() => followUpMutation.mutate({ id: fu.id, body: { status: 'booked' } })}
                   disabled={followUpMutation.isPending}
-                  className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+                  className="text-xs px-2.5 py-1 bg-brand-teal-bright text-white rounded hover:bg-brand-teal disabled:opacity-50"
                 >
                   Booked
                 </button>
@@ -184,7 +184,7 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
                 <button
                   onClick={() => labMutation.mutate({ id: lab.id, body: { status: 'completed' } })}
                   disabled={labMutation.isPending}
-                  className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+                  className="text-xs px-2.5 py-1 bg-brand-teal-bright text-white rounded hover:bg-brand-teal disabled:opacity-50"
                 >
                   Done
                 </button>
@@ -212,7 +212,7 @@ export function PostAvsActionPanel({ profileId, actionItems, upcomingAppointment
                 <button
                   onClick={() => referralMutation.mutate({ id: ref.id, body: { status: 'scheduled' } })}
                   disabled={referralMutation.isPending}
-                  className="text-xs px-2.5 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+                  className="text-xs px-2.5 py-1 bg-brand-teal-bright text-white rounded hover:bg-brand-teal disabled:opacity-50"
                 >
                   Scheduled
                 </button>
