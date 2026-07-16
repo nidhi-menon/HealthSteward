@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="200" viewBox="0 0 1020 200">
+  <g transform="translate(10, 32)">
+    <rect x="12" y="12" width="136" height="136" fill="none" stroke="#fafaf9" stroke-width="11.2"/>
+    <line x1="36" y1="52" x2="124" y2="52" stroke="#cdccbf" stroke-width="11.2" stroke-linecap="square"/>
+    <rect x="36" y="74.4" width="88" height="19.2" fill="#5b98a3"/>
+    <line x1="36" y1="116" x2="88" y2="116" stroke="#cdccbf" stroke-width="11.2" stroke-linecap="square"/>
+  </g>
+  <text x="190" y="140" font-family="ui-monospace, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Roboto Mono&quot;, monospace" font-weight="700" font-size="100" letter-spacing="-0.01em" fill="#fafaf9">HealthSteward</text>
+</svg>
