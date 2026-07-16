@@ -9,12 +9,14 @@ Governs `docs/index.html` (landing page) and `docs/tdd.html` (technical design d
 Both pages share one token set. **A token with the same name must mean the same thing in both files** — this was violated once already (`--amber` was a green selection-highlight color in `index.html` but a real warning-amber in `tdd.html`) and had to be untangled into `--amber` (warning/boundary, `#8a5a17`) vs `--select-hl` (selection highlight, `#047857`), kept as separate tokens. Don't reintroduce that collision.
 
 ```
---paper: #efeee6        --paper-raised: #f7f6ef
+--paper: #fafaf9        --paper-raised: #ffffff
 --ink: #171f1d          --ink-soft: #3b453f       --ink-faint: #5a635d
 --teal: #1f4a42          --teal-bright: #2f6a5e
 --amber: #8a5a17         --select-hl: #047857
 --line: #cdccbf          --focus: #047857          --code-bg: #e6e4d8
 ```
+
+**`--paper` changed from a warm cream (`#efeee6`) to a near-white (`#fafaf9`)** so the same token set could become the single canonical brand palette shared with the actual running app (Tailwind `@theme` in `frontend/src/index.css`), not just the docs/marketing pages. Cream read well for this page's editorial/long-form register, but a functional data-dense app (forms, tables, medical values) benefits from a neutral background, and warm-on-warm made `--amber` feel less distinct even though it never actually failed contrast (verified: `--amber` on old paper 5.07:1, on new paper 5.66:1 — both pass AA regardless). `--paper-raised` moved from `#f7f6ef` to pure white to preserve the "raised = lighter than base" relationship now that base itself is near-white.
 
 tdd.html-only semantic tokens: `--tag-bg`, `--risk-bg`, `--gap-bg`, `--gap-ink` (`#9a3a2e`, a distinct rust tone for "known gaps," separate from the amber used for "risks").
 

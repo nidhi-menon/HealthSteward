@@ -38,7 +38,7 @@ export function DocumentCard({ file, onParse, isParsing }: DocumentCardProps) {
   const showActionButton = file.status !== 'parsing';
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 hover:border-emerald-300 transition-colors">
+    <div className="border border-gray-200 rounded-lg p-4 hover:border-brand-teal-bright/40 transition-colors">
       <div className="flex justify-between items-start">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           <svg className="h-8 w-8 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 24 24">
