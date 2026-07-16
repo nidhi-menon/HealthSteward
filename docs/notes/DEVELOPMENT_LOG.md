@@ -1121,4 +1121,28 @@ Related: DEC-008, entry 24, issue #59.
 
 ---
 
+## 26. Evaluation Plan Page
+
+**Date:** 2026-07-14
+
+**Context:** Issue #29 (no quality evaluation of visit-prep output) has been an open, unimplemented gap since it was filed — the test suite verifies plumbing, not whether the AI output is actually good. Wanted a concrete plan captured before an interview, grounded in the real pipeline (`context_selection.py`'s 4-stage selector, `visit_prep.py`'s prompt + agentic loop, `tools.py`'s two tools) rather than a generic eval template, and to extend that plan to the other three AI-touching components (AVS parsing, PII anonymization) that issue #29 doesn't cover on its own.
+
+**What was built:** A new "Evaluation Plan" tab in `docs/tdd.html`, explicitly labeled "Proposed, not built." Key structural decision: visit prep's AI decisions split into two eval surfaces with different failure modes — **retrieval** (`ContextSelector`, Stages 1-2: fails by omission or dilution) and **generation** (`VisitPrepAgent.prepare_visit`: fails by hallucination or scope violation) — because a generation eval can't detect something retrieval never surfaced to the LLM in the first place. Covers:
+- Retrieval eval: Stage 1 as pure-assertion unit tests, Stage 2 recall@selected as the primary metric (token budget makes recall the scarce resource), a stage-attribution breakdown (which stage killed each gold visit), and Stage 2 scorer calibration.
+- Generation eval: five independent correctness dimensions (groundedness, specialty scope, relevance, non-redundancy, format validity), each with its own ground truth/metric/method — scored separately since conflating them into one "quality" number hides which one is actually breaking. Specialty scope is flagged as the highest value/effort item since it's fully programmatic, reusing `med_specialty_map`/ICD-10 tags already computed in code.
+- AVS parsing and PII anonymization eval, both fully deterministic (golden-set diff; synthetic-PII span-overlap), no judge-reliability problem.
+- A proposed `eval/` harness directory shape, and the observation that `ConversationLog` already logs the full anonymized context per call (verified against `_log_conversation` in `src/agents/base.py`) — so a "run judges against real logged conversations" eval mode needs zero new data collection.
+- Offline (fixture harness, run on-demand) vs. "online" (passive `ConversationLog` monitoring — fallback-rate visibility per issue #30, retroactive judge sampling, human-in-the-loop feedback) reinterpreted for a single-user local app rather than population-scale A/B testing.
+- A single ranked 8-item build order across all four components, rendered as three priority tiers (deterministic-first) rather than a flat list, plus a `Judge?` badge column on both detail tables (reusing the existing deterministic/llm/hybrid badge convention) so judge-dependency is scannable without reading prose.
+
+Also fixed `docs/index.html`'s quick-install section, which only listed the `qwen2.5:7b` pull command despite visit prep needing `llama3.2` by default too.
+
+**Reasoning:** Self-critiqued before shipping and found five real issues in the first draft — a mislabeled table row (called "Stage 2 selection" what was actually end-to-end Stages 1-3 recall), inconsistent table schemas between the retrieval and generation tables, a redundant claim stated twice, a build-order list that only covered 6 of the 8 real items with the other 2 hand-waved in, and a "Metric" column cell that was phrased as a question instead of naming a metric. Fixed all five before the density pass. The density/visual pass came from direct feedback that an 8-item list of paragraph-length bullets is hard to use *during* an interview — converted to tier diagrams and badge columns that add a fast-scan layer without removing any of the underlying detail.
+
+**Files changed:** `docs/tdd.html`, `docs/index.html`.
+
+Related: issue #29, issue #30.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
