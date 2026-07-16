@@ -24,8 +24,14 @@ class Settings(BaseSettings):
 
     # Anthropic API (used when llm_provider="claude")
     anthropic_api_key: Optional[str] = None
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_model: str = "claude-sonnet-5"
     anthropic_max_tokens: int = 4096
+
+    # Anthropic judge/baseline model — used by the evaluation harness to score
+    # coordination outputs (groundedness, relevance) and as the cloud-tier
+    # upper baseline against local Ollama output. Deliberately a stronger tier
+    # than anthropic_model to reduce self-grading bias when judging its output.
+    anthropic_judge_model: str = "claude-opus-4-8"
 
     # Ollama (used when llm_provider="ollama" or for local LLM scoring)
     ollama_base_url: str = "http://localhost:11434"
