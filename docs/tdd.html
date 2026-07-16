@@ -4,8 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HealthSteward — Technical Design Document</title>
-<meta name="description" content="System design, architecture decisions, and tradeoffs behind HealthSteward — a privacy-first LLM application for care coordination.">
+<meta name="description" content="System design, architecture decisions, and tradeoffs behind HealthSteward — local, privacy-first agentic AI for patients navigating fragmented care.">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+<!-- Open Graph / Twitter Card — same fix as index.html: without these, a
+     shared tdd.html link falls back to scraping whatever the scraper finds
+     first, not necessarily the intended title/description. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nidhi-menon.github.io/HealthSteward/tdd.html">
+<meta property="og:title" content="HealthSteward — Technical Design Document">
+<meta property="og:description" content="System design, architecture decisions, and tradeoffs behind HealthSteward — local, privacy-first agentic AI for patients navigating fragmented care.">
+<meta property="og:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="HealthSteward — Technical Design Document">
+<meta name="twitter:description" content="System design, architecture decisions, and tradeoffs behind HealthSteward — local, privacy-first agentic AI for patients navigating fragmented care.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/social-preview.png">
 <style>
   :root {
     /* Same palette as index.html, deliberately single-theme (paper/light)
