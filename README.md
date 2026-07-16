@@ -1,15 +1,18 @@
-# HealthSteward
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/lockup-dark-transparent-2040.png">
+  <img src="docs/assets/brand/lockup-transparent-2040.png" alt="HealthSteward" width="420">
+</picture>
 
-> **Privacy-first AI agent for fragmented care.**
+> **Local, privacy-first agentic AI for patients navigating fragmented care.**
 > Your health is split across multiple specialists on different systems, none talking to each other.
 > HealthSteward centralizes it — locally, on your machine — and prepares you for every appointment.
 
-![license](https://img.shields.io/badge/license-GPL--3.0-1f4a42)
-![python](https://img.shields.io/badge/python-3.11+-2f6a5e)
-![status](https://img.shields.io/badge/status-active%20development-2f6a5e)
-![release](https://img.shields.io/github/v/release/nidhi-menon/HealthSteward?include_prereleases&color=1f4a42)
+![license](https://img.shields.io/badge/license-GPL--3.0-20464c)
+![python](https://img.shields.io/badge/python-3.11+-2f626a)
+![status](https://img.shields.io/badge/status-active%20development-2f626a)
+![release](https://img.shields.io/github/v/release/nidhi-menon/HealthSteward?include_prereleases&color=20464c)
 
-**[Website](https://nidhi-menon.github.io/HealthSteward/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues)**
+**[Website](https://nidhi-menon.github.io/HealthSteward/) · [LinkedIn](https://www.linkedin.com/company/healthsteward-ai/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues)**
 
 If HealthSteward is useful to you, consider giving it a ⭐ — it helps this reach more people navigating fragmented care.
 
