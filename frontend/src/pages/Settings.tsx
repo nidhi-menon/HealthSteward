@@ -101,7 +101,7 @@ export default function Settings() {
                   key={opt.value}
                   className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
                     provider === opt.value
-                      ? 'border-emerald-500 bg-emerald-50'
+                      ? 'border-brand-teal-bright bg-brand-teal-bright/8'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}
                 >
@@ -197,7 +197,7 @@ export default function Settings() {
           <Button type="submit" disabled={updateMutation.isPending}>
             {updateMutation.isPending ? 'Saving...' : 'Save'}
           </Button>
-          {savedMessage && <span className="text-sm text-emerald-600">{savedMessage}</span>}
+          {savedMessage && <span className="text-sm text-brand-teal-bright">{savedMessage}</span>}
           {updateMutation.isError && (
             <span className="text-sm text-red-600">{(updateMutation.error as Error).message}</span>
           )}

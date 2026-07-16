@@ -1145,4 +1145,29 @@ Related: issue #29, issue #30.
 
 ---
 
+## 27. Unified Brand Palette (DEC-017)
+
+**Date:** 2026-07-16
+
+**Context:** Building a GitHub social preview card and a LinkedIn brand asset surfaced a real inconsistency: the docs site's favicon/logo used a deliberately-designed teal, but the actual running app used Tailwind's `emerald` as its primary accent, on a cool-toned `gray-50` background — two disconnected color systems that had never been reconciled.
+
+**What was built:**
+- Verified the app's actual colors before assuming anything — grepped `frontend/src` rather than trusting the initial "the app uses teal" premise, which turned out to be wrong (no teal anywhere in the app; real primary accent was `emerald-600/700`, with `blue`/`green`/`purple` used for distinct categorical states — appointment status, document tags, ICD-10 codes).
+- Computed actual WCAG contrast ratios (`amber` vs. paper at both the old cream and new near-white values) rather than eyeballing a "colors might clash" intuition — the numbers didn't support an earlier draft objection, which was corrected before it became a decision input.
+- Chose to promote the docs site's existing, already-designed, already-audited teal/amber system to the single canonical brand palette everywhere, rather than reverse-engineer a system out of the app's incidental Tailwind defaults.
+- Background moved from the docs' cream (`#efeee6`) and the app's cool `gray-50` to one shared near-white (`#fafaf9`); `--paper-raised` moved from `#f7f6ef` to `#ffffff` to preserve "raised = lighter than base."
+- Added a Tailwind v4 `@theme` block (`frontend/src/index.css`) defining `brand-teal`/`brand-teal-bright`/`brand-amber`/`brand-paper`/`brand-ink` as the exact docs hex values; bulk-replaced every `emerald-*` class with the matching token.
+- One deliberate semantic fix beyond the mechanical rebrand: the "Parsing document with local LLM" indicator was using `blue`, despite being exactly the concept the brand system already calls teal ("runs locally") — changed to `brand-teal`/`brand-teal-bright`.
+- Deliberately left other `blue`/`purple` usages (appointment status, document category tags, ICD-10 chips) and component-level `gray-50` tints (disabled inputs, nested sub-panels) untouched — different UI concerns (categorical meaning, visual hierarchy) than brand identity; collapsing them would have reduced clarity, not improved consistency.
+- Updated `docs/SITE_STYLE_GUIDE.md`'s documented palette values/rationale, `README.md`'s badge colors, the GitHub social preview card, and the favicon (`docs/assets/favicon.svg`) to match the site header's actual logo markup, which it had drifted from.
+- Also corrected the `status` badge (README + social card) from "early development" to "active development" — "early" undersold a project whose core agentic architecture is implemented and running; "active" doesn't overclaim stability the eval harness and installer (issue #18) still lack.
+
+**Reasoning:** Full color uniformity was the explicit goal, but "uniform brand" means shared *brand* colors, not collapsing every incidental UI color into two tokens regardless of what it currently communicates — status/category colors that were never about brand identity were left alone on purpose. See DEC-017 for the full options-considered table.
+
+**Files changed:** `frontend/src/index.css`, `frontend/src/components/Layout.tsx`, `frontend/src/pages/ProfileDetail.tsx`, plus every component using `emerald-*` classes, `docs/index.html`, `docs/tdd.html`, `docs/SITE_STYLE_GUIDE.md`, `docs/assets/favicon.svg`, `README.md`.
+
+Related: DEC-017.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

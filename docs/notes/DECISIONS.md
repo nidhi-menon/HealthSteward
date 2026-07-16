@@ -640,4 +640,37 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-09*
+### DEC-017: Unified Brand Palette Across App, Docs, Favicon, and Marketing Assets
+
+**Date:** 2026-07-16
+
+**Context:** The app (frontend) and the docs/marketing surface (`docs/index.html`, `docs/tdd.html`, favicon, GitHub social preview card) had grown two independent, disconnected color systems. The app used Tailwind defaults reached for during fast development — `emerald-600/700` as a loose primary accent, plus `blue`/`green`/`purple` scattered across different UI states, on a `gray-50`/`white` background. The docs site used a deliberately designed, WCAG-checked custom palette (`docs/SITE_STYLE_GUIDE.md`) — teal (`#1f4a42`/`#2f6a5e`) semantically meaning "runs locally," amber (`#8a5a17`) meaning "crosses the anonymization/external trust boundary," on a warm cream (`#efeee6`) background. Preparing a GitHub social preview card and a LinkedIn brand asset surfaced the inconsistency (teal logo mark vs. emerald app UI) directly.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Standardize on the app's emerald | Matches the literal running product UI | Emerald was never a deliberate brand choice — just Tailwind defaults; also the single most common "clinical app" color family alongside blue, offering no differentiation |
+| Standardize on the docs' existing teal/amber system | Already deliberately designed, WCAG-AA checked, semantically mapped to the actual privacy architecture (local vs. crosses-boundary); already shipped in favicon, social card, LinkedIn description | Requires updating the app's Tailwind usage across many components |
+| Keep both systems, just align background color | Smaller change | Doesn't resolve the actual "teal vs. emerald" brand inconsistency that prompted this |
+| Full uniformity: one palette everywhere (app, docs, favicon, marketing) | Genuinely one brand, no more asking "which color is HealthSteward" | Largest surface area to change; requires care not to collapse *unrelated* semantic UI colors (e.g. appointment-status blue, document-category purple) into the brand accent, which would reduce UI clarity rather than improve brand consistency |
+
+**Decision:**
+1. The docs site's existing teal/amber system becomes the single canonical brand palette everywhere — not the app's incidental emerald.
+2. Background moves from the docs' warm cream (`#efeee6`) to a near-white (`#fafaf9`), and from the app's cool-toned `gray-50` to the same `#fafaf9` — chosen over pure white to avoid the sterile/cold feel of stark white while staying clearly distinct from the old cream. `--paper-raised` moves from `#f7f6ef` to `#ffffff` to preserve "raised = lighter than base" now that base itself is near-white.
+3. App: added a Tailwind v4 `@theme` block (`frontend/src/index.css`) defining `brand-teal`, `brand-teal-bright`, `brand-amber`, `brand-paper`, `brand-ink` as the exact docs hex values. Bulk-replaced every `emerald-*` class (the app's actual primary/interactive accent — buttons, focus rings, active nav state) with the matching brand-teal token. Replaced the top-level page background (`Layout.tsx`, `bg-gray-50`) with `bg-brand-paper`.
+4. One additional *semantic* fix beyond the mechanical rebrand: the "Parsing document with local LLM" indicator (`ProfileDetail.tsx`) was using Tailwind `blue`, despite directly representing the exact concept the brand system already assigns to teal ("runs locally"). Changed to `brand-teal`/`brand-teal-bright` for real semantic consistency, not just cosmetic matching.
+5. Deliberately left other `blue`/`purple` usages untouched — appointment status ("scheduled"), document-category tags, ICD-10 code chips. These represent distinct categorical meanings unrelated to brand identity; collapsing them into the brand accent would reduce UI clarity, not improve brand consistency. Similarly left component-level `gray-50` tints untouched (disabled inputs, nested sub-panels) — these need to read as different from the page background for visual hierarchy and aren't a brand concern.
+6. Verified via computed WCAG contrast (not eyeballed, per the style guide's own rule) that the lighter background only improves contrast for every existing text/accent token — no regressions.
+7. Updated `docs/SITE_STYLE_GUIDE.md`'s documented palette values and rationale, README's badge colors and status text, and the GitHub social preview card to match.
+
+**Reasoning:**
+- The docs palette was the only one of the two that was ever a deliberate design decision — promoting it to canonical is strictly less work and strictly higher quality than reverse-engineering a system out of the app's incidental Tailwind defaults.
+- Full uniformity was the explicit goal (not a partial/background-only fix), but "uniform brand" means the same *brand* accent and background everywhere — it does not mean collapsing every incidental UI color into two tokens regardless of what that color currently communicates. Status/category colors that aren't about brand identity were left alone on purpose.
+- Also updated the `status` badge text from "early development" to "active development" across README and the social card — "early" undersold a project whose core agentic architecture (DEC-009/DEC-013/DEC-016) is implemented and running; "active" is accurate without overclaiming stability the eval harness and installer (issue #18) don't yet have.
+
+**Status:** Implemented
+
+---
+
+*Last updated: 2026-07-16*

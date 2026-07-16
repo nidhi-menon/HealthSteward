@@ -23,7 +23,7 @@ export function Input({ label, error, className = '', ...props }: InputProps) {
         className={`
           block w-full rounded-lg border border-gray-300 px-3 py-2
           text-gray-900 placeholder-gray-400
-          focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+          focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
           disabled:bg-gray-50 disabled:text-gray-500
           ${error ? 'border-red-500' : ''}
           ${className}
@@ -47,7 +47,7 @@ export function Textarea({ label, error, className = '', ...props }: TextareaPro
         className={`
           block w-full rounded-lg border border-gray-300 px-3 py-2
           text-gray-900 placeholder-gray-400
-          focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+          focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
           disabled:bg-gray-50 disabled:text-gray-500
           ${error ? 'border-red-500' : ''}
           ${className}
@@ -78,7 +78,7 @@ export function Select({ label, error, options, className = '', ...props }: Sele
         className={`
           block w-full rounded-lg border border-gray-300 px-3 py-2
           text-gray-900
-          focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+          focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
           disabled:bg-gray-50 disabled:text-gray-500
           ${error ? 'border-red-500' : ''}
           ${className}
@@ -180,7 +180,7 @@ export function MonthYearInput({
           className={`
             flex-1 rounded-lg border border-gray-300 px-3 py-2
             text-gray-900
-            focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+            focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
             ${error ? 'border-red-500' : ''}
           `}
           value={localMonth || ''}
@@ -195,7 +195,7 @@ export function MonthYearInput({
           className={`
             w-28 rounded-lg border border-gray-300 px-3 py-2
             text-gray-900
-            focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+            focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
             ${error ? 'border-red-500' : ''}
           `}
           value={localYear || ''}
@@ -314,7 +314,7 @@ export function DatePicker({
           className={`
             flex-1 rounded-lg border border-gray-300 px-3 py-2
             text-gray-900
-            focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+            focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
             ${error ? 'border-red-500' : ''}
           `}
           value={localMonth || ''}
@@ -329,7 +329,7 @@ export function DatePicker({
           className={`
             w-20 rounded-lg border border-gray-300 px-3 py-2
             text-gray-900
-            focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+            focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
             ${error ? 'border-red-500' : ''}
           `}
           value={localDay || ''}
@@ -344,7 +344,7 @@ export function DatePicker({
           className={`
             w-24 rounded-lg border border-gray-300 px-3 py-2
             text-gray-900
-            focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500
+            focus:border-brand-teal-bright focus:ring-1 focus:ring-brand-teal-bright
             ${error ? 'border-red-500' : ''}
           `}
           value={localYear || ''}

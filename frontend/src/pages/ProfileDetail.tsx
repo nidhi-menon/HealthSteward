@@ -114,7 +114,7 @@ export default function ProfileDetail() {
               onClick={() => setActiveTab(tab.id)}
               className={`py-3 border-b-2 text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'border-emerald-500 text-emerald-600'
+                  ? 'border-brand-teal-bright text-brand-teal-bright'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -307,7 +307,7 @@ function ConditionsTab({ profileId, conditions: conditionList, onAdd }: { profil
                   <div className="flex gap-1">
                     <button
                       onClick={() => setEditTarget(condition)}
-                      className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
+                      className="text-gray-400 hover:text-brand-teal-bright transition-colors p-1"
                       title="Edit condition"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -410,7 +410,7 @@ function MedicationsTab({ profileId, medications: medicationList, onAdd }: { pro
                   <div className="flex gap-1">
                     <button
                       onClick={() => setEditTarget(med)}
-                      className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
+                      className="text-gray-400 hover:text-brand-teal-bright transition-colors p-1"
                       title="Edit medication"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -502,7 +502,7 @@ function DoctorsTab({ profileId, doctors: doctorList, onAdd }: { profileId: stri
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <h4 className="font-medium text-gray-900">{doc.name}</h4>
-                    {doc.specialty && <p className="text-sm text-emerald-600">{doc.specialty}</p>}
+                    {doc.specialty && <p className="text-sm text-brand-teal-bright">{doc.specialty}</p>}
                     {doc.clinic && <p className="text-sm text-gray-500 mt-1">{doc.clinic}</p>}
                     <div className="mt-2 space-y-1 text-sm text-gray-500">
                       {doc.phone && <p>Ph: {doc.phone}</p>}
@@ -512,7 +512,7 @@ function DoctorsTab({ profileId, doctors: doctorList, onAdd }: { profileId: stri
                   <div className="flex gap-1">
                     <button
                       onClick={() => setEditTarget(doc)}
-                      className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
+                      className="text-gray-400 hover:text-brand-teal-bright transition-colors p-1"
                       title="Edit doctor"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -632,7 +632,7 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
       ) : (
         <div className="space-y-3">
           {appointmentList.map((appt: any) => (
-            <Card key={appt.id} className="hover:border-emerald-300 transition-colors">
+            <Card key={appt.id} className="hover:border-brand-teal-bright/40 transition-colors">
               <CardContent>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
@@ -675,7 +675,7 @@ function AppointmentsTab({ profileId, appointments: appointmentList, doctors: do
                     </Button>
                     <button
                       onClick={() => setEditTarget(appt)}
-                      className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
+                      className="text-gray-400 hover:text-brand-teal-bright transition-colors p-1"
                       title="Edit appointment"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -872,12 +872,12 @@ function DocumentsTab({ profileId, files, appointments: appointmentList }: { pro
       </div>
 
       {isParsing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-          <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+        <div className="bg-brand-teal-bright/8 border border-brand-teal-bright/40 rounded-lg p-4 flex items-center gap-3">
+          <svg className="animate-spin h-5 w-5 text-brand-teal-bright" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <span className="text-sm text-blue-700">Parsing document with local LLM... This may take a minute.</span>
+          <span className="text-sm text-brand-teal">Parsing document with local LLM... This may take a minute.</span>
         </div>
       )}
 
@@ -1019,7 +1019,7 @@ function ConditionModal({ isOpen, onClose, profileId, condition }: { isOpen: boo
                     <div className="ml-4 mt-0.5">
                       <span className="text-red-600 line-through">{field.from}</span>
                       <span className="mx-2 text-gray-400">&rarr;</span>
-                      <span className="text-emerald-600">{field.to}</span>
+                      <span className="text-brand-teal-bright">{field.to}</span>
                     </div>
                   </div>
                 ))}
@@ -1139,7 +1139,7 @@ function MedicationModal({ isOpen, onClose, profileId, medication }: { isOpen: b
                     <div className="ml-4 mt-0.5">
                       <span className="text-red-600 line-through">{field.from}</span>
                       <span className="mx-2 text-gray-400">&rarr;</span>
-                      <span className="text-emerald-600">{field.to}</span>
+                      <span className="text-brand-teal-bright">{field.to}</span>
                     </div>
                   </div>
                 ))}
@@ -1263,7 +1263,7 @@ function DoctorModal({ isOpen, onClose, profileId, doctor }: { isOpen: boolean; 
                     <div className="ml-4 mt-0.5">
                       <span className="text-red-600 line-through">{field.from}</span>
                       <span className="mx-2 text-gray-400">&rarr;</span>
-                      <span className="text-emerald-600">{field.to}</span>
+                      <span className="text-brand-teal-bright">{field.to}</span>
                     </div>
                   </div>
                 ))}
@@ -1291,7 +1291,7 @@ function DoctorModal({ isOpen, onClose, profileId, doctor }: { isOpen: boolean; 
               id={checkboxId}
               checked={formData.exclude_from_prep_context || false}
               onChange={(e) => setFormData({ ...formData, exclude_from_prep_context: e.target.checked })}
-              className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              className="h-4 w-4 rounded border-gray-300 text-brand-teal-bright focus:ring-brand-teal-bright"
             />
             <label htmlFor={checkboxId} className="text-sm text-gray-700">
               Exclude from visit prep context (for sensitive specialties)
@@ -1420,7 +1420,7 @@ function AppointmentModal({ isOpen, onClose, profileId, doctors, appointment }: 
                     <div className="ml-4 mt-0.5">
                       <span className="text-red-600 line-through">{field.from}</span>
                       <span className="mx-2 text-gray-400">&rarr;</span>
-                      <span className="text-emerald-600">{field.to}</span>
+                      <span className="text-brand-teal-bright">{field.to}</span>
                     </div>
                   </div>
                 ))}
