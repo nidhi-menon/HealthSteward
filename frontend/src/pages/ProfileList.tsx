@@ -64,11 +64,11 @@ export default function ProfileList() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {profileList?.map((profile) => (
             <Link key={profile.id} to={`/profiles/${profile.id}`}>
-              <Card className="hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer h-full">
+              <Card className="hover:border-brand-teal-bright/40 hover:shadow-md transition-all cursor-pointer h-full">
                 <CardContent>
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-emerald-700 font-semibold text-lg">
+                    <div className="w-12 h-12 bg-brand-teal-bright/15 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-brand-teal font-semibold text-lg">
                         {profile.name.charAt(0).toUpperCase()}
                       </span>
                     </div>

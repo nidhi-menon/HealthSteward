@@ -655,7 +655,7 @@ function EditableField({
         onBlur={() => setEditing(false)}
         onKeyDown={(e) => { if (e.key === 'Enter') setEditing(false); }}
         autoFocus
-        className={`border border-emerald-300 rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 ${edited ? 'bg-amber-50' : 'bg-white'} ${className}`}
+        className={`border border-brand-teal-bright/40 rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal-bright ${edited ? 'bg-amber-50' : 'bg-white'} ${className}`}
         placeholder={placeholder}
       />
     );
@@ -698,7 +698,7 @@ function EditableVital({
           onBlur={() => setEditing(false)}
           onKeyDown={(e) => { if (e.key === 'Enter') setEditing(false); }}
           autoFocus
-          className={`block w-full mt-0.5 border border-emerald-300 rounded px-1.5 py-0.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500 ${edited ? 'bg-amber-50' : 'bg-white'}`}
+          className={`block w-full mt-0.5 border border-brand-teal-bright/40 rounded px-1.5 py-0.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-brand-teal-bright ${edited ? 'bg-amber-50' : 'bg-white'}`}
         />
       ) : (
         <p
