@@ -11,7 +11,7 @@ Both pages share one token set. **A token with the same name must mean the same 
 ```
 --paper: #fafaf9        --paper-raised: #ffffff
 --ink: #171f1d          --ink-soft: #3b453f       --ink-faint: #5a635d
---teal: #1f4a42          --teal-bright: #2f6a5e
+--teal: #20464c          --teal-bright: #2f626a
 --amber: #8a5a17         --select-hl: #047857
 --line: #cdccbf          --focus: #047857          --code-bg: #e6e4d8
 ```

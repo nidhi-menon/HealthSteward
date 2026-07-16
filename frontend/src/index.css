@@ -6,8 +6,8 @@
      visual identity: deep teal (primary — "runs locally" semantic), amber
      (secondary — "crosses the anonymization/external trust boundary" semantic),
      near-white paper (neutral background). See docs/SITE_STYLE_GUIDE.md. */
-  --color-brand-teal: #1f4a42;
-  --color-brand-teal-bright: #2f6a5e;
+  --color-brand-teal: #20464c;
+  --color-brand-teal-bright: #2f626a;
   --color-brand-amber: #8a5a17;
   --color-brand-paper: #fafaf9;
   --color-brand-ink: #171f1d;
