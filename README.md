@@ -12,7 +12,7 @@
 ![status](https://img.shields.io/badge/status-active%20development-2f626a)
 ![release](https://img.shields.io/github/v/release/nidhi-menon/HealthSteward?include_prereleases&color=20464c)
 
-**[Website](https://nidhi-menon.github.io/HealthSteward/) · [LinkedIn](https://www.linkedin.com/company/healthsteward-ai/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues)**
+**[Website](https://healthstewardai.com/) · [LinkedIn](https://www.linkedin.com/company/healthsteward-ai/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues)**
 
 If HealthSteward is useful to you, consider giving it a ⭐ — it helps this reach more people navigating fragmented care.
 
