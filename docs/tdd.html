@@ -11,7 +11,7 @@
      shared tdd.html link falls back to scraping whatever the scraper finds
      first, not necessarily the intended title/description. -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://nidhi-menon.github.io/HealthSteward/tdd.html">
+<meta property="og:url" content="https://healthstewardai.com/tdd.html">
 <meta property="og:title" content="HealthSteward — Technical Design Document">
 <meta property="og:description" content="System design, architecture decisions, and tradeoffs behind HealthSteward — local, privacy-first agentic AI for patients navigating fragmented care.">
 <meta property="og:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/social-preview.png">
@@ -231,7 +231,7 @@
     background: var(--paper-raised);
   }
   .arch-phase-title {
-    font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    font-family: ui-monospace, monospace; font-size: 14px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 10px;
   }
   .arch-phase-row { display: flex; align-items: center; gap: 10px; row-gap: 12px; flex-wrap: wrap; }
@@ -350,13 +350,13 @@
     font-weight: 700; color: var(--teal-bright);
   }
   .schema-root svg { flex: none; width: 14px; height: 14px; color: var(--teal-bright); }
-  .schema-rel { font-family: ui-monospace, monospace; font-size: 10px; color: var(--ink-faint); margin: 8px 0 8px 4px; }
+  .schema-rel { font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink-faint); margin: 8px 0 8px 4px; }
   .schema-children { display: flex; flex-wrap: wrap; gap: 8px; }
   .schema-node {
     border: 1px solid var(--line); border-radius: 4px; background: var(--paper);
     padding: 6px 9px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink);
   }
-  .schema-node .schema-sub { color: var(--ink-faint); font-size: 10px; margin-left: 4px; }
+  .schema-node .schema-sub { color: var(--ink-faint); font-size: 11px; margin-left: 4px; }
   .schema-group--support { background: none; border-style: dashed; }
 
   /* boundary cards, reused from landing page */
@@ -451,6 +451,19 @@
     nav.side.open { transform: translateX(0); }
     .menu-btn { display: inline-block; }
     main.content { padding: 28px 20px 80px; }
+
+    /* .arch-wide's clamp(700px, ...) had a hard 700px floor — forced every
+       phone (375-428px wide) into horizontal overflow to show this diagram.
+       Below the sidebar breakpoint there's no reading column to break out
+       of anyway (.panel is already ~full width here), so just go back to a
+       normal contained block instead of the negative-margin breakout trick. */
+    .arch-wide { width: 100%; margin-left: 0; transform: none; }
+
+    /* header.top had no wrap fallback — brand text ("HealthSteward /
+       Technical Design Document") + two back-links + the menu button all in
+       one non-wrapping flex row overflowed on phone widths (~375-428px). */
+    header.top { flex-wrap: wrap; row-gap: 8px; padding: 14px 16px; }
+    .top-actions { flex-wrap: wrap; row-gap: 6px; }
   }
 </style>
 </head>
@@ -466,7 +479,7 @@
     </svg>
     HealthSteward <span style="color:var(--ink-faint); font-weight:400;">/ Technical Design Doc</span>
   </div>
-  <div style="display:flex; align-items:center; gap:14px;">
+  <div class="top-actions" style="display:flex; align-items:center; gap:14px;">
     <a class="back" href="index.html">← project site</a>
     <a class="back" href="https://github.com/nidhi-menon/HealthSteward">github</a>
     <button class="menu-btn" id="menuBtn" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sideNav">menu</button>
