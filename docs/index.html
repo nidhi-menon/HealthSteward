@@ -11,7 +11,7 @@
      show the project identity, not whatever heading text a scraper falls back to
      scanning when these are absent. -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://nidhi-menon.github.io/HealthSteward/">
+<meta property="og:url" content="https://healthstewardai.com/">
 <meta property="og:title" content="HealthSteward">
 <meta property="og:description" content="Local, privacy-first agentic AI for patients navigating fragmented care.">
 <meta property="og:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/social-preview.png">
@@ -259,6 +259,15 @@
   .boundary p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
   @media (max-width: 620px) {
     .boundaries { grid-template-columns: 1fr; }
+  }
+
+  /* header/footer nav rows had no wrap fallback — brand + nav links (5 in the
+     footer, after adding LinkedIn) forced horizontal overflow below ~440px.
+     Stack onto their own row instead of scrolling the whole page sideways. */
+  @media (max-width: 640px) {
+    header.top { flex-wrap: wrap; row-gap: 10px; }
+    .top nav { flex-wrap: wrap; row-gap: 8px; width: 100%; }
+    footer nav { flex-wrap: wrap; row-gap: 8px; }
   }
 
   /* install block styled like a form/prescription strip */
