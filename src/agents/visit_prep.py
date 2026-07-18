@@ -17,7 +17,7 @@ from sqlalchemy.orm import selectinload
 from src.agents.base import BaseAgent
 from src.agents.llm_backend import ToolCallParsingError, get_llm_backend
 from src.agents.ollama_client import get_ollama_client
-from src.agents.tools import VisitPrepTools, get_tools_for_provider
+from src.agents.tools import UnknownToolError, VisitPrepTools, get_tools_for_provider
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
 from src.services import settings_service
@@ -323,7 +323,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
                     response = await self._run_agentic_loop(
                         appointment.profile_id, messages, system_prompt
                     )
-                except (ToolCallParsingError, RuntimeError) as e:
+                except (ToolCallParsingError, UnknownToolError, RuntimeError) as e:
                     logger.warning(f"Agentic tool-use loop failed, falling back to single-shot: {e}")
                     response = None
 
@@ -366,6 +366,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         tool_executor = VisitPrepTools(self.db, self.anonymizer, profile_id)
 
         conversation = list(messages)
+        tool_call_log: list[dict[str, Any]] = []
 
         for turn in range(self.settings.agent_max_turns):
             result = await backend.call(conversation, system, tools=tools)
@@ -378,6 +379,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
                     model=self._model_name_for_provider(),
+                    tool_calls=tool_call_log or None,
                 )
                 return result.text or ""
 
@@ -385,6 +387,11 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             for tool_call in result.tool_calls:
                 tool_result = await tool_executor.execute(tool_call.name, tool_call.input)
                 conversation.append(backend.build_tool_result_message(tool_call, tool_result))
+                tool_call_log.append({
+                    "name": tool_call.name,
+                    "input": tool_call.input,
+                    "result": tool_result,
+                })
 
         raise RuntimeError(f"Agentic loop did not converge within {self.settings.agent_max_turns} turns")
 
