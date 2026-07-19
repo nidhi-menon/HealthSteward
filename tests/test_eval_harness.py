@@ -78,6 +78,18 @@ def test_score_format_respects_custom_min_questions():
     assert scorers.score_format(result, min_questions=8)["valid"] is False
 
 
+def test_score_groundedness_excludes_lifestyle_category():
+    result = {
+        "questions": {
+            "Condition Management": ["Ask about my diabetes."],
+            "Lifestyle & Prevention": ["What general tips help with a healthy diet?"],
+        }
+    }
+    scored = scorers.score_groundedness(result, entities={"diabetes"})
+    assert scored["grounded_rate"] == 1.0
+    assert scored["ungrounded_questions"] == []
+
+
 
 def test_stage1_checks_run_and_document_the_known_72_gap():
     results = retrieval_stage1.run_all()

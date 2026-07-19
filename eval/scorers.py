@@ -81,8 +81,17 @@ def score_groundedness(result: dict[str, Any], entities: set[str]) -> dict[str, 
     This is the "smoke test" version, not the deeper NLI-judge pass docs/tdd.html
     describes for v2 — it catches obvious hallucination (an entity that was never
     in the input) but can't catch subtler unsupported inferential claims.
+
+    "Lifestyle & Prevention" is excluded from both the numerator and
+    denominator — the visit_prep.py prompts explicitly allow this one
+    category to stay data-light (general guidance tied to a condition or
+    specialty, not a specific unprovided fact), so entity-matching it
+    against provided data isn't a meaningful check. Found via v3's eval
+    evidence (see PROMPT_CHANGELOG.md): generic, prompt-permitted Lifestyle
+    questions were dragging grounded_rate down without reflecting any real
+    change in model behavior.
     """
-    pairs = _all_questions(result)
+    pairs = [(c, q) for c, q in _all_questions(result) if c != "Lifestyle & Prevention"]
     if not pairs:
         return {"grounded_rate": None, "ungrounded_questions": []}
 
