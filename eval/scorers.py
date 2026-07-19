@@ -30,8 +30,24 @@ def _all_questions(result: dict[str, Any]) -> list[tuple[str, str]]:
     return pairs
 
 
-def score_format(result: dict[str, Any]) -> dict[str, Any]:
-    """Format validity: valid JSON shape, 8-15 questions, known categories, none empty."""
+def expected_min_questions(case: EvalCase) -> int:
+    """Scale the expected minimum question count with how much real data a
+    case actually has, rather than enforcing a fixed 8 for every case.
+
+    Found via #29's first real runs: cold_start (one condition, nothing
+    else) failing the fixed 8-question floor was in tension with the
+    system prompt's own anti-hallucination rules — pushing the model to
+    invent content just to hit a fixed number for a case with genuinely
+    little to ask about isn't a real quality bar. 2 questions per known
+    entity, floor of 3, capped at the prompt's own stated 8, is a rough
+    but principled scale-down for sparse cases; richer cases still expect
+    the full 8.
+    """
+    return min(8, max(3, len(known_entities(case)) * 2))
+
+
+def score_format(result: dict[str, Any], min_questions: int = 8) -> dict[str, Any]:
+    """Format validity: valid JSON shape, min_questions-15 questions, known categories, none empty."""
     questions = result.get("questions")
     issues = []
 
@@ -39,8 +55,8 @@ def score_format(result: dict[str, Any]) -> dict[str, Any]:
         return {"valid": False, "question_count": 0, "issues": ["'questions' is not a dict"]}
 
     total = sum(len(v or []) for v in questions.values())
-    if not (8 <= total <= 15):
-        issues.append(f"question count {total} outside 8-15")
+    if not (min_questions <= total <= 15):
+        issues.append(f"question count {total} outside {min_questions}-15")
 
     for category, qs in questions.items():
         if category not in KNOWN_CATEGORIES:

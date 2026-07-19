@@ -120,7 +120,7 @@ class VisitPrepAgent(BaseAgent):
     # See docs/notes/PROMPT_CHANGELOG.md for version history/rationale —
     # bump the version and add an entry there whenever either prompt below
     # changes, per the project-wide prompt-versioning convention.
-    SYSTEM_PROMPT_TEMPLATE_VERSION = "v2-2026-07-19"
+    SYSTEM_PROMPT_TEMPLATE_VERSION = "v3-2026-07-19"
     SYSTEM_PROMPT_TEMPLATE = """You are a healthcare assistant preparing a patient for a visit with their {specialty}.
 
 Your task: generate 8-15 focused, actionable questions the patient should ask THIS doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
@@ -133,6 +133,9 @@ IMPORTANT RULES:
 - Reference pending follow-ups if relevant to this specialty
 - Note significant changes in vitals (weight, BMI, blood pressure) and ask about them if relevant
 - Do NOT ask about vitals, lab results, conditions, or medications that are not explicitly listed in the patient data below — if a category of data (e.g. vitals) isn't provided, don't reference it or assume it exists
+- A category needs real patient data behind it to be included: "Condition Management" needs actual conditions listed, "Medication Review" needs actual medications listed, "Lab Results & Monitoring" needs actual lab orders listed, "Follow-up Planning" needs an actual pending follow-up or referral listed if you're asking about a specific one (a generic "when should I schedule a follow-up" is fine either way). If a category has no real data behind it, omit it entirely rather than asking generically. "Lifestyle & Prevention" is the exception — general guidance tied to a real listed condition or specialty is fine even without additional data, as long as you don't assert a specific fact (a test result, a medication name, an appointment) that wasn't provided.
+- Never include a category key with an empty question list — if a category has nothing to ask, leave the key out of the JSON entirely rather than including it as an empty array. Prioritize categories where you have real patient data (actual conditions, actual medications) over categories with none.
+- Omitting empty categories does NOT lower the question-count requirement below. If dropping empty categories leaves you short of 8, go deeper within the categories that DO have real data — e.g. more angles on each condition or medication (dosage timing, monitoring frequency, symptom tracking, interactions) — rather than accepting a shorter list.
 
 Respond with a JSON object in this exact format:
 {{
@@ -145,23 +148,26 @@ Respond with a JSON object in this exact format:
     "context_summary": "A brief 2-3 sentence summary of the patient's key health context relevant to this visit."
 }}
 
-Use these categories (skip any that have no relevant questions):
+Use these categories (omit any that have no relevant questions — do not include an empty list for a category):
 - "Condition Management" — questions about conditions this specialist manages or that interact with their care
 - "Medication Review" — only medications this specialist manages or that could interact with their treatments
 - "Lab Results & Monitoring" — questions about recent or pending lab work relevant to this specialty
 - "Lifestyle & Prevention" — actionable lifestyle questions specific to their conditions and this specialty
 - "Follow-up Planning" — what to schedule next, referrals to discuss
 
-Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if not, add more before responding. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
+Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     # Fallback when no specialty is known
-    SYSTEM_PROMPT_GENERIC_VERSION = "v2-2026-07-19"
+    SYSTEM_PROMPT_GENERIC_VERSION = "v3-2026-07-19"
     SYSTEM_PROMPT_GENERIC = """You are a healthcare assistant preparing a patient for an upcoming doctor visit.
 
 Your task: generate 8-15 focused, actionable questions the patient should ask their doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
 
 IMPORTANT RULES:
 - Do NOT ask about vitals, lab results, conditions, or medications that are not explicitly listed in the patient data below — if a category of data (e.g. vitals) isn't provided, don't reference it or assume it exists
+- A category needs real patient data behind it to be included: "Condition Management" needs actual conditions listed, "Medication Review" needs actual medications listed, "Lab Results & Monitoring" needs actual lab orders listed, "Follow-up Planning" needs an actual pending follow-up or referral listed if you're asking about a specific one (a generic "when should I schedule a follow-up" is fine either way). If a category has no real data behind it, omit it entirely rather than asking generically. "Lifestyle & Prevention" is the exception — general guidance tied to a real listed condition is fine even without additional data, as long as you don't assert a specific fact (a test result, a medication name, an appointment) that wasn't provided.
+- Never include a category key with an empty question list — if a category has nothing to ask, leave the key out of the JSON entirely rather than including it as an empty array. Prioritize categories where you have real patient data (actual conditions, actual medications) over categories with none.
+- Omitting empty categories does NOT lower the question-count requirement below. If dropping empty categories leaves you short of 8, go deeper within the categories that DO have real data — e.g. more angles on each condition or medication (dosage timing, monitoring frequency, symptom tracking, interactions) — rather than accepting a shorter list.
 
 Respond with a JSON object in this exact format:
 {{
@@ -174,14 +180,14 @@ Respond with a JSON object in this exact format:
     "context_summary": "A brief 2-3 sentence summary of the patient's key health context relevant to this visit."
 }}
 
-Use these categories (skip any that have no relevant questions):
+Use these categories (omit any that have no relevant questions — do not include an empty list for a category):
 - "Condition Management" — questions about their active conditions
 - "Medication Review" — questions about current medications
 - "Lab Results & Monitoring" — questions about recent or pending lab work
 - "Lifestyle & Prevention" — actionable lifestyle questions
 - "Follow-up Planning" — what to schedule next
 
-Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if not, add more before responding. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
+Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     def __init__(self, db: AsyncSession):
         """Initialize the visit prep agent."""
