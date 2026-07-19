@@ -1,6 +1,6 @@
 # HealthSteward — Technical Design Document
 
-**Snapshot as of:** DEC-016 · 2026-07-09
+**Snapshot as of:** DEC-018 · 2026-07-19
 
 This is a point-in-time architecture snapshot, not a living doc — it reflects the system as understood at the DEC entry above and is re-written only when a subsequent DEC represents a genuine architectural shift (new/removed subsystem, changed trust boundary, deprecated core pattern), not on every change. See `CLAUDE.md` for the re-snapshot rule. For decision-by-decision detail, see `docs/notes/DECISIONS.md`; for narrative build history, see `docs/notes/DEVELOPMENT_LOG.md`.
 
@@ -40,12 +40,12 @@ flowchart TD
     Review --> DB[(SQLite)]
 
     DB -->|raw past visits| Select[Context Selection]
-    Select -->|stage 2: relevance scoring<br/>on raw, unanonymized text| OllamaScore[Ollama<br/>local, qwen2.5:7b]
+    Select -->|stage 2: relevance scoring<br/>on raw, unanonymized text| OllamaScore[Ollama<br/>local, llama3.2 default]
     OllamaScore --> Select
     Select -->|stage 4: anonymize| Anon[PII Anonymization]
     Anon --> Loop[Agentic Tool-Use Loop]
 
-    Loop -->|prompt + tools| Backend[Pluggable LLM Backend<br/>Claude API or local Ollama]
+    Loop -->|prompt + tools| Backend[Pluggable LLM Backend<br/>Ollama default, or Claude / custom]
     Backend -->|tool call: get_medication_details<br/>or lookup_past_visits| Tools[Visit Prep Tools]
     Tools -->|query, then anonymize| DB
     Tools -->|anonymized tool result| Backend
@@ -56,9 +56,9 @@ flowchart TD
     API --> UI[React + TypeScript UI]
 ```
 
-**Two LLMs, two trust boundaries:** Ollama runs locally and never touches the network — it parses raw PDFs and scores relevance of raw (pre-anonymization) visit history. The pluggable backend (Claude or local Ollama, per `LLM_PROVIDER`) only ever receives already-anonymized data — anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way for both backends.
+**Two LLMs, two trust boundaries:** Ollama runs locally and never touches the network — it parses raw PDFs and scores relevance of raw (pre-anonymization) visit history. The pluggable backend (Ollama by default, or Claude API, or any custom OpenAI-compatible provider, per `LLM_PROVIDER` — switchable at runtime from Settings, DEC-016) only ever receives already-anonymized data — anonymization happens before the agentic loop starts, and every tool result fed back into the loop is anonymized the same way regardless of backend.
 
-**Tech stack:** FastAPI + SQLAlchemy (async) + SQLite · React 19 + TypeScript + Tailwind + Vite · Claude API (Sonnet) or local Ollama for the agentic loop · Ollama (qwen2.5:7b) for PDF parsing and relevance scoring · Alembic migrations.
+**Tech stack:** FastAPI + SQLAlchemy (async) + SQLite · React 19 + TypeScript + Tailwind + Vite · pluggable agentic backend — Ollama (`llama3.2` default) by default, or Claude API (Sonnet), or any custom OpenAI-compatible provider, switchable at runtime (DEC-016) · Ollama (`qwen2.5:7b`) for PDF parsing, Ollama (`llama3.2` default, reused rather than a dedicated model) for context-selection relevance scoring · Alembic migrations.
 
 Full component-level detail: `docs/notes/IMPLEMENTATION.md`.
 
@@ -78,7 +78,7 @@ Full component-level detail: `docs/notes/IMPLEMENTATION.md`.
 
 **Model selection:** Local Ollama is the default agentic backend as of DEC-016, which supersedes DEC-009's original default choice (not its underlying finding). DEC-009's tool-reliability finding is still true — the dev machine (M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling (malformed JSON, wrong tool calls, non-convergence) — but defaulting the most-used flow to an external API sat awkwardly next to the project's local-first pitch. Claude API (Sonnet) and any custom OpenAI-compatible provider (OpenAI, OpenRouter, Groq, a self-hosted server, etc.) remain fully supported as explicit opt-ins, switchable at runtime from a Settings page (DB-backed, no `.env` edit or restart needed) rather than `.env`-only. Cost for the opt-in Claude path is negligible for personal use (~$1/month). Ollama also continues to handle simpler tasks that don't need reliable structured tool-calling: PDF parsing and context-selection relevance scoring.
 
-**Prompting:** two system prompt templates (specialty-aware and generic fallback) in `src/agents/visit_prep.py`, enriched with ICD-10 → specialty tagging, medication → prescribing-specialty tagging, and clinic-name specialty inference (DEC-011). These prompts are the actual product logic — see the prompt-change gap in §8.
+**Prompting:** two system prompt templates (specialty-aware and generic fallback) in `src/agents/visit_prep.py`, enriched with ICD-10 → specialty tagging, medication → prescribing-specialty tagging, and clinic-name specialty inference (DEC-011). These prompts are the actual product logic — every wording change is versioned and logged in `docs/notes/PROMPT_CHANGELOG.md` (DEC-018), and validated against the eval harness in §8 where the harness's fixtures cover the change.
 
 ## 6. Agentic Loop Design
 
@@ -92,20 +92,26 @@ No staged rollout — single-user local app, changes ship by pulling `main` and 
 
 ## 8. Evaluation, Monitoring & Known Gaps
 
-**What exists:** `ConversationLog` records every LLM call (anonymized content + token counts) for future distillation. Backend test suite (72+ tests) verifies plumbing — loop convergence, tool execution, anonymization boundaries, fallback triggering.
+**What exists:** `ConversationLog` records every LLM call (anonymized content + token counts) for future distillation. Backend test suite (119+ tests) verifies plumbing — loop convergence, tool execution, anonymization boundaries, fallback triggering.
 
-**What's missing (real gaps, not scope cuts):**
-- **No quality evaluation of generated output.** Tests mock the LLM and verify the pipeline works, not whether generated visit-prep questions are actually good — relevant, non-redundant, correctly specialty-scoped. This is the one gap that maps to the "Success Metrics / Offline Evaluation" section of a standard ML design doc, unaddressed here.
-- **No visibility into agentic-loop fallback rate.** `ConversationLog` has the data, but nothing surfaces how often the loop falls back to single-shot in practice. A silently degrading backend (e.g. a Claude API or Ollama version change that breaks tool-calling) would be invisible.
+**Eval harness v1 (DEC-018, `eval/`), deterministic-only:** run on-demand via `python -m eval.run` against a real pipeline + real LLM backend (not mocks), at `temperature=0.0` for run-to-run comparability. Explicitly a smoke test, not a quality measure — catches gross regressions (hallucination, scope violations, malformed output, retrieval rule breaks), says nothing about whether output is actually *good* (relevance, usefulness). Two eval surfaces, matching `docs/tdd.html`'s original plan:
+- **Retrieval** (`eval/retrieval_stage1.py`) — Stage 1's rules-based filtering, checked by exact assertion against synthetic fixtures.
+- **Generation** (`eval/scorers.py`) — format validity (question count, scaled per-case to how much real patient data the case has rather than a flat floor — see `expected_min_questions()`), a cheap entity-match groundedness pass, a deterministic specialty-scope checker, plus two observational (non-pass/fail) checks: tool-call necessity and Phase 1/Phase 2 retrieval redundancy.
+
+Results are diffed against the prior run (`eval/results/`, gitignored) rather than checked against a fixed bar, since "better or worse than last time" is the operative question for a prompt-change review. Every prompt in the codebase is now versioned as a companion convention (`docs/notes/PROMPT_CHANGELOG.md`), so a behavior change is traceable to the exact prompt wording that caused it. Standing up v1 against a real Ollama server (not just mocks) surfaced and fixed three previously-hidden production bugs in the Ollama/custom backend path (missing `stream: false`, misplaced `temperature`, no total-call timeout) — validates that at least one real-backend run was worth including in v1 rather than unit-testing the scorers in isolation.
+
+**What's still missing (real gaps, not scope cuts):**
+- **LLM-as-judge tier (v2), not yet built.** The properties v1's deterministic checks can't reach — relevance/usefulness (no cheap proxy, needs a rubric), non-redundancy, and deeper groundedness for inferential claims a simple entity-string match can't verify (e.g. "how is my TSH trending" — conceptually grounded in lab data mentioned elsewhere in the same response, but not a literal string match; tracked as issue #76) — are the named v2 backlog per `docs/tdd.html`'s Evaluation Plan tab.
+- **No visibility into agentic-loop fallback rate in production.** `ConversationLog` has the data, but nothing surfaces how often the loop falls back to single-shot in practice outside of an eval run. A silently degrading backend (e.g. a Claude API or Ollama version change that breaks tool-calling) would be invisible.
 - **No frontend test coverage** (tracked: issue #27).
 
 ## 9. Alternatives Considered
 
-Full detail lives in `docs/notes/DECISIONS.md` (DEC-001 through DEC-015) — this section is a pointer, not a duplicate. Headline calls: Claude native tool use over the Agent SDK or LangGraph (DEC-009 — no new deps, framework overhead unwarranted for a single agent); SQLite over Postgres for Phase 1 (DEC-003); UUID over integer primary keys (DEC-004); local-only Ollama for PDF parsing over any cloud OCR/vision option (DEC-005/DEC-010).
+Full detail lives in `docs/notes/DECISIONS.md` (DEC-001 through DEC-018) — this section is a pointer, not a duplicate. Headline calls: Claude native tool use over the Agent SDK or LangGraph (DEC-009 — no new deps, framework overhead unwarranted for a single agent); SQLite over Postgres for Phase 1 (DEC-003); UUID over integer primary keys (DEC-004); local-only Ollama for PDF parsing over any cloud OCR/vision option (DEC-005/DEC-010); Ollama flipped to the default agentic backend over keeping Claude as default (DEC-016); deterministic-only eval harness v1 over building the full judge-dependent plan in one pass (DEC-018).
 
 ## 10. Risks
 
 - **Clinical safety.** Neither ML-eval nor typical software-design risk framing covers this: generated output is health-adjacent guidance, and the only safety mechanism is the patient reading it before a real appointment. No automated check exists for a plausible-but-wrong suggestion (e.g. a hallucinated drug interaction, or a misread lab trend). Framed as a permanent human-in-the-loop requirement, not a gap to close via eval — but worth stating outright rather than leaving implicit in "not a replacement for clinical judgment" (README).
 - **External dependency risk.** Ollama model tags (`qwen2.5:7b`, `llama3.2`) are referenced by tag, not pinned digest — a silent upstream model update could change parsing/scoring/visit-prep behavior without any code change here, and this now affects the default agentic backend directly since Ollama is the default (DEC-016). Anthropic API and any custom provider's pricing/availability changes only matter to whoever has opted into them from Settings.
-- **Prompt-change management.** The specialty-aware system prompts (`SYSTEM_PROMPT_TEMPLATE`, `SYSTEM_PROMPT_GENERIC`) are the actual product behavior, but changes to them go through normal code review with no dedicated process (no prompt versioning, no before/after quality comparison). Low-stakes at current scale; worth a lightweight convention (e.g. note prompt changes explicitly in the dev log, per existing discipline) if the loop gains more agentic freedom.
+- **Prompt-change management.** Resolved by DEC-018: every prompt in the codebase is versioned, content changes are logged in `docs/notes/PROMPT_CHANGELOG.md` with before/after eval evidence where the harness's fixtures cover the change, and `visit_prep.py`'s two prompts additionally log their version per-run via `ConversationLog.extra_data["prompt_version"]`. Residual gap: the eval harness only covers `visit_prep.py`'s generation prompts today — `context_selection.py`'s Stage 2 scoring prompt and the AVS parser's five extraction prompts are versioned for traceability but have no before/after quality signal yet if changed.
 - Standard risks already covered elsewhere: fallback-not-hard-failure removes most agentic-loop regression risk by construction (§5); PII anonymization gaps are `SECURITY.md`-reportable, not silent.
