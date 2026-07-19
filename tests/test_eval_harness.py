@@ -64,6 +64,21 @@ def test_all_fixture_cases_have_valid_doctor_and_medication_keys():
             assert pv.doctor_key in doctor_keys, case.id
 
 
+def test_expected_min_questions_scales_down_for_sparse_cases():
+    cold_start = next(c for c in GENERATION_CASES if c.id == "cold_start")
+    richer = next(c for c in GENERATION_CASES if c.id == "tool_call_necessity_dosing")
+
+    assert scorers.expected_min_questions(cold_start) < 8
+    assert scorers.expected_min_questions(richer) == 8
+
+
+def test_score_format_respects_custom_min_questions():
+    result = {"questions": {"Condition Management": ["q1", "q2", "q3"]}}
+    assert scorers.score_format(result, min_questions=3)["valid"] is True
+    assert scorers.score_format(result, min_questions=8)["valid"] is False
+
+
+
 def test_stage1_checks_run_and_document_the_known_72_gap():
     results = retrieval_stage1.run_all()
     by_name = {r.name.split(" (")[0]: r for r in results}

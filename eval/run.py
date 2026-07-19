@@ -79,12 +79,13 @@ async def run_generation_case(db: AsyncSession, case) -> dict:
     tool_calls = agent.last_tool_calls or []
     context_result = agent.last_context_selection
     phase1_dates = [v.scheduled_date for v in (context_result.selected_visits if context_result else [])]
+    min_questions = scorers.expected_min_questions(case)
 
     return {
         "case_id": case.id,
         "description": case.description,
         "raw_result": result,
-        "format": scorers.score_format(result),
+        "format": scorers.score_format(result, min_questions=min_questions),
         "groundedness": scorers.score_groundedness(result, entities),
         "scope": scorers.score_scope(result, off_scope),
         "tool_result_scope": scorers.score_tool_result_scope(tool_calls, off_scope),

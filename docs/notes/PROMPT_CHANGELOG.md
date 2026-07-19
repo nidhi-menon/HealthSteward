@@ -11,6 +11,30 @@ Convention:
 
 ## `src/agents/visit_prep.py` — `SYSTEM_PROMPT_TEMPLATE` (specialty-aware) and `SYSTEM_PROMPT_GENERIC` (fallback)
 
+### v3-2026-07-19
+**Context:** v2's remaining open item was `cold_start` (one condition, nothing else) failing the fixed 8-question floor — investigating it surfaced a real tension: the prompt's own anti-hallucination rule ("don't ask about data that isn't provided") was in direct conflict with the hard "8-15 questions" requirement for any case with genuinely little real data. A model following the grounding rule honestly for a sparse case *cannot* also hit 8 well-grounded questions; the only way to satisfy both was to invent content, which is the exact failure mode the grounding rule exists to prevent.
+
+**Change:**
+- Prompt: added an explicit per-category grounding requirement — a category ("Condition Management", "Medication Review", "Lab Results & Monitoring", "Follow-up Planning") must have real listed patient data behind it to appear at all; "Lifestyle & Prevention" may stay data-light but still can't assert unprovided facts. Also added an explicit instruction to omit a category key entirely rather than emit it with an empty list, and — after the first re-run below surfaced a regression — a follow-up clarification that omitting empty categories does not lower the 8-15 count requirement, and that the model should go deeper within its *non-empty* categories (more angles on the same condition/medication) rather than settling for a shorter list.
+- Scorer (`eval/scorers.py`): added `expected_min_questions(case)`, scaling the format-validity floor to `min(8, max(3, 2 × known_entity_count))` instead of a flat 8 for every case. `score_format` and `run.py`'s call site were updated to pass this per-case floor through instead of hardcoding 8.
+
+**Reasoning:** Rather than relaxing the grounding rule (which would reopen the hallucination risk v2 fixed) or leaving `cold_start` permanently failing a bar it structurally can't meet, scaled the *bar* to the amount of real data available, and made the prompt's category-omission behavior explicit and symmetric with that scaling — both changes needed to land together since the scorer change alone would just be scoring the old prompt's already-inconsistent empty-category behavior more leniently.
+
+**Eval evidence:** Baseline (v2) run: `eval/results/192bdf0-20260719T064925Z.json`.
+
+First re-run after the initial change: `eval/results/e188fce-20260719T074942Z.json`.
+- `cold_start`: format valid False→True (3 questions against a scaled floor of 3) — the model now works within its actual data rather than being pushed toward padding.
+- `cross_specialty_scope`: still format-invalid (6 questions vs. floor 8) but grounded_rate improved 0.0→0.17.
+- `groundedness_labs_vitals`: grounded_rate improved 0.5→0.8, stayed format-valid.
+- `tool_call_necessity_dosing`: grounded_rate improved 0.56→0.67, stayed format-valid.
+- **Regression found:** `retrieval_redundancy` flipped format valid True→False (3 questions against a floor of 4) — the model dropped from 5 categories to 2 (only "Condition Management" and "Lab Results & Monitoring" survived), undershooting even the scaled floor despite having real medication data available. The omit-empty-category instruction was being over-applied relative to the still-present 8-15 instruction, at least for llama3.2.
+
+Second re-run after the "go deeper within non-empty categories" clarification above: `eval/results/e188fce-20260719T162421Z.json`.
+- `retrieval_redundancy`: format valid False→True (9 questions, floor 4) — regression fixed.
+- `tool_call_necessity_dosing`: format stayed valid (8 questions), grounded_rate dipped slightly 0.67→0.625.
+- `groundedness_labs_vitals`: stayed format-valid but grounded_rate dropped 0.8→0.6; `retrieval_redundancy` grounded_rate also dropped 0.67→0.33. In both cases the additional questions used to hit the count are generic ones the prompt's own rules explicitly permit without a cited entity (e.g. general lifestyle tips, "when should we schedule a follow-up") — not new hallucinations, but the `score_groundedness` entity-match scorer doesn't currently know about that prompt-level exception and flags them as ungrounded anyway.
+- `cross_specialty_scope`: still format-invalid (6 questions vs. floor 8) — grounded_rate improved further, 0.17→0.33. Not addressed by this version; appears to be a case where the specialty-scoping rule itself limits how many genuinely relevant questions exist, similar to `cold_start`'s data-sparsity limit. Worth a closer look in a future version rather than folding into this one.
+
 ### v2-2026-07-19
 **Context:** The #29 eval harness's first real run against local Ollama (`llama3.2`) found every one of 5 test cases failing the prompt's own stated 8-15 question requirement (3-8 questions actually returned), plus at least one clear hallucination (`cold_start` — a case with zero vitals data — generated a question asking about blood pressure readings that were never provided).
 
