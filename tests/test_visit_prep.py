@@ -472,3 +472,218 @@ async def test_prepare_visit_falls_back_when_agentic_loop_does_not_converge(
     assert response.status_code == 200
     data = response.json()
     assert data["generated_questions"] == {"General": ["Fallback question"]}
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_logs_tool_calls_from_agentic_loop(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+    sample_medication_data,
+):
+    """Regression test for #52: tool calls made during the agentic loop must
+    land in the converging ConversationLog row's extra_data["tool_calls"],
+    not just live transiently in the in-memory conversation list.
+    """
+    from sqlalchemy import select
+
+    from src.config import get_settings
+    from src.data.models import ConversationLog
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    await client.post(f"/api/profiles/{profile_id}/medications/", json=sample_medication_data)
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    tool_use_response = MagicMock()
+    tool_use_response.content = [
+        SimpleNamespace(
+            type="tool_use",
+            id="call_1",
+            name="get_medication_details",
+            input={},
+        )
+    ]
+
+    final_response = _mock_text_response(
+        '{"questions": {"Medication Review": ["Is Metformin still working well?"]}, '
+        '"context_summary": "Patient on Metformin for diabetes."}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=[tool_use_response, final_response])
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+
+    result = await db_session.execute(
+        select(ConversationLog)
+        .where(ConversationLog.role == "assistant")
+        .order_by(ConversationLog.timestamp.desc())
+    )
+    latest_assistant_log = result.scalars().first()
+
+    logged_tool_calls = latest_assistant_log.extra_data.get("tool_calls")
+    assert logged_tool_calls is not None
+    assert len(logged_tool_calls) == 1
+    assert logged_tool_calls[0]["name"] == "get_medication_details"
+    assert logged_tool_calls[0]["input"] == {}
+    assert "Metformin" in logged_tool_calls[0]["result"]
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_logs_tool_calls_across_multiple_turns(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+    sample_medication_data,
+):
+    """Regression test for #52: tool_call_log accumulates across the whole
+    loop rather than being reset per turn, so a 2-turn loop (a different
+    tool call each turn) must log both calls, in order, not just the last.
+    """
+    from sqlalchemy import select
+
+    from src.config import get_settings
+    from src.data.models import ConversationLog
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    await client.post(f"/api/profiles/{profile_id}/medications/", json=sample_medication_data)
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    turn1_response = MagicMock()
+    turn1_response.content = [
+        SimpleNamespace(
+            type="tool_use", id="call_1", name="get_medication_details", input={}
+        )
+    ]
+
+    turn2_response = MagicMock()
+    turn2_response.content = [
+        SimpleNamespace(
+            type="tool_use",
+            id="call_2",
+            name="lookup_past_visits",
+            input={"specialty": "Cardiology"},
+        )
+    ]
+
+    final_response = _mock_text_response(
+        '{"questions": {"Medication Review": ["Is Metformin still working well?"]}, '
+        '"context_summary": "Patient on Metformin for diabetes."}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=[turn1_response, turn2_response, final_response]
+        )
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+
+    result = await db_session.execute(
+        select(ConversationLog)
+        .where(ConversationLog.role == "assistant")
+        .order_by(ConversationLog.timestamp.desc())
+    )
+    latest_assistant_log = result.scalars().first()
+
+    logged_tool_calls = latest_assistant_log.extra_data.get("tool_calls")
+    assert logged_tool_calls is not None
+    assert len(logged_tool_calls) == 2
+    assert logged_tool_calls[0]["name"] == "get_medication_details"
+    assert logged_tool_calls[1]["name"] == "lookup_past_visits"
+    assert logged_tool_calls[1]["input"] == {"specialty": "Cardiology"}
+    assert "No matching past visits found." in logged_tool_calls[1]["result"]
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_falls_back_when_agentic_loop_calls_unknown_tool(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Regression test for #53: a hallucinated/unrecognized tool name must
+    trigger the single-shot fallback, not be silently fed back into the
+    conversation as if it were a legitimate tool result.
+    """
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    unknown_tool_use_response = MagicMock()
+    unknown_tool_use_response.content = [
+        SimpleNamespace(type="tool_use", id="call_1", name="not_a_real_tool", input={})
+    ]
+
+    fallback_response = _mock_text_response(
+        '{"questions": {"General": ["Fallback question"]}, "context_summary": "Fallback summary"}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=[unknown_tool_use_response, fallback_response]
+        )
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["generated_questions"] == {"General": ["Fallback question"]}

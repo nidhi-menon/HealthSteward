@@ -6,6 +6,10 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 
 ## [Unreleased]
 
+### Fixed
+- An unrecognized tool name called by the model during the agentic visit-prep loop was silently absorbed as a fake tool result instead of triggering the existing single-shot fallback (#53)
+- Tool calls made during the agentic visit-prep loop were never recorded in `ConversationLog`, despite the field existing, so a completed run's tool-call trace was unrecoverable (#52)
+
 ## [0.2.0-alpha] - 2026-07-10
 
 ### Added
