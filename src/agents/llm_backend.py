@@ -5,6 +5,7 @@ any custom OpenAI-compatible provider can implement, so the agentic tool-use
 loop in `visit_prep.py` doesn't need to know which provider it's talking to.
 """
 
+import asyncio
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -15,6 +16,12 @@ from anthropic import AsyncAnthropic
 from loguru import logger
 
 from src.config import Settings
+
+# Total wall-clock ceiling for one _OpenAIStyleHTTPBackend.call — distinct
+# from httpx.Timeout's per-chunk read timeout below, which a slow/trickling
+# response can bypass indefinitely. See _OpenAIStyleHTTPBackend.call's
+# docstring-adjacent comment for how this was found.
+_TOTAL_CALL_TIMEOUT_SECONDS = 150.0
 
 
 class ToolCallParsingError(Exception):
@@ -56,8 +63,15 @@ class LLMBackend(ABC):
         messages: list[dict[str, Any]],
         system: str,
         tools: Optional[list[dict[str, Any]]] = None,
+        temperature: float = 0.7,
     ) -> LLMTurnResult:
-        """Send messages (+ optional tool specs) and get back one turn's result."""
+        """Send messages (+ optional tool specs) and get back one turn's result.
+
+        temperature defaults to production's existing 0.7 — the eval harness
+        (issue #29) passes 0.0 explicitly to make eval runs reproducible
+        across repeats, since the loop's own non-determinism otherwise makes
+        a single eval run's pass/fail meaningless.
+        """
         ...
 
     @abstractmethod
@@ -83,13 +97,14 @@ class ClaudeBackend(LLMBackend):
         messages: list[dict[str, Any]],
         system: str,
         tools: Optional[list[dict[str, Any]]] = None,
+        temperature: float = 0.7,
     ) -> LLMTurnResult:
         kwargs: dict[str, Any] = {
             "model": self.settings.anthropic_model,
             "max_tokens": self.settings.anthropic_max_tokens,
             "system": system,
             "messages": messages,
-            "temperature": 0.7,
+            "temperature": temperature,
         }
         if tools:
             kwargs["tools"] = tools
@@ -159,31 +174,62 @@ class _OpenAIStyleHTTPBackend(LLMBackend):
         """Synthesize a tool-call id when the response doesn't include one."""
         return f"call-{index}"
 
+    def _sampling_payload(self, temperature: float) -> dict[str, Any]:
+        """Provider-specific payload fields for sampling + streaming.
+
+        Default: OpenAI-compatible /chat/completions shape (top-level
+        `temperature`, explicit `stream: false` so a response is always a
+        single JSON body rather than depending on the server's streaming
+        default). OllamaBackend overrides this — Ollama's native /api/chat
+        takes `temperature` nested under `options`, not top-level, and
+        defaults to `stream: true` if unset, which previously made
+        `response.json()` raise `json.JSONDecodeError: Extra data` on any
+        real (multi-chunk) response, silently degrading every Ollama-backed
+        call straight to the outer fallback response instead of either
+        succeeding or reaching DEC-013's single-shot fallback.
+        """
+        return {"temperature": temperature, "stream": False}
+
     async def call(
         self,
         messages: list[dict[str, Any]],
         system: str,
         tools: Optional[list[dict[str, Any]]] = None,
+        temperature: float = 0.7,
     ) -> LLMTurnResult:
         chat_messages = [{"role": "system", "content": system}, *messages]
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": chat_messages,
-            "temperature": 0.7,
+            **self._sampling_payload(temperature),
         }
         if tools:
             payload["tools"] = tools
 
-        try:
+        async def _do_request() -> Any:
             # Fail fast (~5s) on an unreachable/hung host at the connect
-            # phase, while still allowing the full 120s for generation once
+            # phase, while still allowing generous time for generation once
             # connected — a misconfigured or unreachable endpoint shouldn't
-            # block a request for the full 120s before falling back.
+            # block a request before falling back.
             timeout = httpx.Timeout(120.0, connect=5.0)
             async with httpx.AsyncClient(base_url=self.base_url, timeout=timeout) as client:
                 response = await client.post(self._endpoint_path, json=payload, headers=self.headers)
                 response.raise_for_status()
-                data = response.json()
+                return response.json()
+
+        try:
+            # httpx.Timeout(120.0, ...) only bounds the gap between chunks of
+            # a streaming/slow response, not total request duration — a
+            # response that keeps trickling data can run unbounded with no
+            # error raised (found running the eval harness (#29) against a
+            # real local model: one call ran 30+ minutes on an active
+            # connection with no timeout, no log, no fallback triggered).
+            # Wrapping in wait_for enforces an actual wall-clock ceiling.
+            data = await asyncio.wait_for(_do_request(), timeout=_TOTAL_CALL_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError as e:
+            raise ToolCallParsingError(
+                f"{self._error_label} request exceeded {_TOTAL_CALL_TIMEOUT_SECONDS}s total wall-clock time"
+            ) from e
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
             raise ToolCallParsingError(f"{self._error_label} request failed: {e}") from e
 
@@ -241,6 +287,9 @@ class OllamaBackend(_OpenAIStyleHTTPBackend):
 
     def _tool_call_id(self, index: int, raw: dict[str, Any], fn: dict[str, Any]) -> str:
         return f"ollama-call-{index}"
+
+    def _sampling_payload(self, temperature: float) -> dict[str, Any]:
+        return {"stream": False, "options": {"temperature": temperature}}
 
 
 class CustomOpenAICompatibleBackend(_OpenAIStyleHTTPBackend):
