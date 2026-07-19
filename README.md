@@ -193,7 +193,7 @@ HealthSteward/
 │       └── logging.py
 ├── frontend/                # React + TypeScript + Tailwind
 │   └── src/
-│       ├── pages/           # ProfileList, ProfileDetail, VisitPrep
+│       ├── pages/           # ProfileList, ProfileDetail, VisitPrep, Settings
 │       ├── components/      # UI components + DocumentCard, ParsedItemsReview, PostAvsActionPanel, ActionItemsSection
 │       ├── api/client.ts    # Typed API client
 │       └── types/index.ts   # TypeScript interfaces
@@ -219,6 +219,8 @@ HealthSteward/
 | FollowUp | Follow-up recommendations |
 | VisitPrep | AI-generated visit preparation |
 | ConversationLog | Anonymized LLM conversation history |
+| NudgeState | Snooze state for computed "Needs Attention" nudges |
+| AppSettings | Runtime-editable LLM provider settings (DEC-016) |
 
 ## Key Features in Detail
 
