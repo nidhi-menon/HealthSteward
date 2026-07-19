@@ -1,5 +1,16 @@
 """System prompts for per-section LLM extraction."""
 
+# Version tags for each prompt below — bump the relevant entry and add an
+# entry to docs/notes/PROMPT_CHANGELOG.md whenever a prompt's content
+# changes (project-wide prompt-versioning convention, started 2026-07-19).
+PROMPT_VERSIONS = {
+    "VITALS_SYSTEM": "v1",
+    "DIAGNOSES_SYSTEM": "v1",
+    "LAB_ORDERS_SYSTEM": "v1",
+    "NOTES_SYSTEM": "v1",
+    "REFERRALS_SYSTEM": "v1",
+}
+
 VITALS_SYSTEM = """\
 Extract vitals from this medical visit text. Return ONLY a JSON object:
 {"weight": "string or null", "bmi": number or null, "blood_pressure": "string or null", "heart_rate": "string or null", "temperature": "string or null"}

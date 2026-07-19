@@ -14,6 +14,14 @@ docs/notes/PATENT_ANALYSIS.md
 docs/notes/RESEARCH_IDEAS.md
 
 # ===============================================
+# EVAL HARNESS RESULTS (issue #29)
+# ===============================================
+# Local run output — not reproducible across machines/backends/model
+# versions, so not worth tracking in git. The harness code itself is
+# tracked; only its output isn't.
+eval/results/*.json
+
+# ===============================================
 # SECRETS & API KEYS
 # ===============================================
 .env

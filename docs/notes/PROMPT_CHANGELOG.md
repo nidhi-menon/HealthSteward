@@ -1,0 +1,41 @@
+# HealthSteward — Prompt Changelog
+
+Started 2026-07-19. Every LLM prompt in the codebase gets a version tag next to its definition (a `_VERSION` constant, or a `PROMPT_VERSIONS` dict for a module with several). Whenever a prompt's *content* changes — not just surrounding code — bump the version and add an entry here: what changed, why, and (when applicable) what eval evidence motivated or validated the change. This is separate from `docs/notes/DECISIONS.md` (architectural choices) and `docs/notes/DEVELOPMENT_LOG.md` (narrative build history) — this file is specifically the prompt-by-prompt version history, so "what did this prompt say at commit X" and "why did it change" are answerable without archaeology through git blame.
+
+Convention:
+- Version format: `v<N>-<date-of-change>` (e.g. `v2-2026-07-19`) for prompts with real content churn expected (visit-prep system prompts); a plain `v<N>` is fine for prompts expected to change rarely.
+- A version bump is required for any wording change that could plausibly affect model behavior — not for comment/docstring-only edits to the surrounding code.
+- Prompts logged to `ConversationLog` (currently: `visit_prep.py`'s two system prompts) carry their version into `extra_data["prompt_version"]` on every real run, so a logged conversation is traceable to the exact prompt that produced it. Prompts not logged anywhere yet (Stage 2 relevance scoring, the AVS parser's five section prompts) are versioned here for traceability but don't yet have a per-run log field — noted as a gap below, not silently skipped.
+
+---
+
+## `src/agents/visit_prep.py` — `SYSTEM_PROMPT_TEMPLATE` (specialty-aware) and `SYSTEM_PROMPT_GENERIC` (fallback)
+
+### v2-2026-07-19
+**Context:** The #29 eval harness's first real run against local Ollama (`llama3.2`) found every one of 5 test cases failing the prompt's own stated 8-15 question requirement (3-8 questions actually returned), plus at least one clear hallucination (`cold_start` — a case with zero vitals data — generated a question asking about blood pressure readings that were never provided).
+
+**Change:**
+- Moved the question-count requirement from a single soft trailing sentence into the task description itself (primacy), and restated it again as an explicit pre-response self-check (recency) — small local models are known to under-attend to instructions buried mid-prompt or stated only once (DEC-009).
+- Added an explicit prohibition: don't ask about vitals/labs/conditions/medications that aren't in the provided data — the previous prompt only said what *to* reference, never what *not* to invent.
+- `SYSTEM_PROMPT_GENERIC` picked up the same two changes, dropping its previously-absent grounding rule entirely (it had none before this version).
+
+**Reasoning:** Both symptoms (short output, hallucination) plausibly share one root cause — the model under-attending to prompt instructions generally — so bundled into one change rather than two separate prompt edits, to be evaluated together via one harness re-run.
+
+**Eval evidence:** Baseline (v1, pre-this-change) run: `eval/results/192bdf0-20260719T063412Z.json` — 0/5 cases passed format validity, `cold_start` showed the blood-pressure hallucination. Re-run after this change: `eval/results/192bdf0-20260719T064925Z.json` — 3/5 cases now pass format validity (`groundedness_labs_vitals`, `tool_call_necessity_dosing`, `retrieval_redundancy`, all False→True), grounded_rate improved in every case that changed and regressed in none. `cross_specialty_scope` and `cold_start` still fail the count — `cold_start` in particular has very little real patient data to draw from (one condition, no medications/labs/past-visits), so hitting 8+ *grounded* questions may be a harder ceiling for that case specifically rather than a remaining prompt-following failure of the same kind. Not yet investigated further — worth a look before declaring v2 fully sufficient.
+
+### v1 (undated — prior to this changelog's existence)
+Original prompt, no explicit anti-hallucination rule, count requirement stated once at the end. Not separately documented since it predates this tracking convention; preserved here only as the implicit baseline v2 supersedes.
+
+---
+
+## `src/utils/context_selection.py` — Stage 2 relevance-scoring prompt (`STAGE2_SCORING_PROMPT_VERSION`)
+
+### v1 (baseline, 2026-07-19)
+Built inline in `ContextSelector.stage2_llm_scoring`, not yet extracted to a named template constant. Rates a past visit's relevance to the target appointment 1-10. No content change made — version tag added for traceability as part of establishing this convention project-wide. **Gap:** not yet threaded into any per-run log — Stage 2 scoring results aren't currently persisted anywhere queryable after the fact, so a version bump here isn't yet traceable to a specific historical scoring run the way `visit_prep.py`'s prompts are via `ConversationLog`.
+
+---
+
+## `src/parsers/agent/prompts.py` — AVS section-extraction prompts (`PROMPT_VERSIONS` dict)
+
+### v1 (baseline, 2026-07-19)
+`VITALS_SYSTEM`, `DIAGNOSES_SYSTEM`, `LAB_ORDERS_SYSTEM`, `NOTES_SYSTEM`, `REFERRALS_SYSTEM` — no content changes made, version tags added for traceability as part of establishing this convention project-wide. **Gap:** same as Stage 2 scoring above — `Document.raw_parse_result` stores the parse *output* but not which prompt version produced it. Worth closing if/when the AVS parser's prompts start changing with any frequency; not urgent while they're stable.
