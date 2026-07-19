@@ -524,7 +524,7 @@
 
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
-      <div class="eyebrow">Snapshot as of DEC-016 · 2026-07-09</div>
+      <div class="eyebrow">Snapshot as of DEC-018 · 2026-07-19</div>
       <h1>HealthSteward — Technical Design Document</h1>
       <p class="dek">A point-in-time architecture snapshot, written up for anyone who wants to go deep on how it's built. Re-written on architectural shifts, not on every change; see the note at the bottom of this page.</p>
 
@@ -1157,9 +1157,9 @@
 
     <!-- EVALUATION PLAN -->
     <section class="panel" id="panel-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0">
-      <div class="eyebrow">Proposed, not built</div>
+      <div class="eyebrow">Tier 1 &amp; 2 shipped (DEC-018) · Tier 3 (LLM-judge) still proposed</div>
       <h1>Evaluation Plan</h1>
-      <p class="dek">None of this is implemented yet — the test suite verifies plumbing (loop convergence, tool execution, anonymization boundaries hold), not output quality. Grounded in the actual pipeline (<code>context_selection.py</code>'s 4-stage selector, <code>visit_prep.py</code>'s prompt + agentic loop, <code>tools.py</code>'s two read-only tools), not a generic eval template. Tracked in <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>.</p>
+      <p class="dek">The deterministic and cheap-no-judge tiers below (build order, tiers 1-2) are now implemented in <code>eval/</code> and run on-demand via <code>python -m eval.run</code> against a real pipeline and a real LLM backend, not just mocks — this closed out <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>. It's explicitly a smoke test, not a quality measure: it catches gross regressions (hallucination, scope violations, malformed output, retrieval rule breaks), and it already caught and fixed one real prompt regression on its first real run — see <code>docs/notes/PROMPT_CHANGELOG.md</code>'s v3 entry. Tier 3 (LLM-judge: relevance/usefulness, non-redundancy, deeper inferential groundedness) remains proposed, not built — see "Build order" below for what's actually shipped vs. still planned. Grounded in the actual pipeline (<code>context_selection.py</code>'s 4-stage selector, <code>visit_prep.py</code>'s prompt + agentic loop, <code>tools.py</code>'s two read-only tools), not a generic eval template.</p>
 
       <section class="block">
         <h2>Two eval surfaces inside visit prep</h2>
@@ -1270,22 +1270,20 @@
       </section>
 
       <section class="block">
-        <h2>Harness shape</h2>
+        <h2>Harness shape — as built (v1)</h2>
         <pre class="snippet">eval/
-  fixtures/                    # synthetic profiles + appointments + labeled gold context
-    patient_001/
-      profile.json
-      appointments.json
-      gold_retrieval.json      # {target_appointment_id: [expected_visit_ids]}
-      gold_claims.json         # optional: hand-labeled "these facts are grounded"
-  retrieval_eval.py            # replays select_context() — Stage 1 needs no LLM call
-  generation_eval.py           # replays prepare_visit(), captures output
-  judges/
-    groundedness_judge.py      # NLI-style judge + entity-extraction pass
-    scope_judge.py             # deterministic, no LLM
-    relevance_judge.py         # rubric-based LLM judge
-  report.py                    # per-dimension metrics, stage-attribution table</pre>
-        <p>Runs against real <code>ConversationLog</code> entries too, not just synthetic fixtures — every real call is already logged (anonymized content + tokens), so periodically sampling N real conversations through the groundedness/scope judges is a second, zero-new-data-collection eval mode. Regression gate: run the fixture set through old-prompt vs. new-prompt and diff scores per dimension before merging a prompt change — there's no before/after quality comparison today.</p>
+  fixtures.py           # synthetic doctors/conditions/medications/labs + GENERATION_CASES
+  db.py                 # builds a real in-memory-equivalent DB row set per case
+  scorers.py            # score_format, score_groundedness, score_scope,
+                         # score_tool_result_scope, score_tool_call_necessity,
+                         # score_retrieval_redundancy, expected_min_questions
+  retrieval_stage1.py    # Stage 1 rule assertions — no LLM call needed
+  run.py                 # CLI entrypoint: runs the real pipeline against
+                         # whichever backend Settings has configured,
+                         # temperature=0.0, writes a timestamped JSON report
+  results/               # gitignored — timestamped run output, diffed
+                         # against the most recent prior run</pre>
+        <p>Runs the real pipeline end-to-end (real DB rows via <code>build_case()</code>, real <code>VisitPrepAgent</code>, real <code>ContextSelector</code>) against whichever backend <code>Settings</code> has configured — not a mock. Diagnostics (<code>agent.last_context_selection</code>, <code>agent.last_tool_calls</code>) are exposed on <code>VisitPrepAgent</code> after <code>prepare_visit()</code> returns so the harness can inspect Phase 1/Phase 2 retrieval without duplicating pipeline logic. Regression gate is comparative, not a fixed bar: each run's JSON report is diffed against the most recent prior result, since "better or worse than last time" is the operative question for a prompt-change review — see a real example of that loop in <code>docs/notes/PROMPT_CHANGELOG.md</code>'s v3 entry. Sampling real <code>ConversationLog</code> entries through a judge pass, described in the original plan below, stays part of the not-yet-built tier 3.</p>
       </section>
 
       <section class="block">
@@ -1310,7 +1308,7 @@
         <p>One ranked list across all four components, not four separate ones — by value/effort, cheapest and most deterministic first.</p>
 
         <div class="loop-box">
-          <div class="loop-box-label">tier 1 — deterministic, no judge model, build first</div>
+          <div class="loop-box-label">tier 1 — deterministic, no judge model — shipped (DEC-018)</div>
           <div class="loop-steps">
             <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Scope checker<span class="arch-sub" style="margin-left:4px;">generation</span></div>
             <div class="loop-arrow">→</div>
@@ -1318,21 +1316,21 @@
             <div class="loop-arrow">→</div>
             <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>3. Stage 1 unit tests<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>4. PII span-overlap<span class="arch-sub" style="margin-left:4px;">anonymize</span></div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>4. PII span-overlap<span class="arch-sub" style="margin-left:4px;">anonymize</span></div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>5. AVS golden-set diff<span class="arch-sub" style="margin-left:4px;">ingest</span></div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>5. AVS golden-set diff<span class="arch-sub" style="margin-left:4px;">ingest</span></div>
           </div>
         </div>
 
         <div class="loop-box">
-          <div class="loop-box-label">tier 2 — cheap, no judge, but not a pure assertion</div>
+          <div class="loop-box-label">tier 2 — cheap, no judge, but not a pure assertion — shipped (DEC-018)</div>
           <div class="loop-steps">
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>6. Groundedness entity-match<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>6. Groundedness entity-match<span class="arch-sub" style="margin-left:4px;">generation</span></div>
           </div>
         </div>
 
         <div class="loop-box">
-          <div class="loop-box-label">tier 3 — needs fixtures and/or a judge model, build last</div>
+          <div class="loop-box-label">tier 3 — needs fixtures and/or a judge model — proposed, not yet built</div>
           <div class="loop-steps">
             <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>7. Retrieval recall/precision<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
             <div class="loop-arrow">→</div>
@@ -1340,7 +1338,7 @@
           </div>
         </div>
 
-        <p style="margin-top:14px;"><strong>#1 (scope checker) is the standout</strong> — reuses <code>med_specialty_map</code>/ICD-10 tags already computed in code, so it's near-zero new infrastructure for a rule the system prompt already claims to enforce but never verifies. <strong>#4 (PII)</strong> is the highest-stakes item in tier 1 despite being just as cheap — it's the actual privacy boundary.</p>
+        <p style="margin-top:14px;"><strong>Two items shipped beyond the original plan</strong> when scoping DEC-018 in detail: a tool-call-necessity check (did the agentic loop's on-demand retrieval call the tool a case was designed to exercise) and a Phase 1/Phase 2 retrieval-redundancy check (did a <code>lookup_past_visits</code> call re-surface a visit Stage 1 already selected) — both observational, not pass/fail, since neither is a hard requirement of correct behavior. <strong>#4 (PII span-overlap) and #5 (AVS golden-set)</strong> remain not yet built — DEC-018 scoped to visit-prep's retrieval/generation surfaces only, tracked separately from the harness described here.</p>
       </section>
     </section>
 
@@ -1436,24 +1434,24 @@ Lab Orders:
           <p>Ollama model tags (<code>qwen2.5:7b</code>, <code>llama3.2</code>) are referenced by tag, not pinned digest — a silent upstream re-tag could change parsing/scoring/visit-prep behavior with no code change to explain why, and this now affects the default agentic backend directly, not just an opt-in path. Anthropic API and any custom provider's pricing/availability changes only matter to whoever has opted into them from Settings. <a href="https://github.com/nidhi-menon/HealthSteward/issues/31">Tracked in issue #31.</a></p>
         </div>
         <div class="callout risk">
-          <span class="callout-label">Prompt-change management</span>
-          <p>The specialty-aware system prompts are the actual product behavior, but changes go through normal code review with no dedicated versioning or before/after quality comparison. Low-stakes at current scale; would need a real process if the loop gains more agentic freedom.</p>
+          <span class="callout-label">Prompt-change management — resolved (DEC-018)</span>
+          <p>Every prompt in the codebase is now versioned, with content changes logged in <code>docs/notes/PROMPT_CHANGELOG.md</code> — what changed, why, and eval evidence where the harness's fixtures cover the change. <code>visit_prep.py</code>'s two prompts additionally log their version per-run via <code>ConversationLog.extra_data["prompt_version"]</code>. Residual gap: the eval harness only covers <code>visit_prep.py</code>'s generation prompts today — the Stage 2 relevance-scoring prompt and the AVS parser's five extraction prompts are versioned for traceability but have no before/after quality signal yet.</p>
         </div>
       </section>
 
       <section class="block">
         <h2>Known gaps</h2>
         <div class="callout gap">
-          <span class="callout-label">No quality evaluation of generated output</span>
-          <p>Tests mock the LLM and verify the pipeline works — loop convergence, tool execution, anonymization boundaries — not whether generated questions are actually good: relevant, non-redundant, correctly specialty-scoped. <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">Tracked in issue #29.</a></p>
+          <span class="callout-label">No quality evaluation of generated output — partially resolved (DEC-018)</span>
+          <p>A deterministic v1 eval harness (<code>eval/</code>, tiers 1-2 of the Evaluation Plan above) now runs the real pipeline against a real backend and catches format/scope/groundedness/retrieval-rule regressions — it already caught and fixed one real prompt regression on its first run. What it still can't measure: relevance/usefulness, non-redundancy, and deeper inferential groundedness a simple entity-match can't verify (e.g. a question referencing a trend or prior visit without repeating the entity name — <a href="https://github.com/nidhi-menon/HealthSteward/issues/76">issue #76</a>) — that's the named tier-3 LLM-judge work, still not built. Original gap tracked in <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>.</p>
         </div>
         <div class="callout gap">
           <span class="callout-label">No visibility into agentic-loop fallback rate</span>
-          <p><code>ConversationLog</code> stores the data, but nothing surfaces how often the loop actually falls back to single-shot. A silently degrading backend would be invisible. <a href="https://github.com/nidhi-menon/HealthSteward/issues/30">Tracked in issue #30.</a></p>
+          <p><code>ConversationLog</code> stores the data, but nothing surfaces how often the loop actually falls back to single-shot in production usage (outside of an eval run, which forces the real pipeline path). A silently degrading backend would be invisible. <a href="https://github.com/nidhi-menon/HealthSteward/issues/30">Tracked in issue #30.</a></p>
         </div>
         <div class="callout gap">
           <span class="callout-label">No frontend test coverage</span>
-          <p>Backend has 72+ tests; frontend has zero — no framework installed, no test files. <a href="https://github.com/nidhi-menon/HealthSteward/issues/27">Tracked in issue #27.</a></p>
+          <p>Backend has 119+ tests; frontend has zero — no framework installed, no test files. <a href="https://github.com/nidhi-menon/HealthSteward/issues/27">Tracked in issue #27.</a></p>
         </div>
       </section>
 
