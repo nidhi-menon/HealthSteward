@@ -674,4 +674,34 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-16*
+### DEC-018: Evaluation Harness v1 — Deterministic-Only, Plus Project-Wide Prompt Versioning
+
+**Date:** 2026-07-19
+
+**Context:** Issue #29 (no quality evaluation of visit-prep output) had been open since early in the project — the backend test suite verifies plumbing (loop convergence, tool execution, anonymization boundaries), not whether generated questions are actually good. `docs/tdd.html`'s Evaluation Plan tab (entry 26 in `DEVELOPMENT_LOG.md`) had already laid out a full plan splitting visit prep into two eval surfaces — retrieval (`ContextSelector`, Stages 1-2) and generation (`VisitPrepAgent.prepare_visit`) — with a tiered, judge-dependency-ranked build order. This DEC covers actually building the first tier.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Build the full plan (deterministic + LLM-as-judge) in one pass | Complete coverage immediately | Judge reliability is its own unsolved problem (self-grading bias, judge variance); blocks shipping anything on that being solved first |
+| Deterministic-only v1, judge tier explicitly deferred | Ships a real regression signal now with zero new trust dependencies; judge-reliability work can happen independently later | Doesn't measure the properties that most need a judge (relevance, non-redundancy) |
+| Skip a harness, rely on manual spot-checking | No build cost | Exactly the gap issue #29 was filed to close — no repeatable "did this prompt change help or hurt" signal |
+
+**Decision:**
+1. **Deterministic-only v1**, matching `docs/tdd.html`'s own tier-1/tier-2 items: format validity, a specialty-scope checker (reusing `med_specialty_map`/ICD-10 tags already computed in code), a cheap groundedness entity-match pass, and Stage 1 retrieval rule assertions (no LLM involved). Explicitly labeled a smoke test, not a quality measure, in both `eval/__init__.py` and its own README-equivalent — catches gross regressions (hallucination, scope violations, malformed output), says nothing about whether output is actually *good*. LLM-as-judge (relevance/usefulness, non-redundancy, deeper groundedness) stays a named v2 backlog item.
+2. **Two additional checks beyond the original plan**, added after tracing the pipeline in detail while scoping this: a **tool-call necessity** check (did the agentic loop's Phase 2 on-demand retrieval call the tool a case was designed to make useful) and a **Phase 1/Phase 2 retrieval redundancy** check (did a `lookup_past_visits` tool call re-surface a visit `ContextSelector` already selected) — both observational in v1, not hard pass/fail, since neither is a deterministic requirement of good behavior, just a signal worth tracking. Matched on `scheduled_date` since `AnonymizedAppointment` carries no original id to correlate the two retrieval phases by anything sturdier.
+3. **Fixed sampling temperature (0.0) for all eval calls**, threaded as a new `temperature` parameter through `LLMBackend.call()` → `VisitPrepAgent.prepare_visit()` — production's default (0.7) is untouched; eval-only override. Without this, a single eval run's pass/fail is meaningless noise.
+4. **Diagnostics exposed on `VisitPrepAgent`** (`self.last_context_selection`, `self.last_tool_calls`) after `prepare_visit()` returns, rather than changing its return contract — lets the harness inspect Phase 1/Phase 2 retrieval without duplicating pipeline logic or breaking the existing API route's expectations.
+5. **Results are diffed against the prior run**, not just checked against a fixed pass/fail floor — `eval/run.py` writes a timestamped JSON report (gitignored, not checked in) and prints a diff summary against the most recent prior result, since "better or worse than last time" is the actual question a prompt-change review needs answered.
+6. **Project-wide prompt versioning, started alongside this** (not originally scoped, added when the first real eval run immediately motivated a prompt change and there was nowhere to record why): every prompt in the codebase — `visit_prep.py`'s two system prompts, `context_selection.py`'s Stage 2 scoring prompt, `parsers/agent/prompts.py`'s five AVS extraction prompts — gets a version tag, with content changes logged in the new `docs/notes/PROMPT_CHANGELOG.md`. `visit_prep.py`'s prompts additionally log their version into `ConversationLog.extra_data["prompt_version"]` on every real run; the other two locations don't have a per-run log to thread into yet (noted as an open gap in the changelog, not silently skipped).
+
+**Found while building this** (not part of the decision, but material context for why v1 shipped with real teeth): running the harness against a real local Ollama server — not just mocks — surfaced three previously-hidden production bugs, all fixed on the same branch: (a) the Ollama/custom backend never sent `stream: false`, so `response.json()` broke on any real multi-chunk response, likely silently degrading most/all Ollama-backed calls straight to the generic fallback; (b) `temperature` was sent top-level for `OllamaBackend`, which Ollama's native `/api/chat` ignores (needs nesting under `options`); (c) the backend's HTTP timeout only bounded gaps between chunks, not total request duration, so a slow/trickling response could hang indefinitely with no error — fixed with an `asyncio.wait_for` wall-clock ceiling. A fourth non-production bug (an undisposed `AsyncEngine` in `eval/run.py` itself) caused the harness process to hang ~17 minutes in asyncio shutdown after already finishing its work — fixed by disposing the engine explicitly.
+
+**Reasoning:** A harness that only ever runs against mocks would have shipped without finding any of the three real production bugs above — validates deliberately including at least one real-backend run as part of standing up v1, not just unit-testing the scorers in isolation. Deterministic-first was the right sequencing call per `docs/tdd.html`'s own build order: it shipped a working regression signal immediately and — concretely, not hypothetically — that signal caught a real prompt-count regression on its very first run, which then got fixed and re-validated through the same harness within the same session.
+
+**Status:** Implemented (v1). LLM-as-judge tier, and closing the two prompt-version-without-a-log gaps noted above, remain open follow-ups.
+
+---
+
+*Last updated: 2026-07-19*
