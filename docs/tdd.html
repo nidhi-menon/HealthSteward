@@ -918,7 +918,7 @@
       <details class="accordion-item">
         <summary>Agentic tool-use loop <span class="plus">+</span></summary>
         <div class="body">
-          <p><code>_run_agentic_loop</code> in <code>src/agents/visit_prep.py</code>: send context + tool specs to the backend → if it returns tool calls, execute each against the DB, anonymize the result, append to the conversation, repeat → if it returns final text with no tool calls, that's the answer → if <code>agent_max_turns</code> is exhausted first, raise and let the caller fall back to single-shot.</p>
+          <p><code>_run_agentic_loop</code> in <code>src/agents/visit_prep.py</code>: send context + tool specs to the backend → if it returns tool calls, execute each against the DB, anonymize the result, append to the conversation, repeat → if it returns final text with no tool calls, that's the answer → if <code>agent_max_turns</code> is exhausted, or the model calls a tool name that doesn't exist, raise and let the caller fall back to single-shot.</p>
 
           <div class="loop-box">
             <div class="loop-box-label">repeats up to agent_max_turns (default 6)</div>
@@ -941,7 +941,7 @@
             </div>
             <div class="branch-card branch-card--fallback">
               <div class="bc-title"><span class="bc-dot"></span>Fails or times out</div>
-              <p>Parse error or turn cap hit → caught, and <code>prepare_visit()</code> silently falls back to a single-shot call.</p>
+              <p>Parse error, turn cap hit, or an unrecognized tool name → caught, and <code>prepare_visit()</code> falls back to a single-shot call.</p>
             </div>
           </div>
 
