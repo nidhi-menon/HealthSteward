@@ -50,7 +50,8 @@ flowchart TD
     Tools -->|query, then anonymize| DB
     Tools -->|anonymized tool result| Backend
     Backend -->|final text, up to agent_max_turns| Loop
-    Loop -->|falls back to single-shot<br/>if loop doesn't converge| DB
+    Loop -->|doesn't converge: another call to| Backend
+    Loop -->|final questions, either path| DB
 
     DB --> API[FastAPI]
     API --> UI[React + TypeScript UI]
