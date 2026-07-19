@@ -5,7 +5,7 @@ from datetime import date, datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.tools import VisitPrepTools, claude_tools, ollama_tools
+from src.agents.tools import UnknownToolError, VisitPrepTools, claude_tools, ollama_tools
 from src.data.models import Appointment, Doctor, HealthProfile, Medication
 from src.utils.anonymization import Anonymizer
 
@@ -104,6 +104,6 @@ async def test_lookup_past_visits_specialty_filter_no_match(db_session, profile_
 @pytest.mark.asyncio
 async def test_unknown_tool_name(db_session, profile_with_medication):
     tools = VisitPrepTools(db_session, Anonymizer(use_ner=False), profile_with_medication.id)
-    result = await tools.execute("not_a_real_tool", {})
 
-    assert "Unknown tool" in result
+    with pytest.raises(UnknownToolError, match="not_a_real_tool"):
+        await tools.execute("not_a_real_tool", {})

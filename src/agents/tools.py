@@ -25,6 +25,16 @@ from src.agents.llm_backend import uses_openai_style_wire_format
 from src.data.models import Appointment, Medication
 from src.utils.anonymization import Anonymizer
 
+
+class UnknownToolError(Exception):
+    """Raised when the model calls a tool name VisitPrepTools doesn't recognize.
+
+    Caught alongside ToolCallParsingError/RuntimeError in visit_prep.py's
+    agentic loop, so a hallucinated tool name triggers the same single-shot
+    fallback as other loop failures rather than being fed back into the
+    conversation as if it were a real tool result.
+    """
+
 # Canonical tool specs (name, description, JSON-schema parameters).
 # Adapted per-backend below since Claude and Ollama expect different shapes.
 TOOL_SPECS: list[dict[str, Any]] = [
@@ -124,7 +134,7 @@ class VisitPrepTools:
             return await self._lookup_past_visits(
                 tool_input.get("specialty"), tool_input.get("keyword")
             )
-        return f"Unknown tool: {name}"
+        raise UnknownToolError(f"Unknown tool: {name}")
 
     async def _get_medication_details(self, medication_name: Optional[str]) -> str:
         query = select(Medication).where(Medication.profile_id == self.profile_id)

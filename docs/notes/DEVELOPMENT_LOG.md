@@ -1170,4 +1170,24 @@ Related: DEC-017.
 
 ---
 
+## 28. Agentic Loop: Fixed Two Silent-Failure Paths (#52, #53)
+
+**Date:** 2026-07-18
+
+**Context:** Prioritizing the backlog ahead of building the #29 eval harness surfaced two bugs in the agentic tool-use loop, both in the same class: code that already had the right structure in place for a failure to be visible, but wasn't actually using it — so failures degraded silently instead. #53: `VisitPrepTools.execute()` (`src/agents/tools.py`) returned the string `"Unknown tool: {name}"` for an unrecognized tool name instead of raising, so a hallucinated tool call was fed back into the conversation as if it were a legitimate result — the model had no way to know it went wrong, and neither did anything watching the loop. #52: `_log_conversation` (`src/agents/base.py`) already accepted a `tool_calls` parameter and stored it in `ConversationLog.extra_data`, but neither call site in `visit_prep.py` ever passed it, so no `ConversationLog` row could ever be used to reconstruct which tools ran during a given visit-prep call.
+
+**What was built:**
+- Added `UnknownToolError` (`src/agents/tools.py`); the unknown-tool branch now raises it instead of returning a fake result string.
+- `visit_prep.py`'s agentic-loop caller now catches `UnknownToolError` alongside the existing `ToolCallParsingError`/`RuntimeError`, so an unrecognized tool name triggers the same single-shot fallback as any other loop failure (DEC-009/DEC-013), rather than silently continuing.
+- `_run_agentic_loop` now accumulates `{name, input, result}` for every tool call across all turns into a list initialized once outside the turn loop (not reset per turn), and passes it to `_log_conversation(tool_calls=...)` when the loop converges — `ConversationLog.extra_data["tool_calls"]` is now actually populated.
+- Regression tests: unknown-tool-name now asserts the raise (`tests/test_agent_tools.py`); single-turn tool-call logging, a 2-turn multi-tool-call accumulation test (guards specifically against the list being reinitialized inside the loop and dropping earlier turns), and the existing non-convergence fallback test extended to cover the unknown-tool fallback path (`tests/test_visit_prep.py`).
+
+**Reasoning:** Neither fix is an architectural choice — both restore behavior the existing code structure already implied (a `tool_calls` param nobody passed, an exception-handling path that already existed for two sibling error types). No DEC entry. Chose to raise rather than log-and-continue for #53 specifically because the loop already has a working fallback path (DEC-013) — routing through it is strictly better than inventing a second silent-degradation mode alongside the first.
+
+**Files changed:** `src/agents/tools.py`, `src/agents/visit_prep.py`, `tests/test_agent_tools.py`, `tests/test_visit_prep.py`.
+
+Related: issue #52, issue #53, DEC-009, DEC-013.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
