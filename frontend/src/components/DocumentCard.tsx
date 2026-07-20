@@ -3,7 +3,7 @@ import type { ScannedFile } from '../types';
 
 interface DocumentCardProps {
   file: ScannedFile;
-  onParse: (filename: string, documentId: string | null) => void;
+  onParse: (filename: string, documentId: string | null, status: ScannedFile['status']) => void;
   isParsing?: boolean;
 }
 
@@ -62,7 +62,7 @@ export function DocumentCard({ file, onParse, isParsing }: DocumentCardProps) {
             <Button
               size="sm"
               variant={file.status === 'completed' ? 'secondary' : 'primary'}
-              onClick={() => onParse(file.filename, file.document_id)}
+              onClick={() => onParse(file.filename, file.document_id, file.status)}
               disabled={isParsing}
             >
               {isParsing
