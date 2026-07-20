@@ -36,6 +36,21 @@ class Settings(BaseSettings):
     # Ollama (used when llm_provider="ollama" or for local LLM scoring)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
+    # Explicit Ollama context window (num_ctx). Without this, Ollama silently
+    # falls back to its own runtime default (commonly 2048 for a
+    # freshly-pulled model's Modelfile) regardless of what this app's own
+    # budget assumes — see issue #71.
+    #
+    # Sized from context_max_tokens (2000, visit-history text) + an estimated
+    # ~1500 tokens for system prompt/patient conditions-medications-labs
+    # overhead + ~500 tokens/turn * agent_max_turns (6) for agentic tool-call
+    # round trips ≈ 6500, rounded up to the next power-of-two Ollama context
+    # size (matching how Modelfiles typically declare num_ctx). The 1500/500
+    # overhead figures are estimates, not measured — llm_backend.py's
+    # OllamaBackend._context_budget_warning logs a warning if an actual
+    # request's estimated token count gets close to this ceiling, so a wrong
+    # estimate here is visible rather than silently truncating.
+    ollama_num_ctx: int = 8192
 
     # Custom OpenAI-compatible provider (used when llm_provider="custom") —
     # any endpoint speaking OpenAI's /chat/completions + tool-calling format:

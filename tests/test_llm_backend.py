@@ -131,6 +131,64 @@ async def test_ollama_backend_requests_non_streaming_with_nested_temperature():
 
 
 @pytest.mark.asyncio
+async def test_ollama_backend_sets_num_ctx_from_settings():
+    """Regression test for issue #71: without an explicit num_ctx, Ollama
+    silently falls back to its own runtime default (commonly 2048 for a
+    freshly-pulled model), independent of this app's own context_max_tokens
+    budget — see Settings.ollama_num_ctx.
+    """
+    mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
+    captured_payload = {}
+
+    async def fake_post(self, url, json, headers=None):
+        captured_payload.update(json)
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post):
+        backend = OllamaBackend(_settings(llm_provider="ollama", ollama_num_ctx=4096))
+        await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys")
+
+    assert captured_payload["options"]["num_ctx"] == 4096
+
+
+@pytest.mark.asyncio
+async def test_ollama_backend_warns_when_request_likely_exceeds_num_ctx():
+    """Regression test for issue #71's "fails loudly" requirement: an
+    oversized request should produce a visible warning rather than silently
+    risking context truncation.
+    """
+    mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
+
+    async def fake_post(self, url, json, headers=None):
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post), patch(
+        "src.agents.llm_backend.logger"
+    ) as mock_logger:
+        backend = OllamaBackend(_settings(llm_provider="ollama", ollama_num_ctx=100))
+        await backend.call(messages=[{"role": "user", "content": "x" * 2000}], system="sys")
+
+    assert mock_logger.warning.called
+    assert "ollama_num_ctx" in mock_logger.warning.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_ollama_backend_no_warning_for_small_request():
+    mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
+
+    async def fake_post(self, url, json, headers=None):
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post), patch(
+        "src.agents.llm_backend.logger"
+    ) as mock_logger:
+        backend = OllamaBackend(_settings(llm_provider="ollama", ollama_num_ctx=8192))
+        await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys")
+
+    assert not mock_logger.warning.called
+
+
+@pytest.mark.asyncio
 async def test_custom_backend_requests_non_streaming_with_top_level_temperature():
     """CustomOpenAICompatibleBackend hits /chat/completions, where top-level
     `temperature` (OpenAI's convention) is correct — unlike Ollama's native
