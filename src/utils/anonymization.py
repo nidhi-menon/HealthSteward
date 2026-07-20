@@ -55,6 +55,7 @@ class AnonymizedDoctor:
     title: str  # e.g., "your Endocrinologist" or "Doctor"
     specialty: Optional[str]
     clinic: Optional[str]  # Keep clinic name
+    notes: Optional[str]  # Anonymized
 
 
 @dataclass
@@ -255,6 +256,7 @@ class Anonymizer:
             title=self.anonymize_doctor_reference(doctor.name, doctor.specialty),
             specialty=doctor.specialty,
             clinic=doctor.clinic,  # Keep clinic name per DEC-006
+            notes=self.anonymize_text(doctor.notes),
         )
 
     def anonymize_appointment(self, appointment) -> AnonymizedAppointment:

@@ -92,6 +92,36 @@ class TestAnonymizer:
         assert result == "Doctor"
         assert "Jane" not in result
 
+    def test_anonymize_doctor_includes_anonymized_notes(self, anonymizer):
+        """Regression test for issue #51: Doctor.notes must reach
+        AnonymizedDoctor, anonymized the same way as every other free-text
+        field (e.g. Condition.notes, see test_anonymize_profile_anonymizes_notes).
+        """
+        doctor = MagicMock()
+        doctor.name = "Dr. Sarah Johnson"
+        doctor.specialty = "Endocrinology"
+        doctor.clinic = "City Medical Center"
+        doctor.notes = "Prefers phone follow-ups. Call 555-000-1111 to reach the office."
+
+        result = anonymizer.anonymize_doctor(doctor)
+
+        assert result.notes is not None
+        assert "555-000-1111" not in result.notes
+        assert "[REDACTED]" in result.notes
+        assert "phone follow-ups" in result.notes
+
+    def test_anonymize_doctor_with_no_notes(self, anonymizer):
+        """None notes should stay None, not become an empty/placeholder string."""
+        doctor = MagicMock()
+        doctor.name = "Dr. Sarah Johnson"
+        doctor.specialty = "Endocrinology"
+        doctor.clinic = "City Medical Center"
+        doctor.notes = None
+
+        result = anonymizer.anonymize_doctor(doctor)
+
+        assert result.notes is None
+
     def test_anonymize_doctor_reference_prescribing(self, anonymizer):
         """Test prescribing doctor anonymization."""
         result = anonymizer.anonymize_doctor_reference(

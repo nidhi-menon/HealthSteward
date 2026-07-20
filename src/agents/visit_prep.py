@@ -535,6 +535,8 @@ Before finalizing your response, count your questions. You must have between 8 a
         lines.append(f"- Date: {appointment.scheduled_date}")
         if appointment.purpose:
             lines.append(f"- Purpose: {appointment.purpose}")
+        if appointment.doctor.notes:
+            lines.append(f"- Provider Notes: {appointment.doctor.notes}")
 
         # Medical conditions with ICD-10 and specialty tags
         if conditions_raw:

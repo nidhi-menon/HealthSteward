@@ -20,6 +20,7 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 - The eval harness's fixed 8-question format-validity floor was in tension with data-sparse cases (e.g. `cold_start`) correctly following the prompt's own anti-hallucination rule — floor now scales to how much real patient data a case has (`eval/scorers.py`'s `expected_min_questions()`); visit-prep prompts bumped to v3 to require real data behind a category before including it and to omit empty categories rather than padding them (see `docs/notes/PROMPT_CHANGELOG.md`)
 - The eval harness's groundedness scorer didn't know the prompt explicitly allows the "Lifestyle & Prevention" category to stay data-light, and was flagging its generic-but-permitted questions as ungrounded
 - Ollama agentic-loop calls never set `num_ctx`, so Ollama silently used its own runtime default (commonly 2048) independent of this app's own context budget — added an explicit, formula-derived default plus a runtime warning when a request estimate crosses 75% of it (#71, DEC-019)
+- `Doctor.notes` was persisted and user-editable but never reached visit-prep's AI context, unlike `Condition.notes`/`Appointment.visit_notes` — now anonymized and included the same way (#51)
 
 ## [0.2.0-alpha] - 2026-07-10
 
