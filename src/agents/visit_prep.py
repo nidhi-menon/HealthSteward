@@ -22,7 +22,7 @@ from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
 from src.services import settings_service
 from src.utils.anonymization import Anonymizer, AnonymizedAppointment, AnonymizedProfile
-from src.utils.context_selection import ContextSelector, ContextSelectionResult
+from src.utils.context_selection import ContextSelectionResult, ContextSelector
 
 
 # ICD-10 prefix → specialty mapping for tagging conditions
@@ -117,9 +117,13 @@ class VisitPrepAgent(BaseAgent):
     Uses anonymization and intelligent context selection per DEC-006 and DEC-008.
     """
 
+    # See docs/notes/PROMPT_CHANGELOG.md for version history/rationale —
+    # bump the version and add an entry there whenever either prompt below
+    # changes, per the project-wide prompt-versioning convention.
+    SYSTEM_PROMPT_TEMPLATE_VERSION = "v3-2026-07-19"
     SYSTEM_PROMPT_TEMPLATE = """You are a healthcare assistant preparing a patient for a visit with their {specialty}.
 
-Your task: generate focused, actionable questions the patient should ask THIS doctor based on the patient data provided.
+Your task: generate 8-15 focused, actionable questions the patient should ask THIS doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
 
 IMPORTANT RULES:
 - Only include questions relevant to this doctor's specialty ({specialty})
@@ -128,6 +132,10 @@ IMPORTANT RULES:
 - Use the lab orders and vitals data to generate specific questions (e.g. "Your last TSH was ordered on [date] — ask about results and whether dosage adjustment is needed")
 - Reference pending follow-ups if relevant to this specialty
 - Note significant changes in vitals (weight, BMI, blood pressure) and ask about them if relevant
+- Do NOT ask about vitals, lab results, conditions, or medications that are not explicitly listed in the patient data below — if a category of data (e.g. vitals) isn't provided, don't reference it or assume it exists
+- A category needs real patient data behind it to be included: "Condition Management" needs actual conditions listed, "Medication Review" needs actual medications listed, "Lab Results & Monitoring" needs actual lab orders listed, "Follow-up Planning" needs an actual pending follow-up or referral listed if you're asking about a specific one (a generic "when should I schedule a follow-up" is fine either way). If a category has no real data behind it, omit it entirely rather than asking generically. "Lifestyle & Prevention" is the exception — general guidance tied to a real listed condition or specialty is fine even without additional data, as long as you don't assert a specific fact (a test result, a medication name, an appointment) that wasn't provided.
+- Never include a category key with an empty question list — if a category has nothing to ask, leave the key out of the JSON entirely rather than including it as an empty array. Prioritize categories where you have real patient data (actual conditions, actual medications) over categories with none.
+- Omitting empty categories does NOT lower the question-count requirement below. If dropping empty categories leaves you short of 8, go deeper within the categories that DO have real data — e.g. more angles on each condition or medication (dosage timing, monitoring frequency, symptom tracking, interactions) — rather than accepting a shorter list.
 
 Respond with a JSON object in this exact format:
 {{
@@ -140,19 +148,26 @@ Respond with a JSON object in this exact format:
     "context_summary": "A brief 2-3 sentence summary of the patient's key health context relevant to this visit."
 }}
 
-Use these categories (skip any that have no relevant questions):
+Use these categories (omit any that have no relevant questions — do not include an empty list for a category):
 - "Condition Management" — questions about conditions this specialist manages or that interact with their care
 - "Medication Review" — only medications this specialist manages or that could interact with their treatments
 - "Lab Results & Monitoring" — questions about recent or pending lab work relevant to this specialty
 - "Lifestyle & Prevention" — actionable lifestyle questions specific to their conditions and this specialty
 - "Follow-up Planning" — what to schedule next, referrals to discuss
 
-Generate 8-15 questions total. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
+Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     # Fallback when no specialty is known
+    SYSTEM_PROMPT_GENERIC_VERSION = "v3-2026-07-19"
     SYSTEM_PROMPT_GENERIC = """You are a healthcare assistant preparing a patient for an upcoming doctor visit.
 
-Your task: generate focused, actionable questions the patient should ask their doctor based on the patient data provided.
+Your task: generate 8-15 focused, actionable questions the patient should ask their doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
+
+IMPORTANT RULES:
+- Do NOT ask about vitals, lab results, conditions, or medications that are not explicitly listed in the patient data below — if a category of data (e.g. vitals) isn't provided, don't reference it or assume it exists
+- A category needs real patient data behind it to be included: "Condition Management" needs actual conditions listed, "Medication Review" needs actual medications listed, "Lab Results & Monitoring" needs actual lab orders listed, "Follow-up Planning" needs an actual pending follow-up or referral listed if you're asking about a specific one (a generic "when should I schedule a follow-up" is fine either way). If a category has no real data behind it, omit it entirely rather than asking generically. "Lifestyle & Prevention" is the exception — general guidance tied to a real listed condition is fine even without additional data, as long as you don't assert a specific fact (a test result, a medication name, an appointment) that wasn't provided.
+- Never include a category key with an empty question list — if a category has nothing to ask, leave the key out of the JSON entirely rather than including it as an empty array. Prioritize categories where you have real patient data (actual conditions, actual medications) over categories with none.
+- Omitting empty categories does NOT lower the question-count requirement below. If dropping empty categories leaves you short of 8, go deeper within the categories that DO have real data — e.g. more angles on each condition or medication (dosage timing, monitoring frequency, symptom tracking, interactions) — rather than accepting a shorter list.
 
 Respond with a JSON object in this exact format:
 {{
@@ -165,14 +180,14 @@ Respond with a JSON object in this exact format:
     "context_summary": "A brief 2-3 sentence summary of the patient's key health context relevant to this visit."
 }}
 
-Use these categories (skip any that have no relevant questions):
+Use these categories (omit any that have no relevant questions — do not include an empty list for a category):
 - "Condition Management" — questions about their active conditions
 - "Medication Review" — questions about current medications
 - "Lab Results & Monitoring" — questions about recent or pending lab work
 - "Lifestyle & Prevention" — actionable lifestyle questions
 - "Follow-up Planning" — what to schedule next
 
-Generate 8-15 questions total. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
+Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     def __init__(self, db: AsyncSession):
         """Initialize the visit prep agent."""
@@ -185,6 +200,10 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             relevance_cutoff=self.settings.context_relevance_cutoff,
             stage2_max_candidates=self.settings.context_stage2_max_candidates,
         )
+        # Diagnostics from the most recent prepare_visit() call — see that
+        # method's docstring. None/empty until a run has actually happened.
+        self.last_context_selection: Optional[ContextSelectionResult] = None
+        self.last_tool_calls: list[dict[str, Any]] = []
 
     async def _get_past_appointments(self, profile_id: str, current_appointment_id: str) -> list[Appointment]:
         """Get past completed appointments for context."""
@@ -241,14 +260,34 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             return self.SYSTEM_PROMPT_TEMPLATE.format(specialty=specialty)
         return self.SYSTEM_PROMPT_GENERIC
 
+    def _get_system_prompt_version(self, specialty: Optional[str]) -> str:
+        """Version tag for whichever prompt _get_system_prompt returns —
+        logged alongside the conversation so a real ConversationLog row is
+        traceable to which prompt version produced it. See
+        docs/notes/PROMPT_CHANGELOG.md for the project-wide convention.
+        """
+        return self.SYSTEM_PROMPT_TEMPLATE_VERSION if specialty else self.SYSTEM_PROMPT_GENERIC_VERSION
+
     async def prepare_visit(
         self,
         appointment: Appointment,
         additional_concerns: Optional[str] = None,
+        temperature: float = 0.7,
     ) -> dict[str, Any]:
         """Generate visit preparation questions and context.
 
         Uses anonymization and context selection per DEC-006 and DEC-008.
+
+        temperature defaults to production's normal 0.7; the eval harness
+        (issue #29) passes 0.0 so repeated runs of the same fixture are
+        reproducible enough to diff against a prior run.
+
+        After this returns, `self.last_context_selection` (the Phase 1
+        ContextSelectionResult) and `self.last_tool_calls` (the Phase 2
+        agentic-loop tool-call log, empty if the single-shot fallback ran)
+        are available for callers that need run diagnostics — the eval
+        harness uses both to check for redundant retrieval between the two
+        phases, without duplicating this method's pipeline logic.
         """
         # Step 0: Refresh settings with any DB-persisted overrides (DEC-016) —
         # the LLM provider can be switched from the Settings UI at runtime,
@@ -277,6 +316,8 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             all_past_appointments=past_appointments,
             max_tokens=self.settings.context_max_tokens,
         )
+        self.last_context_selection = context_result
+        self.last_tool_calls: list[dict[str, Any]] = []
 
         logger.info(
             f"Context selection: {context_result.total_visits_considered} total, "
@@ -311,6 +352,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         )
 
         system_prompt = self._get_system_prompt(target_specialty)
+        system_prompt_version = self._get_system_prompt_version(target_specialty)
         messages = [{"role": "user", "content": context}]
 
         try:
@@ -321,14 +363,17 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             if self.settings.agent_tool_use_enabled:
                 try:
                     response = await self._run_agentic_loop(
-                        appointment.profile_id, messages, system_prompt
+                        appointment.profile_id, messages, system_prompt, temperature=temperature,
+                        prompt_version=system_prompt_version,
                     )
                 except (ToolCallParsingError, UnknownToolError, RuntimeError) as e:
                     logger.warning(f"Agentic tool-use loop failed, falling back to single-shot: {e}")
                     response = None
 
             if response is None:
-                response = await self._call_backend(messages, system_prompt)
+                response = await self._call_backend(
+                    messages, system_prompt, temperature=temperature, prompt_version=system_prompt_version
+                )
 
             # Step 8: Parse JSON response
             parsed = self._parse_json_response(response)
@@ -354,6 +399,8 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         profile_id: str,
         messages: list[dict],
         system: str,
+        temperature: float = 0.7,
+        prompt_version: Optional[str] = None,
     ) -> str:
         """Run the bounded agentic tool-use loop (DEC-009, DEC-013).
 
@@ -366,10 +413,10 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
         tool_executor = VisitPrepTools(self.db, self.anonymizer, profile_id)
 
         conversation = list(messages)
-        tool_call_log: list[dict[str, Any]] = []
+        tool_call_log: list[dict[str, Any]] = getattr(self, "last_tool_calls", [])
 
         for turn in range(self.settings.agent_max_turns):
-            result = await backend.call(conversation, system, tools=tools)
+            result = await backend.call(conversation, system, tools=tools, temperature=temperature)
 
             if not result.tool_calls:
                 await self._log_conversation(
@@ -380,6 +427,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
                     output_tokens=result.output_tokens,
                     model=self._model_name_for_provider(),
                     tool_calls=tool_call_log or None,
+                    prompt_version=prompt_version,
                 )
                 return result.text or ""
 
@@ -403,10 +451,12 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             return self.settings.custom_llm_model or "custom"
         return self.settings.anthropic_model
 
-    async def _call_backend(self, messages: list[dict], system: str) -> str:
+    async def _call_backend(
+        self, messages: list[dict], system: str, temperature: float = 0.7, prompt_version: Optional[str] = None
+    ) -> str:
         """Single-shot (non-agentic) generation via whichever backend is configured."""
         backend = get_llm_backend(self.settings)
-        result = await backend.call(messages, system, tools=None)
+        result = await backend.call(messages, system, tools=None, temperature=temperature)
         response = result.text or ""
 
         await self._log_conversation(
@@ -416,6 +466,7 @@ Generate 8-15 questions total. Be specific — reference actual condition names,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
             model=self._model_name_for_provider(),
+            prompt_version=prompt_version,
         )
 
         return response

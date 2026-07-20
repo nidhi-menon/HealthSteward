@@ -6,9 +6,17 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 
 ## [Unreleased]
 
+### Added
+- Deterministic evaluation harness (v1) for visit-prep output quality — format validity, groundedness, specialty-scope, tool-call necessity, and Phase 1/Phase 2 retrieval-redundancy checks, runnable on-demand against the real pipeline (#29, DEC-018)
+- Project-wide prompt versioning — every LLM prompt now carries a version tag, with change history in `docs/notes/PROMPT_CHANGELOG.md` (DEC-018)
+
 ### Fixed
 - An unrecognized tool name called by the model during the agentic visit-prep loop was silently absorbed as a fake tool result instead of triggering the existing single-shot fallback (#53)
 - Tool calls made during the agentic visit-prep loop were never recorded in `ConversationLog`, despite the field existing, so a completed run's tool-call trace was unrecoverable (#52)
+- The Ollama/custom LLM backend never sent `stream: false`, so a real (multi-chunk) response body could raise an uncaught `json.JSONDecodeError`, likely degrading most real Ollama-backed visit-prep calls straight to the generic fallback response with no visible error
+- `temperature` was sent top-level for the Ollama backend, which Ollama's native `/api/chat` silently ignores (needs nesting under `options`) — sampling temperature had no effect for Ollama-backed calls
+- The agentic loop's backend HTTP call had no total wall-clock timeout, only a per-chunk read timeout, so a slow/trickling response could hang indefinitely with no error or fallback triggered
+- The visit-prep system prompt's own stated 8-15 question requirement and its grounding guidance were being under-followed by local models — reinforced prompt wording, validated via the new eval harness (before/after: 0/5 → 3/5 cases passing format validity on identical fixtures)
 
 ## [0.2.0-alpha] - 2026-07-10
 

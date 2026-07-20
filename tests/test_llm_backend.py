@@ -105,6 +105,56 @@ async def test_claude_backend_tool_use_response():
 
 
 @pytest.mark.asyncio
+async def test_ollama_backend_requests_non_streaming_with_nested_temperature():
+    """Regression test: Ollama's native /api/chat defaults to stream: true
+    and expects temperature nested under `options`, not top-level. Sending
+    neither previously meant a real (multi-chunk) response body was NDJSON,
+    and response.json() raised an uncaught json.JSONDecodeError ("Extra
+    data") that skipped straight past the single-shot fallback (DEC-013) to
+    the outer generic fallback response — found by running the eval harness
+    (issue #29) against a real local Ollama server rather than only mocks.
+    """
+    mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
+    captured_payload = {}
+
+    async def fake_post(self, url, json, headers=None):
+        captured_payload.update(json)
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post):
+        backend = OllamaBackend(_settings(llm_provider="ollama"))
+        await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys", temperature=0.0)
+
+    assert captured_payload["stream"] is False
+    assert captured_payload["options"]["temperature"] == 0.0
+    assert "temperature" not in captured_payload  # must not be top-level for Ollama's native API
+
+
+@pytest.mark.asyncio
+async def test_custom_backend_requests_non_streaming_with_top_level_temperature():
+    """CustomOpenAICompatibleBackend hits /chat/completions, where top-level
+    `temperature` (OpenAI's convention) is correct — unlike Ollama's native
+    /api/chat, which needs it nested under `options` (see the Ollama
+    regression test above).
+    """
+    mock_json = {"choices": [{"message": {"role": "assistant", "content": "hi", "tool_calls": None}}]}
+    captured_payload = {}
+
+    async def fake_post(self, url, json, headers=None):
+        captured_payload.update(json)
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post):
+        backend = CustomOpenAICompatibleBackend(_settings(
+            llm_provider="custom", custom_llm_base_url="http://custom", custom_llm_model="m",
+        ))
+        await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys", temperature=0.0)
+
+    assert captured_payload["stream"] is False
+    assert captured_payload["temperature"] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_ollama_backend_text_only_response():
     mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
 
@@ -173,6 +223,31 @@ async def test_ollama_backend_request_error_raises_tool_call_parsing_error():
     with patch.object(httpx.AsyncClient, "post", fake_post):
         backend = OllamaBackend(_settings(llm_provider="ollama"))
         with pytest.raises(ToolCallParsingError):
+            await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys")
+
+
+@pytest.mark.asyncio
+async def test_backend_call_enforces_total_wall_clock_timeout(monkeypatch):
+    """Regression test: a response that keeps trickling data within each
+    httpx per-chunk read-timeout window (never idle long enough to trip
+    httpx.Timeout(120.0, ...) on its own) must still be bounded by a real
+    total-duration ceiling — found by an eval-harness (#29) run against a
+    real local model that hung 30+ minutes on an active connection with no
+    error, no log, no fallback triggered.
+    """
+    import asyncio as asyncio_module
+
+    import src.agents.llm_backend as llm_backend_module
+
+    monkeypatch.setattr(llm_backend_module, "_TOTAL_CALL_TIMEOUT_SECONDS", 0.05)
+
+    async def fake_post(self, url, json, headers=None):
+        await asyncio_module.sleep(10)  # never actually reached — total timeout fires first
+        return httpx.Response(200, json={}, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post):
+        backend = OllamaBackend(_settings(llm_provider="ollama"))
+        with pytest.raises(ToolCallParsingError, match="total wall-clock"):
             await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys")
 
 
