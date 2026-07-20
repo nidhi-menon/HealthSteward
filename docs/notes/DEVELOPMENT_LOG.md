@@ -1234,4 +1234,23 @@ Related: issue #71, DEC-019, DEC-008, DEC-009, DEC-013, DEC-018.
 
 ---
 
+## 31. Doctor.notes Never Reached Visit-Prep Context (#51)
+
+**Date:** 2026-07-20
+
+**Context:** Picked up issue #51 next off the backlog — same class of gap as `Appointment.prep_notes` (#43): `Doctor.notes` (`src/data/models.py:157`) is a persisted, user-editable freeform field (the "Notes" textarea on the Doctor modal, distinct from the already-wired Condition modal's Notes field) with zero references in `visit_prep.py`, `context_selection.py`, or `anonymization.py`. `Condition.notes` and `Appointment.visit_notes` were both already confirmed wired in; `Doctor.notes` was the one remaining orphaned notes field.
+
+**What was built:**
+- `AnonymizedDoctor` (`src/utils/anonymization.py`) gained a `notes: Optional[str]` field, populated in `Anonymizer.anonymize_doctor()` via `self.anonymize_text(doctor.notes)` — same anonymization call as every other free-text field, not a new code path.
+- `VisitPrepAgent._build_context_message` (`src/agents/visit_prep.py`) now appends a `- Provider Notes: ...` line to the "Upcoming Appointment" section when present, reading the already-anonymized `appointment.doctor.notes` (no double-anonymization, since context assembly operates on the `AnonymizedAppointment`/`AnonymizedDoctor` dataclasses, not raw ORM objects).
+- Regression test `test_prepare_visit_includes_doctor_notes_in_context` (`tests/test_visit_prep.py`) — forces `llm_provider="claude"` via `monkeypatch.setattr(get_settings(), "llm_provider", "claude")` (matching `test_prepare_visit_agentic_tool_use`'s pattern) so the mocked Claude client is actually the backend exercised, then asserts the doctor's notes text appears in the constructed context message. Found while writing this that several *existing* `test_visit_prep.py` tests patch `AsyncAnthropic` to mock Claude but never force `llm_provider` away from the dev machine's `.env` default (`ollama`) — those tests were silently exercising a real/timing-out Ollama call and its single-shot fallback instead of the intended mock, which happened to still produce a 200 response so nothing failed, just not against the code path the test's own docstring claims. Out of scope for #51 itself; filed as issue #79.
+
+**Reasoning:** Not an architectural choice — restores the same anonymize-then-include treatment every other patient/provider free-text field already gets, following the exact pattern `Condition.notes` already established rather than inventing a new one. No DEC entry, matching the #52/#53 precedent (entry 28) for gap-filling fixes with no new architectural surface.
+
+**Files changed:** `src/utils/anonymization.py`, `src/agents/visit_prep.py`, `tests/test_visit_prep.py`.
+
+Related: issue #51, issue #43, issue #79.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
