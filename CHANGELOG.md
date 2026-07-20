@@ -17,6 +17,8 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 - `temperature` was sent top-level for the Ollama backend, which Ollama's native `/api/chat` silently ignores (needs nesting under `options`) — sampling temperature had no effect for Ollama-backed calls
 - The agentic loop's backend HTTP call had no total wall-clock timeout, only a per-chunk read timeout, so a slow/trickling response could hang indefinitely with no error or fallback triggered
 - The visit-prep system prompt's own stated 8-15 question requirement and its grounding guidance were being under-followed by local models — reinforced prompt wording, validated via the new eval harness (before/after: 0/5 → 3/5 cases passing format validity on identical fixtures)
+- The eval harness's fixed 8-question format-validity floor was in tension with data-sparse cases (e.g. `cold_start`) correctly following the prompt's own anti-hallucination rule — floor now scales to how much real patient data a case has (`eval/scorers.py`'s `expected_min_questions()`); visit-prep prompts bumped to v3 to require real data behind a category before including it and to omit empty categories rather than padding them (see `docs/notes/PROMPT_CHANGELOG.md`)
+- The eval harness's groundedness scorer didn't know the prompt explicitly allows the "Lifestyle & Prevention" category to stay data-light, and was flagging its generic-but-permitted questions as ungrounded
 
 ## [0.2.0-alpha] - 2026-07-10
 
