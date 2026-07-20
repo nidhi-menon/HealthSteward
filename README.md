@@ -144,6 +144,7 @@ Create a `.env` file in the project root:
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
+OLLAMA_NUM_CTX=8192           # explicit context window (DEC-019) — see .env.example
 
 # Required only if using Claude for visit prep (set from Settings, or here)
 # ANTHROPIC_API_KEY=your_key_here
