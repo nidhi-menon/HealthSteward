@@ -77,7 +77,8 @@ flowchart TD
     Tools -->|query, then anonymize| DB
     Tools -->|anonymized tool result| Backend
     Backend -->|final text, up to agent_max_turns| Loop
-    Loop -->|falls back to single-shot<br/>if loop doesn't converge| DB
+    Loop -->|doesn't converge: another call to| Backend
+    Loop -->|final questions, either path| DB
 
     DB --> API[FastAPI]
     API --> UI[React + TypeScript UI]
@@ -193,7 +194,7 @@ HealthSteward/
 │       └── logging.py
 ├── frontend/                # React + TypeScript + Tailwind
 │   └── src/
-│       ├── pages/           # ProfileList, ProfileDetail, VisitPrep
+│       ├── pages/           # ProfileList, ProfileDetail, VisitPrep, Settings
 │       ├── components/      # UI components + DocumentCard, ParsedItemsReview, PostAvsActionPanel, ActionItemsSection
 │       ├── api/client.ts    # Typed API client
 │       └── types/index.ts   # TypeScript interfaces
@@ -219,6 +220,8 @@ HealthSteward/
 | FollowUp | Follow-up recommendations |
 | VisitPrep | AI-generated visit preparation |
 | ConversationLog | Anonymized LLM conversation history |
+| NudgeState | Snooze state for computed "Needs Attention" nudges |
+| AppSettings | Runtime-editable LLM provider settings (DEC-016) |
 
 ## Key Features in Detail
 
@@ -245,8 +248,9 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 - `docs/notes/DESIGN.md` — technical design doc; point-in-time architecture snapshot (problem framing, system design, AI approach, evaluation gaps, risks)
 - `docs/SITE_STYLE_GUIDE.md` — palette, typography, layout, diagram, and accessibility conventions for the public site (`docs/index.html`, `docs/tdd.html`)
-- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-016)
+- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-018)
 - `docs/notes/DEVELOPMENT_LOG.md` — development conversation history
+- `docs/notes/PROMPT_CHANGELOG.md` — version history for every LLM prompt in the codebase
 - `docs/notes/SANDBOX_PROMPT.md` — sandbox experiment prompts
 - `CONTRIBUTING.md` — how to contribute, including the privacy constraints PRs must respect
 - `SECURITY.md` — how to report a vulnerability

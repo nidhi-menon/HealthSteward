@@ -77,6 +77,7 @@ class BaseAgent:
         output_tokens: Optional[int] = None,
         model: Optional[str] = None,
         tool_calls: Optional[list[dict[str, Any]]] = None,
+        prompt_version: Optional[str] = None,
     ) -> None:
         """Log conversation to database for training data collection.
 
@@ -114,6 +115,8 @@ class BaseAgent:
             }
             if tool_calls:
                 assistant_extra_data["tool_calls"] = tool_calls
+            if prompt_version:
+                assistant_extra_data["prompt_version"] = prompt_version
 
             assistant_log = ConversationLog(
                 role="assistant",
