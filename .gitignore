@@ -14,6 +14,11 @@ docs/notes/PATENT_ANALYSIS.md
 docs/notes/RESEARCH_IDEAS.md
 
 # ===============================================
+# CLAUDE CODE (local-only, per its own header)
+# ===============================================
+CLAUDE.md
+
+# ===============================================
 # EVAL HARNESS RESULTS (issue #29)
 # ===============================================
 # Local run output — not reproducible across machines/backends/model
