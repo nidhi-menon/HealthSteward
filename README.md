@@ -144,6 +144,7 @@ Create a `.env` file in the project root:
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
+OLLAMA_NUM_CTX=8192           # explicit context window (DEC-019) — see .env.example
 
 # Required only if using Claude for visit prep (set from Settings, or here)
 # ANTHROPIC_API_KEY=your_key_here
@@ -248,7 +249,7 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 - `docs/notes/DESIGN.md` — technical design doc; point-in-time architecture snapshot (problem framing, system design, AI approach, evaluation gaps, risks)
 - `docs/SITE_STYLE_GUIDE.md` — palette, typography, layout, diagram, and accessibility conventions for the public site (`docs/index.html`, `docs/tdd.html`)
-- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-018)
+- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-019)
 - `docs/notes/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/notes/PROMPT_CHANGELOG.md` — version history for every LLM prompt in the codebase
 - `docs/notes/SANDBOX_PROMPT.md` — sandbox experiment prompts

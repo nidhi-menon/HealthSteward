@@ -1214,4 +1214,24 @@ Related: issue #29, issue #71, issue #72, issue #73, issue #74, DEC-008, DEC-009
 
 ---
 
+## 30. Fixed Ollama `num_ctx` Never Being Set (#71, DEC-019)
+
+**Date:** 2026-07-20
+
+**Context:** Picked up issue #71 next off the backlog — one of the follow-up bugs surfaced while scoping the #29 eval harness (entry 29). `_OpenAIStyleHTTPBackend.call` never included `num_ctx` in the Ollama request payload, so Ollama silently used its own runtime default (commonly 2048 for a freshly-pulled model) regardless of what this app's `context_max_tokens` budget (2000) assumed — a gap that predates the agentic loop's tool-call overhead and could already be silently truncating context on local models.
+
+**What was built:** Added `Settings.ollama_num_ctx: int = 8192` (`src/config.py`), sized from a documented formula (`context_max_tokens` + estimated system-prompt overhead + per-turn tool-call overhead × `agent_max_turns`, rounded to the next power-of-two Ollama context size) rather than an arbitrary round number, and wired it into `OllamaBackend._sampling_payload`'s `options` dict (`src/agents/llm_backend.py`) — scoped to `OllamaBackend` only, since `num_ctx` isn't a standard OpenAI-compatible field and `CustomOpenAICompatibleBackend` shares the same base class. Kept env-only for now rather than adding it to the runtime-editable Settings allowlist, matching the existing gap on `ollama_model` (issue #59) instead of quietly compounding it.
+
+Went back and closed the issue's second half rather than leaving it as a follow-up: added `_context_budget_warning`, a hook on `_OpenAIStyleHTTPBackend` (no-op by default, overridden by `OllamaBackend`) that estimates a request's token count via a chars/4 heuristic over the serialized messages and tool specs, and logs a loguru warning — naming the estimate and which settings to adjust — if it crosses 75% of `ollama_num_ctx`. Deliberately a visibility mechanism rather than a hard gate, since the heuristic isn't a real per-model tokenizer count and shouldn't block an otherwise-fine request on a false positive.
+
+Added three regression tests in `tests/test_llm_backend.py`: `test_ollama_backend_sets_num_ctx_from_settings` (configured value reaches the payload), `test_ollama_backend_warns_when_request_likely_exceeds_num_ctx`, and `test_ollama_backend_no_warning_for_small_request`.
+
+**Reasoning:** See DEC-019 for the full options analysis — a formula-grounded default plus a runtime overflow warning closes both halves of the issue's expected behavior (explicit, reasoned `num_ctx`; loud failure on likely overflow) without needing a separate profiling project to trust the number first.
+
+**Files changed:** `src/config.py`, `src/agents/llm_backend.py`, `tests/test_llm_backend.py`, `docs/notes/DECISIONS.md`.
+
+Related: issue #71, DEC-019, DEC-008, DEC-009, DEC-013, DEC-018.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
