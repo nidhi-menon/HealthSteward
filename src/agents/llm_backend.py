@@ -190,6 +190,16 @@ class _OpenAIStyleHTTPBackend(LLMBackend):
         """
         return {"temperature": temperature, "stream": False}
 
+    def _context_budget_warning(
+        self, chat_messages: list[dict[str, Any]], tools: Optional[list[dict[str, Any]]]
+    ) -> Optional[str]:
+        """Return a warning message if this request is likely to exceed the
+        provider's context window, or None if there's no such window to check
+        (default: no-op). Overridden by OllamaBackend, where `num_ctx` is an
+        explicit, known ceiling — see issue #71.
+        """
+        return None
+
     async def call(
         self,
         messages: list[dict[str, Any]],
@@ -205,6 +215,10 @@ class _OpenAIStyleHTTPBackend(LLMBackend):
         }
         if tools:
             payload["tools"] = tools
+
+        budget_warning = self._context_budget_warning(chat_messages, tools)
+        if budget_warning:
+            logger.warning(budget_warning)
 
         async def _do_request() -> Any:
             # Fail fast (~5s) on an unreachable/hung host at the connect
@@ -272,6 +286,17 @@ class _OpenAIStyleHTTPBackend(LLMBackend):
         return {"role": "tool", "tool_call_id": tool_call.id, "content": result_content}
 
 
+# Rough chars-per-token ratio for estimating request size against `num_ctx`
+# without a real tokenizer per model. English text is commonly ~4 chars/token;
+# this is a heuristic early-warning signal, not a precise count — it exists to
+# make an already-likely-truncated request visible in logs (issue #71's
+# "fails loudly" requirement), not to gate/block the request.
+_CHARS_PER_TOKEN_ESTIMATE = 4
+# Warn once the estimate crosses this fraction of num_ctx, leaving headroom
+# for the model's own response tokens within the same context window.
+_CONTEXT_BUDGET_WARNING_THRESHOLD = 0.75
+
+
 class OllamaBackend(_OpenAIStyleHTTPBackend):
     """LLMBackend implementation wrapping Ollama's /api/chat tool-calling support."""
 
@@ -289,7 +314,28 @@ class OllamaBackend(_OpenAIStyleHTTPBackend):
         return f"ollama-call-{index}"
 
     def _sampling_payload(self, temperature: float) -> dict[str, Any]:
-        return {"stream": False, "options": {"temperature": temperature}}
+        return {
+            "stream": False,
+            "options": {"temperature": temperature, "num_ctx": self.settings.ollama_num_ctx},
+        }
+
+    def _context_budget_warning(
+        self, chat_messages: list[dict[str, Any]], tools: Optional[list[dict[str, Any]]]
+    ) -> Optional[str]:
+        char_count = sum(len(json.dumps(m)) for m in chat_messages)
+        if tools:
+            char_count += sum(len(json.dumps(t)) for t in tools)
+        estimated_tokens = char_count // _CHARS_PER_TOKEN_ESTIMATE
+        threshold = int(self.settings.ollama_num_ctx * _CONTEXT_BUDGET_WARNING_THRESHOLD)
+        if estimated_tokens > threshold:
+            return (
+                f"Ollama request estimated at ~{estimated_tokens} tokens, over "
+                f"{int(_CONTEXT_BUDGET_WARNING_THRESHOLD * 100)}% of ollama_num_ctx "
+                f"({self.settings.ollama_num_ctx}) — response quality may silently "
+                f"degrade from context truncation. Consider raising ollama_num_ctx "
+                f"or reducing context_max_tokens/agent_max_turns."
+            )
+        return None
 
 
 class CustomOpenAICompatibleBackend(_OpenAIStyleHTTPBackend):

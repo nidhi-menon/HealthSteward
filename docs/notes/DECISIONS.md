@@ -704,4 +704,29 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-19*
+### DEC-019: Explicit Ollama `num_ctx`, Sized as an Env-Only Setting
+
+**Date:** 2026-07-20
+
+**Context:** Issue #71, filed while scoping the #29 eval harness (DEC-018): `_OpenAIStyleHTTPBackend.call` never set `num_ctx` in the request payload sent to Ollama's `/api/chat`. Without it, Ollama silently falls back to its own runtime default for whatever model is configured — commonly 2048 tokens for a freshly-pulled model unless its Modelfile overrides it — completely independent of this app's own `context_max_tokens` budget (default 2000), which itself only bounds past-visit history text before the system prompt, patient data, and any agentic tool-call round trips are added on top. This predates any of the agentic loop's growth: the single-shot fallback path could already be silently truncating context on local models today, with no error surfaced.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Hardcode a fixed `num_ctx` in the request | Simplest possible fix | No way to tune per-model without a code change |
+| New `Settings.ollama_num_ctx` field, explicit default, env-overridable | Coordinates with existing `context_max_tokens`/`agent_max_turns` budget; fixable without a code change per deployment; matches the pattern of every other Ollama tunable in `config.py` | Doesn't (yet) expose runtime editing via Settings.tsx the way `ollama_model`/`ollama_base_url` do |
+| Compute `num_ctx` dynamically from `context_max_tokens` + `agent_max_turns` at call time | Self-coordinating, no separate value to drift out of sync | Needs real measurement of system-prompt + per-turn tool-call overhead first (issue #56 territory) to size correctly — guessing a formula now risks a false sense of precision |
+
+**Decision:**
+1. Added `Settings.ollama_num_ctx: int = 8192` (`src/config.py`), and passed it through `OllamaBackend._sampling_payload`'s `options` dict (`src/agents/llm_backend.py`). The default is derived from a documented formula rather than an arbitrary round number: `context_max_tokens` (2000, visit-history text) + an estimated ~1500 tokens of system prompt/patient-data overhead + ~500 tokens/turn × `agent_max_turns` (6) ≈ 6500, rounded up to the next power-of-two Ollama context size.
+2. Since the 1500/500-token overhead figures are estimates, not measured, added a best-effort safety net rather than waiting on real profiling: `OllamaBackend._context_budget_warning` estimates a request's token count (chars/4 heuristic over the serialized messages + tools) and logs a warning via loguru if it crosses 75% of `ollama_num_ctx`, naming the estimate and suggesting the two knobs (`ollama_num_ctx`, `context_max_tokens`/`agent_max_turns`) to adjust. This is deliberately a visibility mechanism, not a hard gate — an approximate heuristic shouldn't block an otherwise-working request on a false positive — but it directly satisfies the issue's "fails loudly" expected behavior rather than leaving it as a follow-up.
+3. Scoped `ollama_num_ctx` as env-only for now, not added to `settings_service.py`'s runtime-editable allowlist or the Settings API/UI — matching `ollama_model`'s prior gap (issue #59) rather than compounding it silently; making it runtime-editable is a natural companion to #59 if picked up together, not bundled into this fix.
+
+**Reasoning:** A formula-grounded default plus a runtime overflow warning closes both halves of the issue's expected behavior — an explicit, reasoned `num_ctx`, and loud failure when a request is actually likely to exceed it — without requiring a separate profiling project to trust the number. `num_ctx` is Ollama-specific (not a standard OpenAI-compatible field), so the fix is scoped to `OllamaBackend` only, not the shared `_OpenAIStyleHTTPBackend` base class `CustomOpenAICompatibleBackend` also uses.
+
+**Status:** Implemented. Replacing the chars/4 heuristic with real per-model tokenizer counts (if warning false-positive/negative rates in practice warrant it), and exposing `ollama_num_ctx` as runtime-editable alongside #59, remain open follow-ups.
+
+---
+
+*Last updated: 2026-07-20*
