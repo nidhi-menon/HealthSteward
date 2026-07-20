@@ -120,6 +120,52 @@ async def test_prepare_visit(
 
 
 @pytest.mark.asyncio
+async def test_prepare_visit_includes_doctor_notes_in_context(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Regression test for issue #51: Doctor.notes was persisted and
+    user-editable but never reached the visit-prep context, unlike
+    Condition.notes/Appointment.visit_notes.
+    """
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(
+        '{"questions": {"General": ["Test question"]}, "context_summary": "Test summary"}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    context_message = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert sample_doctor_data["notes"] in context_message
+
+
+@pytest.mark.asyncio
 async def test_get_visit_prep(
     client: AsyncClient,
     sample_profile_data,
