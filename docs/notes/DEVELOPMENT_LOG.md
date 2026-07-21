@@ -1294,4 +1294,23 @@ Related: issue #47, DEC-020, DEC-009, DEC-013.
 
 ---
 
+## 34. Test-Only Fix: Three `test_visit_prep.py` Tests Weren't Actually Exercising Their Mocked Claude Client (#79)
+
+**Date:** 2026-07-20
+
+**Context:** Self-filed follow-up from #51's work — `test_prepare_visit`, `test_get_visit_prep`, and `test_prepare_visit_with_additional_concerns` (`tests/test_visit_prep.py`) patch `AsyncAnthropic` to mock a Claude response, matching the module's own docstring, but never forced `Settings.llm_provider` away from whatever the dev machine's `.env` has it set to (`ollama` by default per DEC-016). `get_llm_backend()` dispatches on `settings.llm_provider`, not on which client happens to be patched, so on a machine with `.env`'s checked-in `LLM_PROVIDER=ollama` default, these three tests actually constructed `OllamaBackend` and hit a real/unreachable local Ollama server, timing out and falling through to the single-shot fallback — never touching the mocked Claude client. They still passed, since none asserted content tied to the mock, only response shape.
+
+**What was built:**
+- Added `monkeypatch.setattr(get_settings(), "llm_provider", "claude")` to all three tests, matching the pattern already used correctly by `test_prepare_visit_agentic_tool_use` and others.
+- Added a content assertion to each (`data["generated_questions"] == {...}` matching the mock's exact response, plus `mock_client.messages.create.called` on one) so a future regression of this same kind fails loudly instead of silently passing via a fallback path.
+- Confirmed the fix mattered rather than just being cosmetic: `tests/test_visit_prep.py` dropped from several minutes (real Ollama wall-clock timeouts, per `_TOTAL_CALL_TIMEOUT_SECONDS`) to under 1 second; the full backend suite (126 tests) dropped from ~150-600s across every run this session to 1.36s.
+
+**Reasoning:** Not an architectural choice — test-only fix restoring the isolation the mocking setup already implied. The dramatic runtime drop is itself the confirmation: these three tests were the majority of this session's repeated multi-minute `pytest` waits, silently caused by a real network dependency the test suite was never supposed to have.
+
+**Files changed:** `tests/test_visit_prep.py`.
+
+Related: issue #79, issue #51.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

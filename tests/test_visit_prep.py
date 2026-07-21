@@ -64,6 +64,7 @@ def mock_claude_response():
 @pytest.mark.asyncio
 async def test_prepare_visit(
     client: AsyncClient,
+    monkeypatch,
     sample_profile_data,
     sample_doctor_data,
     sample_appointment_data,
@@ -72,6 +73,10 @@ async def test_prepare_visit(
     mock_claude_response,
 ):
     """Test visit preparation endpoint with mocked Claude API."""
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
     # Create a profile
     profile_response = await client.post("/api/profiles/", json=sample_profile_data)
     profile_id = profile_response.json()["id"]
@@ -117,6 +122,11 @@ async def test_prepare_visit(
     assert "generated_questions" in data
     assert "context_summary" in data
     assert data["appointment_id"] == appointment_id
+    # Ties the assertion to the mocked Claude response's actual content, not
+    # just response shape — guards against issue #79 (this test silently
+    # exercising real/fallback Ollama instead of the intended mock).
+    assert data["generated_questions"] == {"General": ["Test question"]}
+    assert mock_client.messages.create.called
 
 
 @pytest.mark.asyncio
@@ -168,11 +178,16 @@ async def test_prepare_visit_includes_doctor_notes_in_context(
 @pytest.mark.asyncio
 async def test_get_visit_prep(
     client: AsyncClient,
+    monkeypatch,
     sample_profile_data,
     sample_doctor_data,
     sample_appointment_data,
 ):
     """Test getting visit preparation after it's been generated."""
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
     # Create a profile
     profile_response = await client.post("/api/profiles/", json=sample_profile_data)
     profile_id = profile_response.json()["id"]
@@ -212,6 +227,8 @@ async def test_get_visit_prep(
     data = response.json()
     assert data["appointment_id"] == appointment_id
     assert "generated_questions" in data
+    # Ties to the mocked Claude response's actual content — see #79.
+    assert data["generated_questions"] == {"Test": ["Question 1"]}
 
 
 @pytest.mark.asyncio
@@ -249,11 +266,16 @@ async def test_get_visit_prep_not_found(
 @pytest.mark.asyncio
 async def test_prepare_visit_with_additional_concerns(
     client: AsyncClient,
+    monkeypatch,
     sample_profile_data,
     sample_doctor_data,
     sample_appointment_data,
 ):
     """Test visit preparation with additional patient concerns."""
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
     # Create a profile
     profile_response = await client.post("/api/profiles/", json=sample_profile_data)
     profile_id = profile_response.json()["id"]
@@ -292,6 +314,8 @@ async def test_prepare_visit_with_additional_concerns(
     assert response.status_code == 200
     data = response.json()
     assert "generated_questions" in data
+    # Ties to the mocked Claude response's actual content — see #79.
+    assert data["generated_questions"] == {"Concerns": ["About fatigue"]}
 
 
 @pytest.mark.asyncio
