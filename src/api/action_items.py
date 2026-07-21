@@ -5,11 +5,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, or_, nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.data.database import get_db
 from pydantic import BaseModel
 
-from src.data.models import Appointment, Document, FollowUp, LabOrder, NudgeState, Referral, VisitPrep, Vitals
+from src.data.models import Appointment, Doctor, Document, FollowUp, LabOrder, NudgeState, Referral, VisitPrep, Vitals
 from src.models.schemas import (
     AppointmentResponse,
     FollowUpResponse,
@@ -311,12 +312,14 @@ def _parse_numeric(value: str | None) -> float | None:
         return None
 
 
-@router.get("/vitals-alerts", response_model=list[VitalsAlert])
-async def vitals_alerts(
-    profile_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """Return alerts for meaningful trends in vitals across visits."""
+async def _compute_all_vitals_alerts(db: AsyncSession, profile_id: str) -> list["VitalsAlert"]:
+    """Compute every metric trend alert, regardless of snooze status.
+
+    Split out so both the active list (excludes snoozed) and the
+    currently-snoozed list (issue #44 — needs the same trend message, not
+    just the bare metric name) can filter this one computation differently
+    instead of duplicating the trend logic.
+    """
     result = await db.execute(
         select(Vitals)
         .where(Vitals.profile_id == profile_id)
@@ -326,14 +329,10 @@ async def vitals_alerts(
     if len(all_vitals) < 2:
         return []
 
-    snoozed = await _snoozed_item_ids(db, profile_id, "vitals_alert")
-
     alerts: list[VitalsAlert] = []
 
     def check_metric(label: str, values: list[tuple[float, str]]) -> None:
         if len(values) < 2:
-            return
-        if label in snoozed:
             return
         oldest_val, oldest_raw = values[0]
         newest_val, newest_raw = values[-1]
@@ -394,6 +393,17 @@ async def vitals_alerts(
     return alerts
 
 
+@router.get("/vitals-alerts", response_model=list[VitalsAlert])
+async def vitals_alerts(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return alerts for meaningful trends in vitals across visits."""
+    snoozed = await _snoozed_item_ids(db, profile_id, "vitals_alert")
+    all_alerts = await _compute_all_vitals_alerts(db, profile_id)
+    return [a for a in all_alerts if a.metric not in snoozed]
+
+
 # ── Completed appointments without AVS ────────────────────────────────────────
 
 @router.get("/completed-without-avs", response_model=list[AppointmentResponse])
@@ -451,3 +461,139 @@ def _doc_near_appointment(doc: Document, appt_date) -> bool:
     if not doc_date:
         return False
     return abs((doc_date - appt_date).days) <= 14
+
+
+# ── Currently-snoozed items (issue #44) ───────────────────────────────────────
+#
+# Every other endpoint above excludes snoozed items entirely, so once
+# something is snoozed there was no way to see it, confirm what's snoozed and
+# until when, or reverse it early — "snooze" behaved like a silent, permanent
+# delete. This section inverts that filter into a single unified view instead
+# of adding a parallel "snoozed_only" mode to every endpoint above.
+
+_NUDGE_TYPE_LABELS = {
+    "past_due": "Appointment to close out",
+    "upcoming_without_prep": "Visit prep needed",
+    "completed_without_avs": "Missing after-visit summary",
+    "vitals_alert": "Vitals trend",
+}
+
+
+class SnoozedItem(BaseModel):
+    category: str  # nudge_type, or "follow_up" | "lab_order" | "referral"
+    category_label: str
+    item_id: str
+    label: str
+    snoozed_until: datetime
+
+
+async def _appointment_label(db: AsyncSession, appointment_id: str) -> str:
+    result = await db.execute(
+        select(Appointment)
+        .options(selectinload(Appointment.doctor))
+        .where(Appointment.id == appointment_id)
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        return "Appointment (deleted)"
+    who = appt.doctor.name if appt.doctor else (appt.purpose or "Appointment")
+    when = appt.scheduled_date.strftime("%b %d, %Y") if appt.scheduled_date else ""
+    return f"{who} — {when}" if when else who
+
+
+@router.get("/snoozed-items", response_model=list[SnoozedItem])
+async def list_snoozed_items(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return every currently-snoozed item across all nudge types and models."""
+    now = datetime.utcnow()
+    items: list[SnoozedItem] = []
+
+    # Computed nudges (NudgeState-backed)
+    nudge_result = await db.execute(
+        select(NudgeState).where(
+            NudgeState.profile_id == profile_id,
+            NudgeState.snoozed_until > now,
+        )
+    )
+    all_alerts_by_metric = None
+    for state in nudge_result.scalars().all():
+        if state.nudge_type == "vitals_alert":
+            if all_alerts_by_metric is None:
+                all_alerts = await _compute_all_vitals_alerts(db, profile_id)
+                all_alerts_by_metric = {a.metric: a.message for a in all_alerts}
+            label = all_alerts_by_metric.get(state.item_id, f"{state.item_id} trend")
+        elif state.nudge_type in ("past_due", "upcoming_without_prep", "completed_without_avs"):
+            label = await _appointment_label(db, state.item_id)
+        else:
+            label = state.item_id
+        items.append(SnoozedItem(
+            category=state.nudge_type,
+            category_label=_NUDGE_TYPE_LABELS.get(state.nudge_type, state.nudge_type),
+            item_id=state.item_id,
+            label=label,
+            snoozed_until=state.snoozed_until,
+        ))
+
+    # Model-backed items (FollowUp, LabOrder, Referral) — snoozed_until lives
+    # directly on the row, not in NudgeState.
+    fu_result = await db.execute(
+        select(FollowUp).where(FollowUp.profile_id == profile_id, FollowUp.snoozed_until > now)
+    )
+    for fu in fu_result.scalars().all():
+        items.append(SnoozedItem(
+            category="follow_up", category_label="Follow-up appointment",
+            item_id=fu.id, label=fu.description, snoozed_until=fu.snoozed_until,
+        ))
+
+    lab_result = await db.execute(
+        select(LabOrder).where(LabOrder.profile_id == profile_id, LabOrder.snoozed_until > now)
+    )
+    for lab in lab_result.scalars().all():
+        items.append(SnoozedItem(
+            category="lab_order", category_label="Lab test ordered",
+            item_id=lab.id, label=lab.test_name, snoozed_until=lab.snoozed_until,
+        ))
+
+    ref_result = await db.execute(
+        select(Referral).where(Referral.profile_id == profile_id, Referral.snoozed_until > now)
+    )
+    for ref in ref_result.scalars().all():
+        label = f"{ref.specialty} — {ref.provider_name}" if ref.provider_name else ref.specialty
+        items.append(SnoozedItem(
+            category="referral", category_label="Referral to schedule",
+            item_id=ref.id, label=label, snoozed_until=ref.snoozed_until,
+        ))
+
+    items.sort(key=lambda i: i.snoozed_until)
+    return items
+
+
+@router.delete("/nudge-states/{nudge_type}/{item_id}", status_code=204)
+async def unsnooze_nudge(
+    profile_id: str,
+    nudge_type: str,
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Un-snooze a computed nudge early (issue #44).
+
+    NudgeState.snoozed_until is NOT NULL, unlike FollowUp/LabOrder/Referral's
+    snoozed_until — so "un-snoozed" for a computed nudge means deleting the
+    row entirely, not nulling a field. `_snoozed_item_ids` already treats a
+    missing row as "not snoozed", so this is enough to make the item
+    reappear in its normal (unsnoozed) list on the next fetch.
+    """
+    result = await db.execute(
+        select(NudgeState).where(
+            NudgeState.profile_id == profile_id,
+            NudgeState.nudge_type == nudge_type,
+            NudgeState.item_id == item_id,
+        )
+    )
+    state = result.scalar_one_or_none()
+    if not state:
+        raise HTTPException(status_code=404, detail="Snooze not found")
+    await db.delete(state)
+    await db.commit()

@@ -19,6 +19,7 @@ import type {
   ActionItems,
   VitalsAlert,
   NudgeState,
+  SnoozedItem,
   AppSettings,
   AppSettingsUpdate,
 } from '../types';
@@ -212,6 +213,12 @@ export const actionItems = {
       method: 'POST',
       body: JSON.stringify({ nudge_type: nudgeType, item_id: itemId, snoozed_until: snoozedUntil }),
     }),
+  unsnoozeNudge: (profileId: string, nudgeType: string, itemId: string) =>
+    request<void>(`/profiles/${profileId}/nudge-states/${nudgeType}/${encodeURIComponent(itemId)}`, {
+      method: 'DELETE',
+    }),
+  listSnoozedItems: (profileId: string) =>
+    request<SnoozedItem[]>(`/profiles/${profileId}/snoozed-items`),
 };
 
 // Visit Prep
