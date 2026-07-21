@@ -273,6 +273,14 @@ export interface VitalsAlert {
   visit_count: number;
 }
 
+export interface SnoozedItem {
+  category: string;
+  category_label: string;
+  item_id: string;
+  label: string;
+  snoozed_until: string;
+}
+
 export interface ActionItems {
   follow_ups: FollowUp[];
   lab_orders: LabOrder[];

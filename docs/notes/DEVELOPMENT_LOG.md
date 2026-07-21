@@ -1313,4 +1313,26 @@ Related: issue #79, issue #51.
 
 ---
 
+## 35. Snoozed Action Items Made Recoverable and Visible (#44)
+
+**Date:** 2026-07-21
+
+**Context:** Picked up issue #44. Every action-items endpoint (`src/api/action_items.py`) excluded snoozed items entirely rather than flagging them — `_snoozed_item_ids`/`_is_active` filtered them out of every list, so a snooze pill click removed an item from view immediately with no confirmation, no way to see what was currently snoozed or until when, and no undo. "Snooze" behaved like a silent, permanent delete rather than something temporary and reversible.
+
+**What was built:**
+- **Backend** (`src/api/action_items.py`): refactored vitals-alert computation into `_compute_all_vitals_alerts` (trend message for every metric, snoozed or not), so the same real trend text can be shown for a currently-snoozed vitals alert instead of just its bare metric name. Added `GET /snoozed-items` — a single unified view across both snooze mechanisms in this codebase: `NudgeState`-backed computed nudges (past-due, upcoming-without-prep, completed-without-AVS, vitals-alert) and the three model rows with their own `snoozed_until` column (FollowUp, LabOrder, Referral) — each resolved to a human-readable label (appointment → doctor name + date via a join; vitals → the real trend message; the three model rows → their existing description/test_name/specialty fields). Added `DELETE /nudge-states/{nudge_type}/{item_id}` to un-snooze a computed nudge early, since `NudgeState.snoozed_until` is `NOT NULL` (unlike the three model columns, which already supported un-snoozing via the existing `snoozed_until: null` PATCH path) — deleting the row is the only way to represent "not snoozed" for that table.
+- **Frontend** (`ActionItemsSection.tsx`): a "Show snoozed" toggle (matching the existing "Show resolved" pattern) revealing `SnoozedItemsList`, with an "Un-snooze now" button per item. An undo banner appears for 8 seconds after any snooze action (all 7 snooze call sites now pass a per-call `onSuccess` to `.mutate()`), reusing the same unified `unsnoozeMutation` that dispatches to either the new DELETE endpoint or the existing null-out PATCH depending on category.
+- New `tests/test_action_items.py` — this file had zero test coverage before this PR (a pre-existing gap, not introduced here). Covers: snoozed follow-up excluded from the active list and visible in `/snoozed-items`, then reappearing after un-snooze; lab-order/referral labels; a `past_due` nudge's label correctly resolving through the appointment→doctor join, and un-snoozing it via the new DELETE endpoint; 404 on deleting a non-existent snooze.
+- No schema/migration change — purely additive filtering/display, as scoped in the issue.
+- Manually verified the exact API sequence the frontend calls (snooze → confirm excluded from active list → confirm visible in `/snoozed-items` with the correct resolved label → un-snooze via DELETE → confirm it's back in the active list and gone from `/snoozed-items`) against a live `uvicorn` instance with real profile/doctor/appointment data. Browser-tooling wasn't available this session, so the actual click-through UI wasn't visually verified — `npx tsc --noEmit` and `npx vite build` both pass, and this API-level verification covers the same request/response contract the UI calls.
+- Incidental fix while testing manually: the dev DB (`data/healthsteward.db`) hadn't had DEC-020's `used_fallback` migration applied yet (unrelated pre-existing gap, surfaced by hitting a stale endpoint) — ran `alembic upgrade head` against it.
+
+**Reasoning:** Not an architectural choice — matches the issue's own framing as small/additive, inverting an existing filter into a second view rather than changing the underlying snooze mechanism. Keeping computed-nudge un-snooze as a row deletion (rather than adding a nullable-relaxation migration to `NudgeState.snoozed_until`) avoided a schema change for a purely additive feature.
+
+**Files changed:** `src/api/action_items.py`, `frontend/src/components/ActionItemsSection.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `tests/test_action_items.py`.
+
+Related: issue #44.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
