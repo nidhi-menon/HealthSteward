@@ -747,15 +747,20 @@ function DocumentsTab({ profileId, files, appointments: appointmentList }: { pro
   const [parsingFilename, setParsingFilename] = useState<string | null>(null);
   const [postAvsItems, setPostAvsItems] = useState<ActionItems | null>(null);
 
-  const handleParse = async (filename: string, documentId: string | null) => {
+  const handleParse = async (filename: string, documentId: string | null, status: ScannedFile['status']) => {
     setIsParsing(true);
     setParseError(null);
     setParsingFilename(filename);
 
     try {
-      // If no document record exists yet, create one
+      // If no document record exists yet, or the previous attempt failed,
+      // call parseFile to (re)create/reset it — parseFile is what flips a
+      // failed document's parse_status back to "pending" server-side
+      // (src/api/documents.py's /parse-file), which getParsed below needs
+      // to actually re-invoke the parser instead of re-raising the same
+      // cached parse_error (issue #45).
       let docId = documentId;
-      if (!docId) {
+      if (!docId || status === 'failed') {
         const result = await documents.parseFile(profileId, filename);
         docId = result.document_id;
       }
