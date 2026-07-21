@@ -382,12 +382,14 @@ Before finalizing your response, count your questions. You must have between 8 a
                 return {
                     "questions": parsed.get("questions", {}),
                     "context_summary": parsed.get("context_summary", ""),
+                    "used_fallback": False,
                 }
             else:
                 logger.warning("Could not parse JSON from LLM response")
                 return {
                     "questions": {"General Questions": [response]},
                     "context_summary": "AI generated visit preparation (raw response).",
+                    "used_fallback": False,
                 }
 
         except Exception as e:
@@ -648,7 +650,13 @@ Before finalizing your response, count your questions. You must have between 8 a
         return "\n".join(lines)
 
     def _get_fallback_response(self) -> dict[str, Any]:
-        """Get fallback response when LLM is unavailable."""
+        """Get fallback response when LLM is unavailable.
+
+        `used_fallback: True` is the only signal (besides a backend log)
+        that this is generic placeholder content, not something the model
+        actually generated — see issue #47. Callers must surface it to the
+        user rather than let it look like a normal successful generation.
+        """
         return {
             "questions": {
                 "General Questions": [
@@ -659,4 +667,5 @@ Before finalizing your response, count your questions. You must have between 8 a
                 ]
             },
             "context_summary": "Default questions generated due to AI service unavailability.",
+            "used_fallback": True,
         }

@@ -9,6 +9,7 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 ### Added
 - Deterministic evaluation harness (v1) for visit-prep output quality — format validity, groundedness, specialty-scope, tool-call necessity, and Phase 1/Phase 2 retrieval-redundancy checks, runnable on-demand against the real pipeline (#29, DEC-018)
 - Project-wide prompt versioning — every LLM prompt now carries a version tag, with change history in `docs/notes/PROMPT_CHANGELOG.md` (DEC-018)
+- `VisitPrep.used_fallback` flag, surfaced as a warning banner in the UI, so a total LLM backend failure (e.g. unreachable/misconfigured Ollama URL) no longer looks like a normal successful generation with generic placeholder questions (#47, DEC-020)
 
 ### Fixed
 - An unrecognized tool name called by the model during the agentic visit-prep loop was silently absorbed as a fake tool result instead of triggering the existing single-shot fallback (#53)

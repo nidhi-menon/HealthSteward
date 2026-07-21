@@ -231,6 +231,11 @@ class VisitPrep(Base):
     )
     generated_questions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     context_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # True when the LLM backend failed outright (unreachable/misconfigured
+    # URL, both the agentic loop and its single-shot fallback erroring) and
+    # generated_questions is VisitPrepAgent's hardcoded generic placeholder
+    # rather than anything the model actually produced — see issue #47.
+    used_fallback: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )

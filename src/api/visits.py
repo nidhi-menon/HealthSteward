@@ -56,6 +56,7 @@ async def prepare_visit(
         # Update existing prep
         existing_prep.generated_questions = prep_data["questions"]
         existing_prep.context_summary = prep_data["context_summary"]
+        existing_prep.used_fallback = prep_data.get("used_fallback", False)
         await db.flush()
         await db.refresh(existing_prep)
         return existing_prep
@@ -65,6 +66,7 @@ async def prepare_visit(
             appointment_id=appointment_id,
             generated_questions=prep_data["questions"],
             context_summary=prep_data["context_summary"],
+            used_fallback=prep_data.get("used_fallback", False),
         )
         db.add(visit_prep)
         await db.flush()
