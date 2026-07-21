@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { actionItems as actionItemsApi } from '../api/client';
 import { Card, CardHeader, CardContent } from './Card';
-import type { Appointment, Doctor, FollowUp, LabOrder, Referral } from '../types';
+import type { Appointment, Doctor, FollowUp, LabOrder, Referral, SnoozedItem } from '../types';
+
+// Categories backed by NudgeState (a computed nudge with no row of its own)
+// vs. a model row (FollowUp/LabOrder/Referral) that carries snoozed_until
+// directly — un-snoozing each needs a different API call (issue #44).
+const NUDGE_CATEGORIES = new Set(['past_due', 'upcoming_without_prep', 'completed_without_avs', 'vitals_alert']);
 
 interface Props {
   profileId: string;
@@ -176,11 +181,69 @@ function ResolvedItems({
   );
 }
 
+function formatSnoozedUntil(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// Issue #44: currently-snoozed items had no view anywhere in the UI — this
+// makes them visible with an early "un-snooze now" per item.
+function SnoozedItemsList({
+  items,
+  onUnsnooze,
+  isPending,
+}: {
+  items: SnoozedItem[];
+  onUnsnooze: (item: SnoozedItem) => void;
+  isPending: boolean;
+}) {
+  if (!items.length) {
+    return <p className="text-sm text-gray-400 italic">Nothing currently snoozed.</p>;
+  }
+  return (
+    <div className="space-y-2">
+      {items.map(item => (
+        <div key={`${item.category}-${item.item_id}`} className="flex items-center justify-between gap-2 bg-white rounded border border-gray-100 px-3 py-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-gray-700">{item.label}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {item.category_label} — snoozed until {formatSnoozedUntil(item.snoozed_until)}
+            </p>
+          </div>
+          <button
+            onClick={() => onUnsnooze(item)}
+            disabled={isPending}
+            className="text-xs px-2.5 py-1 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 disabled:opacity-50 flex-shrink-0"
+          >
+            Un-snooze now
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Issue #44: a snooze pill fired immediately with no confirmation and no
+// undo — one misclick removed an item from view with no recovery path.
+function UndoSnoozeBanner({ label, onUndo }: { label: string; onUndo: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2 bg-gray-800 text-white text-sm rounded-lg px-3 py-2">
+      <span>Snoozed "{label}"</span>
+      <button onClick={onUndo} className="text-xs font-medium underline underline-offset-2 hover:text-gray-200 flex-shrink-0">
+        Undo
+      </button>
+    </div>
+  );
+}
+
 export function ActionItemsSection({ profileId, appointments, doctors }: Props) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // Gap 1: toggle for resolved history
   const [showResolved, setShowResolved] = useState(false);
+  // Issue #44: toggle for currently-snoozed items
+  const [showSnoozed, setShowSnoozed] = useState(false);
+  const [undoBanner, setUndoBanner] = useState<{ category: string; itemId: string; label: string } | null>(null);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const invalidateFollowUps = () => queryClient.invalidateQueries({ queryKey: ['followUps', profileId] });
   const invalidateLabOrders = () => queryClient.invalidateQueries({ queryKey: ['labOrders', profileId] });
@@ -189,6 +252,16 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
   const invalidateUpcomingPrep = () => queryClient.invalidateQueries({ queryKey: ['upcomingWithoutPrep', profileId] });
   const invalidateVitals = () => queryClient.invalidateQueries({ queryKey: ['vitalsAlerts', profileId] });
   const invalidateCompletedAvs = () => queryClient.invalidateQueries({ queryKey: ['completedWithoutAvs', profileId] });
+  const invalidateSnoozedItems = () => queryClient.invalidateQueries({ queryKey: ['snoozedItems', profileId] });
+
+  // Issue #44: shows an undo banner for ~8s after any snooze action; calling
+  // it again (a second snooze while one banner is showing) replaces it
+  // rather than stacking, matching how a single-slot toast would behave.
+  const showUndoBanner = (category: string, itemId: string, label: string) => {
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    setUndoBanner({ category, itemId, label });
+    undoTimeoutRef.current = setTimeout(() => setUndoBanner(null), 8000);
+  };
 
   const { data: followUps = [] } = useQuery({
     queryKey: ['followUps', profileId],
@@ -251,12 +324,21 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
     enabled: !!profileId,
   });
 
+  // Issue #44: unified view of everything currently snoozed, across both
+  // NudgeState-backed computed nudges and FollowUp/LabOrder/Referral rows.
+  const { data: snoozedItems = [] } = useQuery({
+    queryKey: ['snoozedItems', profileId],
+    queryFn: () => actionItemsApi.listSnoozedItems(profileId),
+    enabled: !!profileId && showSnoozed,
+  });
+
   const followUpMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Parameters<typeof actionItemsApi.updateFollowUp>[2] }) =>
       actionItemsApi.updateFollowUp(profileId, id, body),
     onSuccess: () => {
       invalidateFollowUps();
       queryClient.invalidateQueries({ queryKey: ['followUpsResolved', profileId] });
+      invalidateSnoozedItems();
     },
   });
 
@@ -266,6 +348,7 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
     onSuccess: () => {
       invalidateLabOrders();
       queryClient.invalidateQueries({ queryKey: ['labOrdersResolved', profileId] });
+      invalidateSnoozedItems();
     },
   });
 
@@ -275,31 +358,60 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
     onSuccess: () => {
       invalidateReferrals();
       queryClient.invalidateQueries({ queryKey: ['referralsResolved', profileId] });
+      invalidateSnoozedItems();
     },
   });
 
   const snoozePrepMutation = useMutation({
     mutationFn: ({ id, days }: { id: string; days: number }) =>
       actionItemsApi.snoozeNudge(profileId, 'upcoming_without_prep', id, snoozeDate(days)),
-    onSuccess: invalidateUpcomingPrep,
+    onSuccess: () => { invalidateUpcomingPrep(); invalidateSnoozedItems(); },
   });
 
   const snoozePastDueMutation = useMutation({
     mutationFn: ({ id, days }: { id: string; days: number }) =>
       actionItemsApi.snoozeNudge(profileId, 'past_due', id, snoozeDate(days)),
-    onSuccess: invalidatePastDue,
+    onSuccess: () => { invalidatePastDue(); invalidateSnoozedItems(); },
   });
 
   const snoozeVitalsMutation = useMutation({
     mutationFn: ({ metric, days }: { metric: string; days: number }) =>
       actionItemsApi.snoozeNudge(profileId, 'vitals_alert', metric, snoozeDate(days)),
-    onSuccess: invalidateVitals,
+    onSuccess: () => { invalidateVitals(); invalidateSnoozedItems(); },
   });
 
   const snoozeAvsCompletedMutation = useMutation({
     mutationFn: ({ id, days }: { id: string; days: number }) =>
       actionItemsApi.snoozeNudge(profileId, 'completed_without_avs', id, snoozeDate(days)),
-    onSuccess: invalidateCompletedAvs,
+    onSuccess: () => { invalidateCompletedAvs(); invalidateSnoozedItems(); },
+  });
+
+  // Issue #44: un-snooze early, from either the "Snoozed" list's per-item
+  // button or the undo banner. Dispatches to the right API call since
+  // NudgeState-backed nudges (no snoozed_until on a row of their own) and
+  // model rows (FollowUp/LabOrder/Referral) un-snooze differently.
+  const unsnoozeMutation = useMutation({
+    mutationFn: ({ category, itemId }: { category: string; itemId: string }) => {
+      if (NUDGE_CATEGORIES.has(category)) {
+        return actionItemsApi.unsnoozeNudge(profileId, category, itemId);
+      }
+      const updaters: Record<string, (id: string) => Promise<unknown>> = {
+        follow_up: (id) => actionItemsApi.updateFollowUp(profileId, id, { snoozed_until: null }),
+        lab_order: (id) => actionItemsApi.updateLabOrder(profileId, id, { snoozed_until: null }),
+        referral: (id) => actionItemsApi.updateReferral(profileId, id, { snoozed_until: null }),
+      };
+      return updaters[category](itemId);
+    },
+    onSuccess: (_data, { category }) => {
+      invalidateSnoozedItems();
+      if (category === 'upcoming_without_prep') invalidateUpcomingPrep();
+      else if (category === 'past_due') invalidatePastDue();
+      else if (category === 'vitals_alert') invalidateVitals();
+      else if (category === 'completed_without_avs') invalidateCompletedAvs();
+      else if (category === 'follow_up') { invalidateFollowUps(); queryClient.invalidateQueries({ queryKey: ['followUpsResolved', profileId] }); }
+      else if (category === 'lab_order') { invalidateLabOrders(); queryClient.invalidateQueries({ queryKey: ['labOrdersResolved', profileId] }); }
+      else if (category === 'referral') { invalidateReferrals(); queryClient.invalidateQueries({ queryKey: ['referralsResolved', profileId] }); }
+    },
   });
 
   const total =
@@ -311,7 +423,7 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
     labOrders.length +
     referrals.length;
 
-  if (total === 0 && !showResolved) return null;
+  if (total === 0 && !showResolved && !showSnoozed) return null;
 
   const nextAppt = soonestUpcomingAppointment(appointments);
   const daysToAppt = nextAppt ? daysUntil(nextAppt.scheduled_date) : null;
@@ -330,16 +442,49 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
               {total > 0 ? 'Needs Attention' : 'Action Items'}
             </h3>
           </div>
-          {/* Gap 1: resolved toggle */}
-          <button
-            onClick={() => setShowResolved(v => !v)}
-            className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
-          >
-            {showResolved ? 'Hide resolved' : 'Show resolved'}
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Issue #44: currently-snoozed toggle */}
+            <button
+              onClick={() => setShowSnoozed(v => !v)}
+              className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+            >
+              {showSnoozed ? 'Hide snoozed' : 'Show snoozed'}
+            </button>
+            {/* Gap 1: resolved toggle */}
+            <button
+              onClick={() => setShowResolved(v => !v)}
+              className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+            >
+              {showResolved ? 'Hide resolved' : 'Show resolved'}
+            </button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+
+        {/* Issue #44: undo banner shown briefly after any snooze action */}
+        {undoBanner && (
+          <UndoSnoozeBanner
+            label={undoBanner.label}
+            onUndo={() => {
+              unsnoozeMutation.mutate({ category: undoBanner.category, itemId: undoBanner.itemId });
+              setUndoBanner(null);
+            }}
+          />
+        )}
+
+        {/* Issue #44: currently-snoozed items */}
+        {showSnoozed && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Currently snoozed</p>
+            <SnoozedItemsList
+              items={snoozedItems}
+              onUnsnooze={(item) => unsnoozeMutation.mutate({ category: item.category, itemId: item.item_id })}
+              isPending={unsnoozeMutation.isPending}
+            />
+            {total > 0 && <hr className="border-orange-200 mt-3" />}
+          </div>
+        )}
 
         {/* Gap 1: resolved history */}
         {showResolved && (
@@ -372,7 +517,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <SnoozeButtons
-                      onSnooze={(d) => snoozePrepMutation.mutate({ id: appt.id, days: d })}
+                      onSnooze={(d) => snoozePrepMutation.mutate(
+                        { id: appt.id, days: d },
+                        { onSuccess: () => showUndoBanner('upcoming_without_prep', appt.id, label) },
+                      )}
                       isPending={snoozePrepMutation.isPending}
                     />
                     <button
@@ -406,7 +554,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <SnoozeButtons
-                      onSnooze={(d) => snoozePastDueMutation.mutate({ id: appt.id, days: d })}
+                      onSnooze={(d) => snoozePastDueMutation.mutate(
+                        { id: appt.id, days: d },
+                        { onSuccess: () => showUndoBanner('past_due', appt.id, label) },
+                      )}
                       isPending={snoozePastDueMutation.isPending}
                     />
                     <button
@@ -439,7 +590,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                     <p className="text-xs text-gray-400 mt-0.5">Drop the PDF in <code className="bg-gray-100 px-1 rounded">data/avs/</code> to update your profile</p>
                   </div>
                   <SnoozeButtons
-                    onSnooze={(d) => snoozeAvsCompletedMutation.mutate({ id: appt.id, days: d })}
+                    onSnooze={(d) => snoozeAvsCompletedMutation.mutate(
+                      { id: appt.id, days: d },
+                      { onSuccess: () => showUndoBanner('completed_without_avs', appt.id, label) },
+                    )}
                     isPending={snoozeAvsCompletedMutation.isPending}
                   />
                 </div>
@@ -464,7 +618,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                   </p>
                 </div>
                 <SnoozeButtons
-                  onSnooze={(d) => snoozeVitalsMutation.mutate({ metric: alert.metric, days: d })}
+                  onSnooze={(d) => snoozeVitalsMutation.mutate(
+                    { metric: alert.metric, days: d },
+                    { onSuccess: () => showUndoBanner('vitals_alert', alert.metric, alert.metric) },
+                  )}
                   isPending={snoozeVitalsMutation.isPending}
                 />
               </div>
@@ -496,7 +653,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                   </div>
                   <ActionButtons
                     onAction={() => followUpMutation.mutate({ id: fu.id, body: { status: 'booked' } })}
-                    onSnooze={(days) => followUpMutation.mutate({ id: fu.id, body: { snoozed_until: snoozeDate(days) } })}
+                    onSnooze={(days) => followUpMutation.mutate(
+                      { id: fu.id, body: { snoozed_until: snoozeDate(days) } },
+                      { onSuccess: () => showUndoBanner('follow_up', fu.id, fu.description) },
+                    )}
                     actionLabel="Booked"
                     isPending={followUpMutation.isPending}
                   />
@@ -534,7 +694,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                   </div>
                   <ActionButtons
                     onAction={() => labMutation.mutate({ id: lab.id, body: { status: 'completed' } })}
-                    onSnooze={(days) => labMutation.mutate({ id: lab.id, body: { snoozed_until: snoozeDate(days) } })}
+                    onSnooze={(days) => labMutation.mutate(
+                      { id: lab.id, body: { snoozed_until: snoozeDate(days) } },
+                      { onSuccess: () => showUndoBanner('lab_order', lab.id, lab.test_name) },
+                    )}
                     actionLabel="Done"
                     isPending={labMutation.isPending}
                   />
@@ -566,7 +729,10 @@ export function ActionItemsSection({ profileId, appointments, doctors }: Props) 
                   </div>
                   <ActionButtons
                     onAction={() => referralMutation.mutate({ id: ref.id, body: { status: 'scheduled' } })}
-                    onSnooze={(days) => referralMutation.mutate({ id: ref.id, body: { snoozed_until: snoozeDate(days) } })}
+                    onSnooze={(days) => referralMutation.mutate(
+                      { id: ref.id, body: { snoozed_until: snoozeDate(days) } },
+                      { onSuccess: () => showUndoBanner('referral', ref.id, `${ref.specialty}${ref.provider_name ? ` — ${ref.provider_name}` : ''}`) },
+                    )}
                     actionLabel="Scheduled"
                     isPending={referralMutation.isPending}
                   />
