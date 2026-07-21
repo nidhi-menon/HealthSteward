@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.data.models import Document, FollowUp, LabOrder, Referral
+from src.data.models import Document, FollowUp, LabOrder, Referral, Vitals
 
 
 async def _make_document(db_session: AsyncSession, profile_id: str) -> str:
@@ -142,3 +142,57 @@ async def test_unsnooze_nonexistent_nudge_returns_404(client: AsyncClient, sampl
 
     resp = await client.delete(f"/api/profiles/{profile_id}/nudge-states/past_due/nonexistent-id")
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_snoozed_vitals_alert_shows_real_trend_message_not_bare_metric_name(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data,
+):
+    """The vitals_alert category is the most complex label-resolution path:
+    item_id is just the bare metric name ("Weight"), so the snoozed-items
+    view must re-derive the actual trend message via
+    _compute_all_vitals_alerts rather than showing something generic.
+    """
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+    document_id = await _make_document(db_session, profile_id)
+
+    # Two visits with a >=5lb weight change triggers a real "Weight" alert.
+    db_session.add_all([
+        Vitals(profile_id=profile_id, document_id=document_id, weight="180 lbs", measured_date="2026-01-01"),
+    ])
+    await db_session.commit()
+    doc2 = await _make_document(db_session, profile_id)
+    db_session.add(Vitals(profile_id=profile_id, document_id=doc2, weight="190 lbs", measured_date="2026-06-01"))
+    await db_session.commit()
+
+    # Confirm it's active before snoozing
+    active = await client.get(f"/api/profiles/{profile_id}/vitals-alerts")
+    assert len(active.json()) == 1
+    assert active.json()[0]["metric"] == "Weight"
+
+    snoozed_until = (datetime.utcnow() + timedelta(days=7)).isoformat() + "Z"
+    snooze_resp = await client.post(
+        f"/api/profiles/{profile_id}/nudge-states",
+        json={"nudge_type": "vitals_alert", "item_id": "Weight", "snoozed_until": snoozed_until},
+    )
+    assert snooze_resp.status_code == 200
+
+    # Excluded from the active list
+    active_after = await client.get(f"/api/profiles/{profile_id}/vitals-alerts")
+    assert active_after.json() == []
+
+    # Visible in snoozed-items with the real trend message, not a placeholder
+    snoozed_resp = await client.get(f"/api/profiles/{profile_id}/snoozed-items")
+    items = snoozed_resp.json()
+    assert len(items) == 1
+    assert items[0]["category"] == "vitals_alert"
+    assert "increased" in items[0]["label"]
+    assert "10.0 lbs" in items[0]["label"]
+
+    # Un-snooze early
+    delete_resp = await client.delete(f"/api/profiles/{profile_id}/nudge-states/vitals_alert/Weight")
+    assert delete_resp.status_code == 204
+
+    active_again = await client.get(f"/api/profiles/{profile_id}/vitals-alerts")
+    assert len(active_again.json()) == 1
