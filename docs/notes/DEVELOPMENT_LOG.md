@@ -1253,4 +1253,24 @@ Related: issue #51, issue #43, issue #79.
 
 ---
 
+## 32. "Retry" on a Failed Document Parse Never Actually Retried (#45)
+
+**Date:** 2026-07-20
+
+**Context:** Picked up issue #45 next. `handleParse` (`frontend/src/pages/ProfileDetail.tsx`) only called `documents.parseFile(...)` — the endpoint that resets a document's `parse_status` from `failed` back to `pending` (`src/api/documents.py`'s `/parse-file`) — when `documentId` was falsy. A previously-failed document already has a `document_id` (set from the scan response), so that branch was always skipped, and `handleParse` went straight to `documents.getParsed`, which immediately re-raises the same cached `parse_error` as a 422 for any document whose `parse_status` is already `"failed"` without ever re-invoking the parser. Clicking "Retry" redisplayed the same stale error every time.
+
+**What was built:**
+- `DocumentCard`'s `onParse` prop now passes the file's `status` through, not just `filename`/`documentId` (`frontend/src/components/DocumentCard.tsx`).
+- `handleParse` (`frontend/src/pages/ProfileDetail.tsx`) now calls `parseFile` whenever `!docId || status === 'failed'`, not only `!docId` — so a failed document gets its `parse_status` reset to `pending` server-side before `getParsed` is called, letting the backend's existing `pending → parsing → completed/failed` flow actually re-run rather than short-circuiting on the cached failure.
+- No backend change needed — `/parse-file`'s failed→pending reset and `/parsed`'s trigger-on-pending behavior were already correct; this was purely a frontend control-flow gap.
+- Verified against a live `uvicorn` instance rather than just the diff: created a document, forced a real parse failure (invalid PDF), confirmed `getParsed` alone re-raises the identical cached error with no `updated_at` change (the pre-fix bug, reproduced exactly), then confirmed calling `parse-file` first (the fix's new code path) resets `parse_status` to `pending` and a follow-up `getParsed` call genuinely re-invokes the parser — `updated_at` advances and a fresh parse attempt runs, rather than an instant cached re-raise. `npx tsc --noEmit` passes; no frontend test suite exists in this repo to add a regression test to.
+
+**Reasoning:** Not an architectural choice — restores the control flow the button's own label already implies, matching the #52/#53/#51 precedent for gap-filling fixes. Passing `status` through `onParse` (rather than re-deriving it from `documentId` alone, which can't distinguish "never parsed" from "failed") was the minimal signal `handleParse` needed to make the right call.
+
+**Files changed:** `frontend/src/components/DocumentCard.tsx`, `frontend/src/pages/ProfileDetail.tsx`.
+
+Related: issue #45.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
