@@ -1335,4 +1335,25 @@ Related: issue #44.
 
 ---
 
+## 36. Ollama Auto-Discovery on Settings Page (#48, DEC-021)
+
+**Date:** 2026-07-21
+
+**Context:** Picked up issue #48 next. The Settings page's Ollama Base URL field was a plain text input with no help finding the right value, even though it's almost always `localhost:11434` in practice for this app's single-machine target use case. The issue posed two open questions up front: whether discovery should run automatically or only on request, and how to keep the candidate list easy to extend — both resolved and recorded in DEC-021.
+
+**What was built:**
+- `src/utils/ollama_discovery.py` — `CANDIDATE_OLLAMA_URLS` (a flat, ordered list: localhost, 127.0.0.1, host.docker.internal, Docker's default bridge gateway), `probe_ollama_url()` (health-check via `/api/tags`, matching `OllamaClient.is_available()`'s existing pattern, 1.5s timeout), `discover_ollama_url()` (first responding candidate, or `None`).
+- `GET /api/settings/discover-ollama` (`src/api/settings.py`) — new `OllamaDiscoveryResponse` schema (`found`, `base_url`, `candidates_tried`).
+- `Settings.tsx`: a "Detect" button next to the Base URL field (explicit-only, per DEC-021 — never auto-runs on page load) that auto-fills the field on success, or shows `OllamaDiscoveryGuide` — an in-UI panel with copy-pasteable next steps for the three non-default cases from the issue (different machine, different port, Docker) — when nothing responds. The auto-filled value isn't auto-saved; the user still confirms via the existing Save button.
+- Regression tests: `tests/test_ollama_discovery.py` (7 tests) covering `probe_ollama_url`'s true/false/error paths, `discover_ollama_url` returning the first responding candidate or `None`, and the route's found/not-found responses (mocked, no real network calls in the test suite).
+- Verified against a live `uvicorn` instance: `GET /api/settings/discover-ollama` correctly found this dev machine's real running Ollama instance at `localhost:11434`. `npx tsc --noEmit` and `npx vite build` both pass. Browser tooling wasn't available this session, so the actual click-through UI (Detect button, guide panel) wasn't visually verified — this covers the same request/response contract the UI calls.
+
+**Reasoning:** See DEC-021 for the full analysis. Explicit-only discovery was the deliberate call — auto-probing on every Settings page visit would be a small but real departure from the project's local-first, privacy-first positioning, for a feature whose only job is convenience.
+
+**Files changed:** `src/utils/ollama_discovery.py`, `src/api/settings.py`, `src/models/schemas.py`, `frontend/src/pages/Settings.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `tests/test_ollama_discovery.py`, `docs/notes/DECISIONS.md`.
+
+Related: issue #48, DEC-021.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
