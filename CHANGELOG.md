@@ -23,6 +23,7 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 - Ollama agentic-loop calls never set `num_ctx`, so Ollama silently used its own runtime default (commonly 2048) independent of this app's own context budget — added an explicit, formula-derived default plus a runtime warning when a request estimate crosses 75% of it (#71, DEC-019)
 - `Doctor.notes` was persisted and user-editable but never reached visit-prep's AI context, unlike `Condition.notes`/`Appointment.visit_notes` — now anonymized and included the same way (#51)
 - "Retry" on a failed document parse re-raised the same cached error instead of actually re-invoking the parser, since the frontend only reset a document's `parse_status` back to `pending` when it had no `document_id` yet, never when it had already failed (#45)
+- Three `test_visit_prep.py` tests mocked the Claude client but never forced `llm_provider`, so on a machine with the checked-in `.env` default (`ollama`) they silently exercised a real/timed-out Ollama call and its fallback instead of the intended mock — full backend suite runtime dropped from minutes to ~1.4s (#79)
 
 ## [0.2.0-alpha] - 2026-07-10
 
