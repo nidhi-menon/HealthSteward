@@ -11,6 +11,7 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 - Project-wide prompt versioning — every LLM prompt now carries a version tag, with change history in `docs/notes/PROMPT_CHANGELOG.md` (DEC-018)
 - `VisitPrep.used_fallback` flag, surfaced as a warning banner in the UI, so a total LLM backend failure (e.g. unreachable/misconfigured Ollama URL) no longer looks like a normal successful generation with generic placeholder questions (#47, DEC-020)
 - A unified "currently snoozed" view (`GET /snoozed-items`) across both action-item snooze mechanisms, an "Un-snooze now" action per item, and an 8-second undo banner after any snooze action — snoozing was previously a silent, unrecoverable action-item removal with no way to see or reverse it (#44)
+- Ollama auto-discovery on the Settings page — an explicit "Detect" button probes well-known candidate addresses and auto-fills the Base URL field, with a guided fallback (different machine / different port / Docker) if nothing responds (#48, DEC-021)
 
 ### Fixed
 - An unrecognized tool name called by the model during the agentic visit-prep loop was silently absorbed as a fake tool result instead of triggering the existing single-shot fallback (#53)

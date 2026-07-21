@@ -751,4 +751,29 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-20*
+### DEC-021: Ollama Auto-Discovery — Explicit "Detect" Button, Not Automatic on Page Load
+
+**Date:** 2026-07-21
+
+**Context:** Issue #48: the Settings page's Ollama Base URL field is a plain text input with no help finding the right value — in practice it's almost always `localhost:11434` for this app's target use case (single local machine, per DEC-009), so most users shouldn't need to type anything. The issue explicitly posed two open design questions: (1) should discovery re-run automatically on every Settings page load, or only on an explicit action, and (2) how to keep the candidate-address list easy to extend as new environments (e.g. WSL) come up.
+
+**Options Considered (question 1 — when discovery runs):**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Auto-run on every Settings page load | Zero-click default case | Unexpected network probing every time a user opens Settings, even if they never touch the Ollama field — surprising for a privacy-first app whose whole pitch is "nothing happens without you asking" |
+| Auto-run once, only if the field is empty | Helps a genuinely fresh install | Still implicit background network activity a user didn't ask for; also indistinguishable from "user deliberately cleared the field" |
+| Explicit "Detect" button only | No surprise network activity; user-initiated, matches this app's local-first trust posture | One extra click versus the zero-click ideal |
+
+**Decision:**
+1. **Explicit "Detect" button only** (`frontend/src/pages/Settings.tsx`) — discovery never runs automatically, including on page load. `GET /api/settings/discover-ollama` (`src/api/settings.py`) probes a short list of well-known candidate addresses (`src/utils/ollama_discovery.py`) via Ollama's existing health-check pattern (`/api/tags`, matching `OllamaClient.is_available()`), with a short 1.5s per-candidate timeout so a firewalled/hung candidate doesn't stall the whole scan.
+2. **Candidate list kept as a flat, ordered constant** (`CANDIDATE_OLLAMA_URLS`) rather than branching logic — `localhost`, `127.0.0.1`, `host.docker.internal`, and Docker's default bridge gateway `172.17.0.1`. Adding a new candidate (e.g. a WSL-specific address) is a one-line addition, not a code change.
+3. **Guided fallback when discovery finds nothing**: an in-UI panel with actionable, copy-pasteable guidance for the three real-world non-default cases identified in the issue — a different machine, a different port, or Docker — rather than an empty field with no explanation.
+
+**Reasoning:** An explicit button costs one click in the common case but keeps network activity strictly user-initiated, consistent with the project's local-first, privacy-first positioning — auto-probing on every page visit would be a small but real departure from that posture for a feature whose only job is convenience. The found/not-found result is surfaced in the form state (auto-filling the field on success, showing the guide on failure) but not auto-saved — the user still confirms via the existing Save button, so a bad auto-fill can't silently take effect.
+
+**Status:** Implemented.
+
+---
+
+*Last updated: 2026-07-21*
