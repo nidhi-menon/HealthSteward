@@ -518,6 +518,56 @@ async def test_prepare_visit_falls_back_when_agentic_loop_does_not_converge(
     assert response.status_code == 200
     data = response.json()
     assert data["generated_questions"] == {"General": ["Fallback question"]}
+    # This is the agentic-loop-doesn't-converge fallback (DEC-009/013), which
+    # still produced a real single-shot LLM response — not issue #47's
+    # "backend failed entirely" fallback, so used_fallback must be False.
+    assert data["used_fallback"] is False
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_surfaces_used_fallback_when_backend_fails_entirely(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Regression test for issue #47: when both the agentic loop and its
+    single-shot fallback fail (e.g. an unreachable/misconfigured backend
+    URL), prepare_visit's outer except returns the hardcoded generic
+    placeholder questions — but must also flag used_fallback=True so the
+    frontend can warn the user, instead of looking like a normal successful
+    generation.
+    """
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=RuntimeError("connection refused"))
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["used_fallback"] is True
+    assert "General Questions" in data["generated_questions"]
 
 
 @pytest.mark.asyncio

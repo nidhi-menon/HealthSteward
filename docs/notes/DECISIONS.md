@@ -729,4 +729,26 @@ Oncology → Relevant to all
 
 ---
 
+### DEC-020: Surface LLM Backend Failure to the User via a Persisted `used_fallback` Flag
+
+**Date:** 2026-07-20
+
+**Context:** Issue #47: when the configured LLM backend fails entirely (unreachable/misconfigured URL, or any other failure that survives both the agentic loop and its single-shot fallback), `VisitPrepAgent._get_fallback_response()` returns hardcoded generic placeholder questions — but `prepare_visit` never raises past that point, so the frontend receives what looks like a normal 200 response. `VisitPrep.tsx`'s existing error banner never fires, because nothing actually errored from its perspective. The fallback mechanism itself is working as designed (DEC-009/DEC-013's convergence handling) — it just had no visibility.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Ephemeral flag only in the POST response (not persisted) | No migration needed | Reloading the Visit Prep page (GET) loses the warning — user could reasonably think a stale generic result is a fresh, personalized one |
+| Persist `used_fallback` on `VisitPrep`, surfaced on both POST and GET | Warning survives a page reload/reopen until the user successfully regenerates; consistent state regardless of which route served the data | Needs an Alembic migration |
+| Infer fallback status client-side by pattern-matching `context_summary`/`generated_questions` content | No backend/schema change at all | Fragile — string-matching hardcoded copy is exactly the kind of implicit contract a rename or copy edit silently breaks |
+
+**Decision:** Added `VisitPrep.used_fallback: bool` (`src/data/models.py`, migration `73a1532778f1`, default `False`), threaded through `VisitPrepAgent.prepare_visit`'s return dict (`True` only from `_get_fallback_response()`'s outer-exception path; `False` for every other return, including the agentic-loop-doesn't-converge single-shot fallback (DEC-009/013), which is a real LLM-generated result and not a failure), persisted on both create and update in `src/api/visits.py`, and exposed via `VisitPrepResponse`. `VisitPrep.tsx` shows an amber warning banner (matching `ParsedItemsReview.tsx`'s existing edit-count banner styling) linking to Settings when `used_fallback` is true.
+
+**Reasoning:** A persisted, explicit boolean is the only option of the three that's both durable (survives reload) and robust (doesn't depend on copy text staying in sync with a string-match check). The distinction between "single-shot fallback" (DEC-013, still real model output) and "used_fallback" (issue #47, no model output at all) is deliberate — conflating them would make every graceful DEC-009/013 convergence failure look like a backend outage to the user, when only the latter actually is one.
+
+**Status:** Implemented.
+
+---
+
 *Last updated: 2026-07-20*

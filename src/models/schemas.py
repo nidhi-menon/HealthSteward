@@ -253,6 +253,7 @@ class VisitPrepResponse(BaseModel):
     appointment_id: str
     generated_questions: Optional[dict] = None
     context_summary: Optional[str] = None
+    used_fallback: bool = False
     created_at: datetime
     updated_at: datetime
 

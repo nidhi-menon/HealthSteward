@@ -124,6 +124,7 @@ export interface VisitPrep {
   appointment_id: string;
   generated_questions: Record<string, string[]> | null;
   context_summary: string | null;
+  used_fallback: boolean;
   created_at: string;
   updated_at: string;
 }
