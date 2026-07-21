@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.database import get_db
-from src.models.schemas import AppSettingsResponse, AppSettingsUpdate
+from src.models.schemas import AppSettingsResponse, AppSettingsUpdate, OllamaDiscoveryResponse
 from src.services import settings_service
+from src.utils.ollama_discovery import CANDIDATE_OLLAMA_URLS, discover_ollama_url
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
@@ -61,4 +62,18 @@ async def update_settings_route(
         custom_llm_base_url=effective.custom_llm_base_url,
         custom_llm_api_key=_mask(effective.custom_llm_api_key),
         custom_llm_model=effective.custom_llm_model,
+    )
+
+
+@router.get("/discover-ollama", response_model=OllamaDiscoveryResponse)
+async def discover_ollama_route() -> OllamaDiscoveryResponse:
+    """Probe well-known Ollama addresses (issue #48). Explicit, on-demand only —
+    never auto-run on Settings page load, so visiting the page doesn't cause
+    unexpected network probing.
+    """
+    found_url = await discover_ollama_url()
+    return OllamaDiscoveryResponse(
+        found=found_url is not None,
+        base_url=found_url,
+        candidates_tried=CANDIDATE_OLLAMA_URLS,
     )

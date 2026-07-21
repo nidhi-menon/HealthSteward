@@ -510,3 +510,11 @@ class AppSettingsResponse(BaseModel):
     custom_llm_base_url: Optional[str] = None
     custom_llm_api_key: Optional[str] = None
     custom_llm_model: Optional[str] = None
+
+
+class OllamaDiscoveryResponse(BaseModel):
+    """Result of probing candidate Ollama addresses (issue #48)."""
+
+    found: bool
+    base_url: Optional[str] = None
+    candidates_tried: list[str]

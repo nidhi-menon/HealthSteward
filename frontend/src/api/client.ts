@@ -22,6 +22,7 @@ import type {
   SnoozedItem,
   AppSettings,
   AppSettingsUpdate,
+  OllamaDiscoveryResult,
 } from '../types';
 
 const API_BASE = '/api';
@@ -240,4 +241,5 @@ export const appSettings = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  discoverOllama: () => request<OllamaDiscoveryResult>('/settings/discover-ollama'),
 };

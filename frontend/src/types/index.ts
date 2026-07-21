@@ -323,3 +323,9 @@ export interface AppSettingsUpdate {
   custom_llm_api_key?: string;
   custom_llm_model?: string;
 }
+
+export interface OllamaDiscoveryResult {
+  found: boolean;
+  base_url: string | null;
+  candidates_tried: string[];
+}
