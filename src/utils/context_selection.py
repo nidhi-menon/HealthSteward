@@ -122,6 +122,10 @@ class ContextSelectionResult:
     """Result of context selection."""
 
     selected_visits: list[AnonymizedAppointment]
+    # Original (pre-anonymization) Appointment.ids for selected_visits, same
+    # order — lets downstream consumers (the agentic loop's tools) exclude
+    # these from on-demand lookups without needing PII. See DEC-024.
+    selected_visit_ids: list[str]
     total_visits_considered: int
     visits_after_stage1: int
     visits_after_stage2: Optional[int]
@@ -554,6 +558,7 @@ Notes: {appt.visit_notes or 'N/A'}
 
         return ContextSelectionResult(
             selected_visits=anonymized,
+            selected_visit_ids=[appt.id for appt in stage3_results],
             total_visits_considered=total_considered,
             visits_after_stage1=visits_after_stage1,
             visits_after_stage2=visits_after_stage2,
