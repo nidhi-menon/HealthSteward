@@ -65,7 +65,8 @@ class AnonymizedAppointment:
     doctor: AnonymizedDoctor
     scheduled_date: str  # ISO format date
     purpose: Optional[str]  # Anonymized
-    visit_notes: Optional[str]  # Anonymized
+    prep_notes: Optional[str]  # Anonymized — notes before the visit (concerns, questions to ask)
+    visit_notes: Optional[str]  # Anonymized — notes during/after the visit (what was discussed, outcomes)
 
 
 # Common regex patterns for PII detection
@@ -272,6 +273,7 @@ class Anonymizer:
             doctor=self.anonymize_doctor(appointment.doctor),
             scheduled_date=appointment.scheduled_date.isoformat() if appointment.scheduled_date else None,
             purpose=self.anonymize_text(appointment.purpose),
+            prep_notes=self.anonymize_text(appointment.prep_notes),
             visit_notes=self.anonymize_text(appointment.visit_notes),
         )
 
