@@ -286,6 +286,25 @@
   .arch-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .arch-legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
 
+  /* fan-out of tool chips under the Orchestrate phase's loop box —
+     built tools vs. on-the-roadmap candidates, visually distinct */
+  .arch-tools-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 8px; }
+  .arch-tools-row + .arch-tools-row { margin-top: 6px; }
+  .arch-tools-label {
+    font-family: ui-monospace, monospace; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--ink-faint); flex: none; margin-right: 1px;
+  }
+  .arch-tool {
+    display: inline-flex; align-items: baseline; gap: 4px;
+    border: 1px solid var(--teal-bright); background: var(--paper); border-radius: 999px;
+    padding: 3px 9px; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--teal-bright);
+  }
+  .arch-tool--roadmap {
+    border: 1px dashed var(--ink-faint); color: var(--ink-faint);
+  }
+  .arch-tool-issue { font-size: 9.5px; color: var(--ink-faint); }
+  .arch-tool--roadmap .arch-tool-issue { color: inherit; opacity: 0.75; }
+
   /* compact loop-cycle diagram, used inside Deep Dives accordion bodies —
      same node/icon vocabulary as .arch-node, sized for the 820px reading
      column rather than the full-width breakout diagram */
@@ -304,6 +323,18 @@
     padding: 6px 9px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink);
   }
   .loop-step svg { flex: none; width: 14px; height: 14px; color: var(--ink-faint); }
+  /* two-line variant: icon+title row, then a plain-language description
+     below — used where a bare label (e.g. "Groundedness entity-match")
+     isn't self-explanatory, without affecting the compact single-line
+     .loop-step used elsewhere */
+  .loop-step--desc {
+    flex-direction: column; align-items: flex-start; gap: 5px; max-width: 220px;
+  }
+  .loop-step-head { display: flex; align-items: center; gap: 6px; }
+  .loop-step-desc {
+    font-size: 10px; color: var(--ink-faint); line-height: 1.4; white-space: normal;
+  }
+  .loop-step-desc strong { color: var(--ink-faint); font-weight: 700; }
   .loop-arrow { color: var(--ink-faint); font-size: 12px; flex: none; }
   .loop-cycle-back {
     margin-top: 10px; font-family: ui-monospace, monospace; font-size: 10.5px;
@@ -524,7 +555,7 @@
 
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
-      <div class="eyebrow">Snapshot as of DEC-018 · 2026-07-19</div>
+      <div class="eyebrow">Snapshot as of DEC-024 · 2026-07-22</div>
       <h1>HealthSteward — Technical Design Document</h1>
       <p class="dek">A point-in-time architecture snapshot, written up for anyone who wants to go deep on how it's built. Re-written on architectural shifts, not on every change; see the note at the bottom of this page.</p>
 
@@ -657,7 +688,7 @@
                 <div class="arch-phase-row">
                   <div class="arch-node"><svg aria-hidden="true"><use href="#icon-file"></use></svg><div>AVS PDF<span class="arch-sub">data/avs/</span></div></div>
                   <div class="arch-inline-arrow">→</div>
-                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, qwen2.5:7b</span></div></div>
+                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, qwen2.5:7b default</span></div></div>
                   <div class="arch-inline-arrow">→</div>
                   <div class="arch-node"><svg aria-hidden="true"><use href="#icon-check"></use></svg><div>Review &amp; confirm<span class="arch-sub">user</span></div></div>
                 </div>
@@ -665,29 +696,43 @@
 
               <div class="arch-spine-arrow">↓</div>
 
-              <div class="arch-phase">
-                <div class="arch-phase-title">Select</div>
-                <div class="arch-phase-row">
-                  <div class="arch-node arch-node--store"><svg aria-hidden="true"><use href="#icon-db"></use></svg><div>SQLite<span class="arch-sub">past visits</span></div></div>
-                  <div class="arch-inline-arrow">→</div>
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Context selection<span class="arch-sub">4-stage pipeline</span></div></div>
-                  <div class="arch-inline-arrow">→</div>
-                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama scoring<span class="arch-sub">raw, pre-anonymization · llama3.2 default</span></div></div>
-                </div>
-              </div>
+              <div class="arch-boundary">
+                <div class="arch-boundary-label"><svg aria-hidden="true"><use href="#icon-gear"></use></svg> 4-stage context selection pipeline</div>
 
-              <div class="arch-spine-arrow">↓</div>
+                <div class="arch-stack">
+                  <div class="arch-phase">
+                    <div class="arch-phase-title">Select</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node arch-node--store"><svg aria-hidden="true"><use href="#icon-db"></use></svg><div>SQLite<span class="arch-sub">past visits</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding:4px 0;">↓</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Rules filter<span class="arch-sub">same doctor, PCP, related specialty</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding:4px 0;">↓</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama scoring<span class="arch-sub">raw, pre-anonymization · llama3.2 default · capped @15, if &gt;5 visits left</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding:4px 0;">↓</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Token budget<span class="arch-sub">priority-packed · pinned visit packed first</span></div></div>
+                    </div>
+                  </div>
 
-              <div class="arch-phase">
-                <div class="arch-phase-title">Anonymize</div>
-                <div class="arch-phase-row">
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Deterministic replacement<span class="arch-sub">name omitted, DOB → age</span></div></div>
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Regex patterns<span class="arch-sub">phone, email, SSN</span></div></div>
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>spaCy NER<span class="arch-sub">names in free text</span></div></div>
-                </div>
-                <div class="arch-spine-arrow" style="padding-bottom:0;">↓</div>
-                <div class="arch-phase-row" style="justify-content:center;">
-                  <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Anonymized context</div></div>
+                  <div class="arch-spine-arrow">↓</div>
+
+                  <div class="arch-phase">
+                    <div class="arch-phase-title">Anonymize</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Deterministic replacement<span class="arch-sub">name omitted, DOB → age</span></div></div>
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Regex patterns<span class="arch-sub">phone, email, SSN</span></div></div>
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>spaCy NER<span class="arch-sub">names in free text</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding-bottom:0;">↓</div>
+                    <div class="arch-phase-row" style="justify-content:center;">
+                      <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Anonymized context</div></div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -700,6 +745,21 @@
                   <div class="arch-inline-arrow">→</div>
                   <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Query DB, anonymize result<span class="arch-sub">tool calls</span></div></div>
                 </div>
+
+                <div class="arch-tools-row">
+                  <span class="arch-tools-label">available</span>
+                  <span class="arch-tool">get_medication_details</span>
+                  <span class="arch-tool">lookup_past_visits</span>
+                </div>
+                <div class="arch-tools-row">
+                  <span class="arch-tools-label">roadmap</span>
+                  <span class="arch-tool arch-tool--roadmap">lookup_upcoming_appointments</span>
+                  <span class="arch-tool arch-tool--roadmap">get_doctor_details</span>
+                  <span class="arch-tool arch-tool--roadmap">drug interaction checker <span class="arch-tool-issue">#24</span></span>
+                  <span class="arch-tool arch-tool--roadmap">lab + imaging results lookup <span class="arch-tool-issue">#22</span></span>
+                  <span class="arch-tool arch-tool--roadmap">procedures/hospitalizations lookup <span class="arch-tool-issue">#23</span></span>
+                </div>
+
                 <div class="arch-branch-tag">⇄ optionally calls out to Claude or a custom provider — see right</div>
               </div>
 
@@ -742,6 +802,8 @@
             <span><span class="swatch" style="background:var(--paper); border:1.5px solid var(--teal-bright);"></span> local AI call (Ollama)</span>
             <span><span class="swatch" style="background:var(--paper); border:1px dashed var(--line);"></span> data store</span>
             <span><span class="swatch" style="background:var(--paper); border:1.5px solid var(--amber);"></span> anonymization / external boundary</span>
+            <span><span class="swatch" style="background:var(--paper); border:1px solid var(--teal-bright); border-radius:999px;"></span> available tool</span>
+            <span><span class="swatch" style="background:var(--paper); border:1px dashed var(--ink-faint); border-radius:999px;"></span> roadmap tool, not built</span>
           </div>
         </div>
         </div>
@@ -890,6 +952,8 @@
             <li><strong>Anonymize</strong> — the only stage where data crosses into what the external-capable backend will see.</li>
           </ol>
           <p>Stage 2's relevance scoring deliberately runs on <em>raw, pre-anonymization</em> text — it's a local-only call, so there's no privacy reason to anonymize before it, and doing so first would degrade the local model's ability to judge relevance from real names/context.</p>
+
+          <p><strong>Why is this a separate deterministic pipeline instead of an agentic-loop tool call</strong> (DEC-023)? Two constraints from earlier decisions compound here. Small local models are unreliable at multi-turn tool-calling (DEC-009), so anything load-bearing for output quality — like which past visits matter — shouldn't depend on the agent choosing to call it correctly within a bounded <code>agent_max_turns</code>; it runs deterministically before the loop starts instead. The loop also needs <em>some</em> context in its first prompt to reason from at all, so full agent-driven retrieval would still need a bootstrapping mechanism — at which point most of this pipeline's value has already been re-invented, just less reliably. This split also lines up with how the eval harness scores retrieval (exact assertion) separately from generation (needs a judge, DEC-018) — folding retrieval into the loop would blur that line. The agentic loop's <code>lookup_past_visits</code> tool exists to go <em>beyond</em> this baseline, not duplicate it — since DEC-024, it excludes whatever this pipeline already selected at the SQL query level, so the two layers can't redundantly re-fetch the same visit.</p>
 
           <div class="callout gap">
             <span class="callout-label">Known gap</span>
@@ -1158,7 +1222,7 @@
 
     <!-- EVALUATION PLAN -->
     <section class="panel" id="panel-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0">
-      <div class="eyebrow">Tier 1 &amp; 2 shipped (DEC-018) · Tier 3 (LLM-judge) still proposed</div>
+      <div class="eyebrow">Tier 1 partially shipped, Tier 2 shipped (DEC-018) · Tier 3 (LLM-judge) still proposed</div>
       <h1>Evaluation Plan</h1>
       <p class="dek">The deterministic and cheap-no-judge tiers below (build order, tiers 1-2) are now implemented in <code>eval/</code> and run on-demand via <code>python -m eval.run</code> against a real pipeline and a real LLM backend, not just mocks — this closed out <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>. It's explicitly a smoke test, not a quality measure: it catches gross regressions (hallucination, scope violations, malformed output, retrieval rule breaks), and it already caught and fixed one real prompt regression on its first real run — see <code>docs/notes/PROMPT_CHANGELOG.md</code>'s v3 entry. Tier 3 (LLM-judge: relevance/usefulness, non-redundancy, deeper inferential groundedness) remains proposed, not built — see "Build order" below for what's actually shipped vs. still planned. Grounded in the actual pipeline (<code>context_selection.py</code>'s 4-stage selector, <code>visit_prep.py</code>'s prompt + agentic loop, <code>tools.py</code>'s two read-only tools), not a generic eval template.</p>
 
@@ -1309,33 +1373,57 @@
         <p>One ranked list across all four components, not four separate ones — by value/effort, cheapest and most deterministic first.</p>
 
         <div class="loop-box">
-          <div class="loop-box-label">tier 1 — deterministic, no judge model — shipped (DEC-018)</div>
+          <div class="loop-box-label">tier 1 — deterministic, no judge model — partially shipped (DEC-018): #1-3 built, #4-5 not yet</div>
           <div class="loop-steps">
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Scope checker<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Scope checker</div>
+              <div class="loop-step-desc"><strong>generation</strong> — flags a question referencing a medication tagged for an unrelated specialty</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>2. Format validation<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>2. Format validation</div>
+              <div class="loop-step-desc"><strong>generation</strong> — checks valid JSON shape, 8-15 questions, known non-empty categories</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>3. Stage 1 unit tests<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>3. Stage 1 unit tests</div>
+              <div class="loop-step-desc"><strong>retrieval</strong> — asserts the rules filter includes/excludes the right visits by exact id</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>4. PII span-overlap<span class="arch-sub" style="margin-left:4px;">anonymize</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>4. PII span-overlap</div>
+              <div class="loop-step-desc"><strong>anonymize</strong> — not built; would diff anonymized output against known PII spans in a fixture</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>5. AVS golden-set diff<span class="arch-sub" style="margin-left:4px;">ingest</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>5. AVS golden-set diff</div>
+              <div class="loop-step-desc"><strong>ingest</strong> — not built; would diff parser output against a hand-verified reference PDF</div>
+            </div>
           </div>
         </div>
 
         <div class="loop-box">
           <div class="loop-box-label">tier 2 — cheap, no judge, but not a pure assertion — shipped (DEC-018)</div>
           <div class="loop-steps">
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>6. Groundedness entity-match<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>6. Groundedness entity-match</div>
+              <div class="loop-step-desc"><strong>generation</strong> — flags a question that names no real condition/medication/lab from the input (string match, not semantic)</div>
+            </div>
           </div>
         </div>
 
         <div class="loop-box">
           <div class="loop-box-label">tier 3 — needs fixtures and/or a judge model — proposed, not yet built</div>
           <div class="loop-steps">
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>7. Retrieval recall/precision<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>7. Retrieval recall/precision</div>
+              <div class="loop-step-desc"><strong>retrieval</strong> — not built; would score whether context selection picked the actually-relevant past visits, not just the rule-eligible ones</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>8. LLM-judge relevance<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>8. LLM-judge relevance</div>
+              <div class="loop-step-desc"><strong>generation</strong> — not built; would use a second model to judge whether each question is actually useful, not just non-hallucinated</div>
+            </div>
           </div>
         </div>
 

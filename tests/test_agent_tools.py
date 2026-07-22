@@ -5,6 +5,8 @@ from datetime import date, datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from src.agents.tools import UnknownToolError, VisitPrepTools, claude_tools, ollama_tools
 from src.data.models import Appointment, Doctor, HealthProfile, Medication
 from src.utils.anonymization import Anonymizer
@@ -97,6 +99,25 @@ async def test_lookup_past_visits(db_session, profile_with_medication):
 async def test_lookup_past_visits_specialty_filter_no_match(db_session, profile_with_medication):
     tools = VisitPrepTools(db_session, Anonymizer(use_ner=False), profile_with_medication.id)
     result = await tools.execute("lookup_past_visits", {"specialty": "Cardiology"})
+
+    assert result == "No matching past visits found."
+
+
+@pytest.mark.asyncio
+async def test_lookup_past_visits_excludes_context_selection_visits(db_session, profile_with_medication):
+    """DEC-024: visits Stage 1-4 already selected into the base context
+    shouldn't be re-surfaced by the tool call."""
+    appointment = (
+        await db_session.execute(
+            select(Appointment).where(Appointment.profile_id == profile_with_medication.id)
+        )
+    ).scalar_one()
+
+    tools = VisitPrepTools(
+        db_session, Anonymizer(use_ner=False), profile_with_medication.id,
+        exclude_appointment_ids=[appointment.id],
+    )
+    result = await tools.execute("lookup_past_visits", {})
 
     assert result == "No matching past visits found."
 

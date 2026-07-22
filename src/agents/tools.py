@@ -121,10 +121,20 @@ def get_tools_for_provider(provider: str) -> list[dict[str, Any]]:
 class VisitPrepTools:
     """Executes visit-prep tools against the database, anonymizing results."""
 
-    def __init__(self, db: AsyncSession, anonymizer: Anonymizer, profile_id: str):
+    def __init__(
+        self,
+        db: AsyncSession,
+        anonymizer: Anonymizer,
+        profile_id: str,
+        exclude_appointment_ids: Optional[list[str]] = None,
+    ):
         self.db = db
         self.anonymizer = anonymizer
         self.profile_id = profile_id
+        # Visits context_selection.py's Stage 1-4 pipeline already selected
+        # into the base prompt — excluded here so lookup_past_visits can't
+        # redundantly re-fetch them (DEC-024).
+        self.exclude_appointment_ids = exclude_appointment_ids or []
 
     async def execute(self, name: str, tool_input: dict[str, Any]) -> str:
         """Execute a tool by name and return an anonymized string result."""
@@ -176,6 +186,8 @@ class VisitPrepTools:
             )
             .order_by(Appointment.scheduled_date.desc())
         )
+        if self.exclude_appointment_ids:
+            query = query.where(Appointment.id.notin_(self.exclude_appointment_ids))
         result = await self.db.execute(query)
         appointments = list(result.scalars().all())
 
@@ -202,6 +214,8 @@ class VisitPrepTools:
             lines.append(f"### Visit with {anon.doctor.title} on {anon.scheduled_date}")
             if anon.purpose:
                 lines.append(f"Purpose: {anon.purpose}")
+            if anon.prep_notes:
+                lines.append(f"Planned to discuss: {anon.prep_notes}")
             if anon.visit_notes:
                 lines.append(f"Notes: {anon.visit_notes}")
             lines.append("")

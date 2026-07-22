@@ -1356,4 +1356,67 @@ Related: issue #48, DEC-021.
 
 ---
 
+## 37. Enforced Retrieval Non-Redundancy Between Context Selection and `lookup_past_visits` (DEC-023, DEC-024)
+
+**Date:** 2026-07-22
+
+**Context:** While walking through the System Design diagram, a question surfaced about why context selection (DEC-008) runs as a separate deterministic pipeline instead of being folded into the agentic loop as just another tool call — that rationale had never actually been written down anywhere, so it got documented retroactively as DEC-023. That writeup claimed context selection and `lookup_past_visits` were "intentionally complementary, non-overlapping layers," backed by `eval/scorers.py::score_retrieval_redundancy` checking for overlap between them. Checking that claim against the actual code found it was only half true: the eval scorer's own docstring called it "Observational" — it measured redundant re-fetching after the fact, but nothing in `src/agents/tools.py` or `src/agents/visit_prep.py` actually prevented it. `lookup_past_visits` queried all completed appointments for a profile with no awareness of what DEC-008's pipeline had already selected into the base prompt.
+
+**What was built:**
+- `ContextSelectionResult.selected_visit_ids: list[str]` (`src/utils/context_selection.py`) — the pre-anonymization `Appointment.id`s for `selected_visits`, populated at the same point Stage 4 anonymizes them (the id was already in scope there; it just wasn't being kept).
+- Threaded through `VisitPrepAgent._run_agentic_loop`'s new `exclude_appointment_ids` param (`src/agents/visit_prep.py`) into `VisitPrepTools.__init__` (`src/agents/tools.py`), which now filters `_lookup_past_visits`'s query with `Appointment.id.notin_(...)` — redundant re-fetching is now impossible at the SQL level, not just discouraged.
+- Updated `eval/scorers.py::score_retrieval_redundancy`'s docstring: overlap is now a regression signal (the exclusion filter broke) rather than a quality-tuning signal (the model chose to re-fetch).
+- Added `tests/test_agent_tools.py::test_lookup_past_visits_excludes_context_selection_visits`.
+- Also updated the System Design diagram (`docs/tdd.html`): expanded the "Select" phase's collapsed "Context selection / 4-stage pipeline" node into its actual four sub-steps (SQLite → Rules filter → Ollama scoring → Token budget, stacked vertically), then wrapped Select and Anonymize together in a labeled `.arch-boundary` reading "4-stage context selection pipeline" — since Anonymize is stage 4 of the same pipeline, not a separate step, which the original two-box layout obscured.
+
+**Reasoning:** Didn't cross the anonymization trust boundary (DEC-006) — the exclusion list is derived from real appointment ids before anonymization, but is only ever used as a SQL filter inside the tool executor, never rendered into anything the LLM sees. See DEC-023 for why context selection is a separate deterministic step at all, and DEC-024 for the enforcement decision itself.
+
+**Files changed:** `src/utils/context_selection.py`, `src/agents/visit_prep.py`, `src/agents/tools.py`, `eval/scorers.py`, `tests/test_agent_tools.py`, `docs/tdd.html`, `docs/notes/DECISIONS.md`.
+
+Related: DEC-023, DEC-024.
+
+---
+
+## 38. Expose `Appointment.prep_notes` to Visit Prep (Base Context and `lookup_past_visits`)
+
+**Date:** 2026-07-22
+
+**Context:** While auditing what `lookup_past_visits` actually returns, found that `Appointment.prep_notes` ("notes before the visit — concerns, questions to ask") was invisible to visit prep entirely — both in the base context built by `context_selection.py` and in the `lookup_past_visits` tool's output — even though `visit_notes` ("during/after — what was discussed, outcomes") was already included in both places. `AnonymizedAppointment` (`src/utils/anonymization.py`) simply had no field for it. Practically, this meant the agent could never reason about continuity like "did the concern the patient meant to raise last time actually get addressed" — it only ever saw what was discussed, never what was intended to be discussed.
+
+**What was built:**
+- Added `prep_notes: Optional[str]` to `AnonymizedAppointment`, anonymized the same way as `visit_notes` in `Anonymizer.anonymize_appointment`.
+- Rendered as `Planned to discuss: ...` in both `_build_anonymized_context`'s past-visits section (`src/agents/visit_prep.py`) and `lookup_past_visits`'s tool output (`src/agents/tools.py`), alongside the existing `Purpose:`/`Notes:` lines.
+- Added `tests/test_anonymization.py::TestAnonymizeAppointment::test_anonymize_appointment_includes_prep_notes`, confirming it's anonymized (not just passed through raw) and doesn't silently collide with `visit_notes`.
+- Deliberately scoped to *exposure* only — did not touch the system prompt to instruct the model to actually reason about carryover ("was this addressed last time"), since that's a wording change subject to the project's prompt-versioning discipline and needs separate review before landing.
+
+**Reasoning:** Pure data-exposure fix, not a new capability or a new tool — the data already existed on `Appointment`, the anonymization dataclass just never carried it through. Kept as a standalone step specifically so the still-unwritten prompt change to make the agent reason about it can be reviewed and versioned on its own, rather than bundling a data-shape change with a prompt-wording change in one commit.
+
+**Files changed:** `src/utils/anonymization.py`, `src/agents/visit_prep.py`, `src/agents/tools.py`, `tests/test_anonymization.py`.
+
+Related: DEC-015 (visit-prep tool scope).
+
+---
+
+## 39. Prompt v4: Instruct the Model to Surface `prep_notes`/`visit_notes` Carryover
+
+**Date:** 2026-07-22
+
+**Context:** Follow-up to #38 above — with `prep_notes` now exposed to the model, added the actual instruction to compare it against `visit_notes` and surface a question when something planned was never shown as addressed. Drafted wording for review before touching the versioned prompt, then applied it once approved.
+
+**What was built:**
+- `SYSTEM_PROMPT_TEMPLATE_VERSION`/`SYSTEM_PROMPT_GENERIC_VERSION` bumped v3-2026-07-19 → v4-2026-07-22 (`src/agents/visit_prep.py`).
+- One new rule in both prompts' `IMPORTANT RULES`, scoped to only fire when both fields are present and the second is silent on the topic (not when notes are missing/sparse generally) — kept inside the existing "only assert what's grounded" discipline rather than inventing carryover.
+- "Follow-up Planning"'s category description extended to explicitly include carryover concerns, so they land in an existing category rather than needing a new one.
+- Full `PROMPT_CHANGELOG.md` entry per the project's versioning convention.
+
+**What didn't happen:** attempted a real before/after eval comparison per that same convention (`python -m eval.run`), but the baseline run itself failed — every one of 5 generation cases timed out on the 150s `_TOTAL_CALL_TIMEOUT_SECONDS` (`llm_backend.py:24`) on both the agentic loop and the single-shot fallback, landing on the outer generic-fallback response for all 5 (`grounded_rate=0.0`/`format_valid=False` across the board — "nothing generated," not a real quality signal). `llama3.2:latest` was confirmed pulled; Ollama's `llama-server` process was genuinely computing (~10 min CPU observed) rather than hung — looks like resource contention from four pulled models (`medgemma`, `llama3.2`, `qwen2.5`, `llama3.1`) competing for this 8GB M3's memory/CPU, not a code or prompt defect. Rather than fabricate a "no regression" conclusion from a run where nothing actually generated, landed the prompt change with eval evidence explicitly marked pending in the changelog, and filed [issue #89](https://github.com/nidhi-menon/HealthSteward/issues/89) to re-run once Ollama can reliably complete calls within timeout.
+
+**Reasoning:** User's explicit call, given a live choice between deferring eval, retrying with a longer timeout, or reverting the prompt change outright — chose to land the (self-contained, narrowly-scoped, low-hallucination-risk-by-construction) prompt change now and close the eval gap separately, rather than block on infra that's flaky on this specific dev machine right now.
+
+**Files changed:** `src/agents/visit_prep.py`, `docs/notes/PROMPT_CHANGELOG.md`.
+
+Related: #38, DEC-015, issue #89.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

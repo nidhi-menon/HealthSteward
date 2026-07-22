@@ -179,13 +179,16 @@ def score_retrieval_redundancy(
     phase1_selected_dates: list[str],
     tool_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Observational: did a lookup_past_visits tool call re-surface a visit
+    """Regression check: did a lookup_past_visits tool call re-surface a visit
     Phase 1's context selection already included.
 
-    Matched on scheduled_date (a reliable per-visit identity even though
-    AnonymizedAppointment carries no original id — see #71/#72-adjacent
-    discussion: nothing in the pipeline currently correlates Phase 1 and
-    Phase 2 retrieval by anything sturdier than this).
+    As of DEC-024, lookup_past_visits excludes Phase-1-selected appointment
+    ids at the SQL query level (src/agents/tools.py), so overlap should now
+    be structurally impossible, not just unlikely — a nonzero overlap_count
+    here indicates the exclusion filter regressed, not merely a quality dip.
+    Still matched on scheduled_date rather than the real id, since this
+    reads the tool's rendered text output (AnonymizedAppointment carries no
+    original id by design) rather than the query itself.
     """
     phase1_dates = set(phase1_selected_dates)
     phase2_dates: set[str] = set()
