@@ -323,6 +323,18 @@
     padding: 6px 9px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink);
   }
   .loop-step svg { flex: none; width: 14px; height: 14px; color: var(--ink-faint); }
+  /* two-line variant: icon+title row, then a plain-language description
+     below — used where a bare label (e.g. "Groundedness entity-match")
+     isn't self-explanatory, without affecting the compact single-line
+     .loop-step used elsewhere */
+  .loop-step--desc {
+    flex-direction: column; align-items: flex-start; gap: 5px; max-width: 220px;
+  }
+  .loop-step-head { display: flex; align-items: center; gap: 6px; }
+  .loop-step-desc {
+    font-size: 10px; color: var(--ink-faint); line-height: 1.4; white-space: normal;
+  }
+  .loop-step-desc strong { color: var(--ink-faint); font-weight: 700; }
   .loop-arrow { color: var(--ink-faint); font-size: 12px; flex: none; }
   .loop-cycle-back {
     margin-top: 10px; font-family: ui-monospace, monospace; font-size: 10.5px;
@@ -1210,7 +1222,7 @@
 
     <!-- EVALUATION PLAN -->
     <section class="panel" id="panel-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0">
-      <div class="eyebrow">Tier 1 &amp; 2 shipped (DEC-018) · Tier 3 (LLM-judge) still proposed</div>
+      <div class="eyebrow">Tier 1 partially shipped, Tier 2 shipped (DEC-018) · Tier 3 (LLM-judge) still proposed</div>
       <h1>Evaluation Plan</h1>
       <p class="dek">The deterministic and cheap-no-judge tiers below (build order, tiers 1-2) are now implemented in <code>eval/</code> and run on-demand via <code>python -m eval.run</code> against a real pipeline and a real LLM backend, not just mocks — this closed out <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>. It's explicitly a smoke test, not a quality measure: it catches gross regressions (hallucination, scope violations, malformed output, retrieval rule breaks), and it already caught and fixed one real prompt regression on its first real run — see <code>docs/notes/PROMPT_CHANGELOG.md</code>'s v3 entry. Tier 3 (LLM-judge: relevance/usefulness, non-redundancy, deeper inferential groundedness) remains proposed, not built — see "Build order" below for what's actually shipped vs. still planned. Grounded in the actual pipeline (<code>context_selection.py</code>'s 4-stage selector, <code>visit_prep.py</code>'s prompt + agentic loop, <code>tools.py</code>'s two read-only tools), not a generic eval template.</p>
 
@@ -1361,33 +1373,57 @@
         <p>One ranked list across all four components, not four separate ones — by value/effort, cheapest and most deterministic first.</p>
 
         <div class="loop-box">
-          <div class="loop-box-label">tier 1 — deterministic, no judge model — shipped (DEC-018)</div>
+          <div class="loop-box-label">tier 1 — deterministic, no judge model — partially shipped (DEC-018): #1-3 built, #4-5 not yet</div>
           <div class="loop-steps">
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Scope checker<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Scope checker</div>
+              <div class="loop-step-desc"><strong>generation</strong> — flags a question referencing a medication tagged for an unrelated specialty</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>2. Format validation<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>2. Format validation</div>
+              <div class="loop-step-desc"><strong>generation</strong> — checks valid JSON shape, 8-15 questions, known non-empty categories</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>3. Stage 1 unit tests<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>3. Stage 1 unit tests</div>
+              <div class="loop-step-desc"><strong>retrieval</strong> — asserts the rules filter includes/excludes the right visits by exact id</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>4. PII span-overlap<span class="arch-sub" style="margin-left:4px;">anonymize</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>4. PII span-overlap</div>
+              <div class="loop-step-desc"><strong>anonymize</strong> — not built; would diff anonymized output against known PII spans in a fixture</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>5. AVS golden-set diff<span class="arch-sub" style="margin-left:4px;">ingest</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>5. AVS golden-set diff</div>
+              <div class="loop-step-desc"><strong>ingest</strong> — not built; would diff parser output against a hand-verified reference PDF</div>
+            </div>
           </div>
         </div>
 
         <div class="loop-box">
           <div class="loop-box-label">tier 2 — cheap, no judge, but not a pure assertion — shipped (DEC-018)</div>
           <div class="loop-steps">
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>6. Groundedness entity-match<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>6. Groundedness entity-match</div>
+              <div class="loop-step-desc"><strong>generation</strong> — flags a question that names no real condition/medication/lab from the input (string match, not semantic)</div>
+            </div>
           </div>
         </div>
 
         <div class="loop-box">
           <div class="loop-box-label">tier 3 — needs fixtures and/or a judge model — proposed, not yet built</div>
           <div class="loop-steps">
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>7. Retrieval recall/precision<span class="arch-sub" style="margin-left:4px;">retrieval</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>7. Retrieval recall/precision</div>
+              <div class="loop-step-desc"><strong>retrieval</strong> — not built; would score whether context selection picked the actually-relevant past visits, not just the rule-eligible ones</div>
+            </div>
             <div class="loop-arrow">→</div>
-            <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>8. LLM-judge relevance<span class="arch-sub" style="margin-left:4px;">generation</span></div>
+            <div class="loop-step loop-step--desc">
+              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>8. LLM-judge relevance</div>
+              <div class="loop-step-desc"><strong>generation</strong> — not built; would use a second model to judge whether each question is actually useful, not just non-hallucinated</div>
+            </div>
           </div>
         </div>
 
