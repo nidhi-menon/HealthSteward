@@ -259,6 +259,38 @@ class TestAnonymizerProfile:
         assert "[REDACTED]" in condition_notes
 
 
+class TestAnonymizeAppointment:
+    """Test anonymize_appointment, including prep_notes exposure."""
+
+    @pytest.fixture
+    def anonymizer(self):
+        return Anonymizer(use_ner=False)
+
+    def test_anonymize_appointment_includes_prep_notes(self, anonymizer):
+        """prep_notes (pre-visit concerns/questions) must be anonymized and
+        included, not silently dropped alongside visit_notes."""
+        doctor = MagicMock()
+        doctor.name = "Dr. Smith"
+        doctor.specialty = "Endocrinology"
+        doctor.clinic = "Metro Health"
+        doctor.notes = None
+
+        appointment = MagicMock()
+        appointment.doctor = doctor
+        appointment.scheduled_date = date(2024, 3, 1)
+        appointment.purpose = "Follow-up"
+        appointment.prep_notes = "Ask about fatigue, call 555-123-4567 if urgent"
+        appointment.visit_notes = "Discussed dosage increase"
+
+        result = anonymizer.anonymize_appointment(appointment)
+
+        assert result.prep_notes is not None
+        assert "Ask about fatigue" in result.prep_notes
+        assert "555-123-4567" not in result.prep_notes
+        assert "[REDACTED]" in result.prep_notes
+        assert result.visit_notes == "Discussed dosage increase"
+
+
 class TestModuleLevelFunctions:
     """Test module-level convenience functions."""
 

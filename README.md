@@ -202,6 +202,7 @@ HealthSteward/
 ├── alembic/                 # Database migrations
 ├── data/                    # SQLite DB + AVS PDFs in data/avs/ (git-ignored)
 ├── docs/                    # Decision log, chat history, sandbox experiments
+├── eval/                    # Visit-prep quality eval harness (DEC-018, issue #29) — run via `python -m eval.run`
 └── requirements.txt
 ```
 
@@ -249,10 +250,11 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 - `docs/notes/DESIGN.md` — technical design doc; point-in-time architecture snapshot (problem framing, system design, AI approach, evaluation gaps, risks)
 - `docs/SITE_STYLE_GUIDE.md` — palette, typography, layout, diagram, and accessibility conventions for the public site (`docs/index.html`, `docs/tdd.html`)
-- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-021)
+- `docs/notes/DECISIONS.md` — architectural decision log (DEC-001 through DEC-024)
 - `docs/notes/DEVELOPMENT_LOG.md` — development conversation history
 - `docs/notes/PROMPT_CHANGELOG.md` — version history for every LLM prompt in the codebase
 - `docs/notes/SANDBOX_PROMPT.md` — sandbox experiment prompts
+- `eval/` — visit-prep quality eval harness (deterministic + cheap-assertion tiers, DEC-018); run via `python -m eval.run`
 - `CONTRIBUTING.md` — how to contribute, including the privacy constraints PRs must respect
 - `SECURITY.md` — how to report a vulnerability
 - `CODE_OF_CONDUCT.md` — community behavior expectations and enforcement

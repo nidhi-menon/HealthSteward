@@ -120,7 +120,7 @@ class VisitPrepAgent(BaseAgent):
     # See docs/notes/PROMPT_CHANGELOG.md for version history/rationale —
     # bump the version and add an entry there whenever either prompt below
     # changes, per the project-wide prompt-versioning convention.
-    SYSTEM_PROMPT_TEMPLATE_VERSION = "v3-2026-07-19"
+    SYSTEM_PROMPT_TEMPLATE_VERSION = "v4-2026-07-22"
     SYSTEM_PROMPT_TEMPLATE = """You are a healthcare assistant preparing a patient for a visit with their {specialty}.
 
 Your task: generate 8-15 focused, actionable questions the patient should ask THIS doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
@@ -134,6 +134,7 @@ IMPORTANT RULES:
 - Note significant changes in vitals (weight, BMI, blood pressure) and ask about them if relevant
 - Do NOT ask about vitals, lab results, conditions, or medications that are not explicitly listed in the patient data below — if a category of data (e.g. vitals) isn't provided, don't reference it or assume it exists
 - A category needs real patient data behind it to be included: "Condition Management" needs actual conditions listed, "Medication Review" needs actual medications listed, "Lab Results & Monitoring" needs actual lab orders listed, "Follow-up Planning" needs an actual pending follow-up or referral listed if you're asking about a specific one (a generic "when should I schedule a follow-up" is fine either way). If a category has no real data behind it, omit it entirely rather than asking generically. "Lifestyle & Prevention" is the exception — general guidance tied to a real listed condition or specialty is fine even without additional data, as long as you don't assert a specific fact (a test result, a medication name, an appointment) that wasn't provided.
+- If a past visit's "Planned to discuss" notes mention something its "Notes" don't show as addressed, that's a real carryover — surface it as a question. Don't assume something wasn't discussed just because it isn't repeated in the visit notes; only flag it if the notes are present and silent on it, not when notes are missing or sparse in general.
 - Never include a category key with an empty question list — if a category has nothing to ask, leave the key out of the JSON entirely rather than including it as an empty array. Prioritize categories where you have real patient data (actual conditions, actual medications) over categories with none.
 - Omitting empty categories does NOT lower the question-count requirement below. If dropping empty categories leaves you short of 8, go deeper within the categories that DO have real data — e.g. more angles on each condition or medication (dosage timing, monitoring frequency, symptom tracking, interactions) — rather than accepting a shorter list.
 
@@ -153,12 +154,12 @@ Use these categories (omit any that have no relevant questions — do not includ
 - "Medication Review" — only medications this specialist manages or that could interact with their treatments
 - "Lab Results & Monitoring" — questions about recent or pending lab work relevant to this specialty
 - "Lifestyle & Prevention" — actionable lifestyle questions specific to their conditions and this specialty
-- "Follow-up Planning" — what to schedule next, referrals to discuss
+- "Follow-up Planning" — what to schedule next, referrals to discuss, and any carryover concern from a past visit's planned-but-unconfirmed-as-addressed topics
 
 Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     # Fallback when no specialty is known
-    SYSTEM_PROMPT_GENERIC_VERSION = "v3-2026-07-19"
+    SYSTEM_PROMPT_GENERIC_VERSION = "v4-2026-07-22"
     SYSTEM_PROMPT_GENERIC = """You are a healthcare assistant preparing a patient for an upcoming doctor visit.
 
 Your task: generate 8-15 focused, actionable questions the patient should ask their doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
@@ -166,6 +167,7 @@ Your task: generate 8-15 focused, actionable questions the patient should ask th
 IMPORTANT RULES:
 - Do NOT ask about vitals, lab results, conditions, or medications that are not explicitly listed in the patient data below — if a category of data (e.g. vitals) isn't provided, don't reference it or assume it exists
 - A category needs real patient data behind it to be included: "Condition Management" needs actual conditions listed, "Medication Review" needs actual medications listed, "Lab Results & Monitoring" needs actual lab orders listed, "Follow-up Planning" needs an actual pending follow-up or referral listed if you're asking about a specific one (a generic "when should I schedule a follow-up" is fine either way). If a category has no real data behind it, omit it entirely rather than asking generically. "Lifestyle & Prevention" is the exception — general guidance tied to a real listed condition is fine even without additional data, as long as you don't assert a specific fact (a test result, a medication name, an appointment) that wasn't provided.
+- If a past visit's "Planned to discuss" notes mention something its "Notes" don't show as addressed, that's a real carryover — surface it as a question. Don't assume something wasn't discussed just because it isn't repeated in the visit notes; only flag it if the notes are present and silent on it, not when notes are missing or sparse in general.
 - Never include a category key with an empty question list — if a category has nothing to ask, leave the key out of the JSON entirely rather than including it as an empty array. Prioritize categories where you have real patient data (actual conditions, actual medications) over categories with none.
 - Omitting empty categories does NOT lower the question-count requirement below. If dropping empty categories leaves you short of 8, go deeper within the categories that DO have real data — e.g. more angles on each condition or medication (dosage timing, monitoring frequency, symptom tracking, interactions) — rather than accepting a shorter list.
 
@@ -185,7 +187,7 @@ Use these categories (omit any that have no relevant questions — do not includ
 - "Medication Review" — questions about current medications
 - "Lab Results & Monitoring" — questions about recent or pending lab work
 - "Lifestyle & Prevention" — actionable lifestyle questions
-- "Follow-up Planning" — what to schedule next
+- "Follow-up Planning" — what to schedule next, and any carryover concern from a past visit's planned-but-unconfirmed-as-addressed topics
 
 Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
@@ -365,6 +367,7 @@ Before finalizing your response, count your questions. You must have between 8 a
                     response = await self._run_agentic_loop(
                         appointment.profile_id, messages, system_prompt, temperature=temperature,
                         prompt_version=system_prompt_version,
+                        exclude_appointment_ids=context_result.selected_visit_ids,
                     )
                 except (ToolCallParsingError, UnknownToolError, RuntimeError) as e:
                     logger.warning(f"Agentic tool-use loop failed, falling back to single-shot: {e}")
@@ -403,16 +406,25 @@ Before finalizing your response, count your questions. You must have between 8 a
         system: str,
         temperature: float = 0.7,
         prompt_version: Optional[str] = None,
+        exclude_appointment_ids: Optional[list[str]] = None,
     ) -> str:
         """Run the bounded agentic tool-use loop (DEC-009, DEC-013).
 
         Raises ToolCallParsingError/RuntimeError if the loop can't converge
         within settings.agent_max_turns — callers should fall back to
         single-shot generation on those exceptions.
+
+        exclude_appointment_ids: visits already selected into the base
+        context by context_selection.py's Stage 1-4 pipeline — passed
+        through to VisitPrepTools so lookup_past_visits can't redundantly
+        re-surface them (DEC-024).
         """
         backend = get_llm_backend(self.settings)
         tools = get_tools_for_provider(self.settings.llm_provider)
-        tool_executor = VisitPrepTools(self.db, self.anonymizer, profile_id)
+        tool_executor = VisitPrepTools(
+            self.db, self.anonymizer, profile_id,
+            exclude_appointment_ids=exclude_appointment_ids,
+        )
 
         conversation = list(messages)
         tool_call_log: list[dict[str, Any]] = getattr(self, "last_tool_calls", [])
@@ -639,6 +651,8 @@ Before finalizing your response, count your questions. You must have between 8 a
                 lines.append(f"- Date: {visit.scheduled_date}")
                 if visit.purpose:
                     lines.append(f"- Purpose: {visit.purpose}")
+                if visit.prep_notes:
+                    lines.append(f"- Planned to discuss: {visit.prep_notes}")
                 if visit.visit_notes:
                     lines.append(f"- Notes: {visit.visit_notes}")
                 lines.append("")
