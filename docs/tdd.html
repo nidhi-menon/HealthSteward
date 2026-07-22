@@ -286,6 +286,25 @@
   .arch-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .arch-legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
 
+  /* fan-out of tool chips under the Orchestrate phase's loop box —
+     built tools vs. on-the-roadmap candidates, visually distinct */
+  .arch-tools-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 8px; }
+  .arch-tools-row + .arch-tools-row { margin-top: 6px; }
+  .arch-tools-label {
+    font-family: ui-monospace, monospace; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--ink-faint); flex: none; margin-right: 1px;
+  }
+  .arch-tool {
+    display: inline-flex; align-items: baseline; gap: 4px;
+    border: 1px solid var(--teal-bright); background: var(--paper); border-radius: 999px;
+    padding: 3px 9px; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--teal-bright);
+  }
+  .arch-tool--roadmap {
+    border: 1px dashed var(--ink-faint); color: var(--ink-faint);
+  }
+  .arch-tool-issue { font-size: 9.5px; color: var(--ink-faint); }
+  .arch-tool--roadmap .arch-tool-issue { color: inherit; opacity: 0.75; }
+
   /* compact loop-cycle diagram, used inside Deep Dives accordion bodies —
      same node/icon vocabulary as .arch-node, sized for the 820px reading
      column rather than the full-width breakout diagram */
@@ -657,7 +676,7 @@
                 <div class="arch-phase-row">
                   <div class="arch-node"><svg aria-hidden="true"><use href="#icon-file"></use></svg><div>AVS PDF<span class="arch-sub">data/avs/</span></div></div>
                   <div class="arch-inline-arrow">→</div>
-                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, qwen2.5:7b</span></div></div>
+                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama<span class="arch-sub">local, qwen2.5:7b default</span></div></div>
                   <div class="arch-inline-arrow">→</div>
                   <div class="arch-node"><svg aria-hidden="true"><use href="#icon-check"></use></svg><div>Review &amp; confirm<span class="arch-sub">user</span></div></div>
                 </div>
@@ -665,29 +684,43 @@
 
               <div class="arch-spine-arrow">↓</div>
 
-              <div class="arch-phase">
-                <div class="arch-phase-title">Select</div>
-                <div class="arch-phase-row">
-                  <div class="arch-node arch-node--store"><svg aria-hidden="true"><use href="#icon-db"></use></svg><div>SQLite<span class="arch-sub">past visits</span></div></div>
-                  <div class="arch-inline-arrow">→</div>
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Context selection<span class="arch-sub">4-stage pipeline</span></div></div>
-                  <div class="arch-inline-arrow">→</div>
-                  <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama scoring<span class="arch-sub">raw, pre-anonymization · llama3.2 default</span></div></div>
-                </div>
-              </div>
+              <div class="arch-boundary">
+                <div class="arch-boundary-label"><svg aria-hidden="true"><use href="#icon-gear"></use></svg> 4-stage context selection pipeline</div>
 
-              <div class="arch-spine-arrow">↓</div>
+                <div class="arch-stack">
+                  <div class="arch-phase">
+                    <div class="arch-phase-title">Select</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node arch-node--store"><svg aria-hidden="true"><use href="#icon-db"></use></svg><div>SQLite<span class="arch-sub">past visits</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding:4px 0;">↓</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Rules filter<span class="arch-sub">same doctor, PCP, related specialty</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding:4px 0;">↓</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node arch-node--ai"><svg aria-hidden="true"><use href="#icon-chip"></use></svg><div>Ollama scoring<span class="arch-sub">raw, pre-anonymization · llama3.2 default · capped @15, if &gt;5 visits left</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding:4px 0;">↓</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Token budget<span class="arch-sub">priority-packed · pinned visit packed first</span></div></div>
+                    </div>
+                  </div>
 
-              <div class="arch-phase">
-                <div class="arch-phase-title">Anonymize</div>
-                <div class="arch-phase-row">
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Deterministic replacement<span class="arch-sub">name omitted, DOB → age</span></div></div>
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Regex patterns<span class="arch-sub">phone, email, SSN</span></div></div>
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>spaCy NER<span class="arch-sub">names in free text</span></div></div>
-                </div>
-                <div class="arch-spine-arrow" style="padding-bottom:0;">↓</div>
-                <div class="arch-phase-row" style="justify-content:center;">
-                  <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Anonymized context</div></div>
+                  <div class="arch-spine-arrow">↓</div>
+
+                  <div class="arch-phase">
+                    <div class="arch-phase-title">Anonymize</div>
+                    <div class="arch-phase-row">
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Deterministic replacement<span class="arch-sub">name omitted, DOB → age</span></div></div>
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Regex patterns<span class="arch-sub">phone, email, SSN</span></div></div>
+                      <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>spaCy NER<span class="arch-sub">names in free text</span></div></div>
+                    </div>
+                    <div class="arch-spine-arrow" style="padding-bottom:0;">↓</div>
+                    <div class="arch-phase-row" style="justify-content:center;">
+                      <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Anonymized context</div></div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -700,6 +733,21 @@
                   <div class="arch-inline-arrow">→</div>
                   <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Query DB, anonymize result<span class="arch-sub">tool calls</span></div></div>
                 </div>
+
+                <div class="arch-tools-row">
+                  <span class="arch-tools-label">available</span>
+                  <span class="arch-tool">get_medication_details</span>
+                  <span class="arch-tool">lookup_past_visits</span>
+                </div>
+                <div class="arch-tools-row">
+                  <span class="arch-tools-label">roadmap</span>
+                  <span class="arch-tool arch-tool--roadmap">lookup_upcoming_appointments</span>
+                  <span class="arch-tool arch-tool--roadmap">get_doctor_details</span>
+                  <span class="arch-tool arch-tool--roadmap">drug interaction checker <span class="arch-tool-issue">#24</span></span>
+                  <span class="arch-tool arch-tool--roadmap">lab + imaging results lookup <span class="arch-tool-issue">#22</span></span>
+                  <span class="arch-tool arch-tool--roadmap">procedures/hospitalizations lookup <span class="arch-tool-issue">#23</span></span>
+                </div>
+
                 <div class="arch-branch-tag">⇄ optionally calls out to Claude or a custom provider — see right</div>
               </div>
 
@@ -742,6 +790,8 @@
             <span><span class="swatch" style="background:var(--paper); border:1.5px solid var(--teal-bright);"></span> local AI call (Ollama)</span>
             <span><span class="swatch" style="background:var(--paper); border:1px dashed var(--line);"></span> data store</span>
             <span><span class="swatch" style="background:var(--paper); border:1.5px solid var(--amber);"></span> anonymization / external boundary</span>
+            <span><span class="swatch" style="background:var(--paper); border:1px solid var(--teal-bright); border-radius:999px;"></span> available tool</span>
+            <span><span class="swatch" style="background:var(--paper); border:1px dashed var(--ink-faint); border-radius:999px;"></span> roadmap tool, not built</span>
           </div>
         </div>
         </div>
@@ -890,6 +940,8 @@
             <li><strong>Anonymize</strong> — the only stage where data crosses into what the external-capable backend will see.</li>
           </ol>
           <p>Stage 2's relevance scoring deliberately runs on <em>raw, pre-anonymization</em> text — it's a local-only call, so there's no privacy reason to anonymize before it, and doing so first would degrade the local model's ability to judge relevance from real names/context.</p>
+
+          <p><strong>Why is this a separate deterministic pipeline instead of an agentic-loop tool call</strong> (DEC-023)? Two constraints from earlier decisions compound here. Small local models are unreliable at multi-turn tool-calling (DEC-009), so anything load-bearing for output quality — like which past visits matter — shouldn't depend on the agent choosing to call it correctly within a bounded <code>agent_max_turns</code>; it runs deterministically before the loop starts instead. The loop also needs <em>some</em> context in its first prompt to reason from at all, so full agent-driven retrieval would still need a bootstrapping mechanism — at which point most of this pipeline's value has already been re-invented, just less reliably. This split also lines up with how the eval harness scores retrieval (exact assertion) separately from generation (needs a judge, DEC-018) — folding retrieval into the loop would blur that line. The agentic loop's <code>lookup_past_visits</code> tool exists to go <em>beyond</em> this baseline, not duplicate it — since DEC-024, it excludes whatever this pipeline already selected at the SQL query level, so the two layers can't redundantly re-fetch the same visit.</p>
 
           <div class="callout gap">
             <span class="callout-label">Known gap</span>
