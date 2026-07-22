@@ -776,4 +776,68 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-21*
+### DEC-022: Specialty Relevance Mapping Sourced from an External, Publicly-Licensed Pipeline
+
+**Date:** 2026-07-21
+
+**Context:** `src/utils/context_selection.py`'s `SPECIALTY_MAPPING` (Stage 1 of DEC-008's context selection) has been a small, hand-authored `dict[str, set[str]]` since it was introduced — manually enumerated specialty pairs, including broad `{"*"}` wildcards for Primary Care/Internal Medicine/Oncology. This doesn't scale past a handful of specialties and isn't grounded in any external source. Research into replacing it surfaced that no public dataset directly answers "which specialties share clinical context" (as opposed to referral or shared-patient-volume data, which measure a different thing) — building one requires a real pipeline: LLM-assisted generation cross-checked against disease ontologies (Disease Ontology, Mondo, Wikidata) and an empirical anchor (CMS shared-patient data). That pipeline touches several data sources with meaningfully different licenses (CC0, CC BY 4.0, federal public domain, and — explicitly excluded — UMLS/SNOMED and state Medicaid data, which carry redistribution/derivative-work restrictions incompatible with a public artifact).
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Keep hand-authoring the dict in this repo | No new dependency | Doesn't scale, no external grounding, `{"*"}` wildcards are known-crude, requires domain expertise the maintainer doesn't have |
+| Build the generation pipeline inside HealthSteward (`scripts/` or similar) | Everything in one repo | Entangles a general-purpose, publicly-citable dataset artifact with a patient-facing app's codebase and licensing; couples the mapping's release cadence to HealthSteward's |
+| **Build the pipeline in a separate, standalone public repo; HealthSteward consumes only the small derived dict** | Dataset is independently citable/reusable, cleanly licensed (CC BY 4.0, matching its CC0/CC-BY-sourced inputs) separate from HealthSteward's own license; versioned independently; the actual generation pipeline and its large raw source data never need to touch this repo | Two repos to maintain; HealthSteward's mapping is now externally sourced rather than self-contained |
+
+**Decision:** Built as a separate repository, intended to go public once the dataset itself is ready — [`nidhi-menon/clinical-specialty-relevance-graph`](https://github.com/nidhi-menon/clinical-specialty-relevance-graph) (currently private; displayed as "SpecialtyBridge" — repo slug kept descriptive for discoverability/citation, display name reserved for the README title and any future paper) (pipeline: LLM-generation cross-checked against Disease Ontology/Mondo/Wikidata, empirically anchored against CMS Physician Shared Patient Patterns data via NBER, with a small clinician-reviewed held-out validation set). HealthSteward's `SPECIALTY_MAPPING` in `context_selection.py` will be replaced with the small derived dict that pipeline produces, with a comment pointing to the source repo for methodology and full licensing detail (see that repo's `docs/SOURCES_AND_DECISIONS.md` for the complete source-by-source accounting).
+
+**Reasoning:** The mapping is genuinely general-purpose — useful to anyone building multi-specialty medical context retrieval, not specific to HealthSteward — so it deserves independent citability and its own license rather than being buried in an app repo. Keeping the two repos separate also avoids licensing entanglement: several candidate sources (UMLS/SNOMED, state Medicaid claims data) were evaluated and excluded entirely, from both the published output and the development process, because their terms prohibit derivative works/redistribution — a determination made explicit and durable in the pipeline repo's own decisions log rather than left as tribal knowledge.
+
+**Status:** Decided. Pipeline repo scaffolded; generation pipeline itself not yet implemented. `SPECIALTY_MAPPING` in this repo still holds the original hand-authored dict pending the pipeline's first output.
+
+---
+
+### DEC-023: Why Context Selection Is a Separate Deterministic Pipeline, Not an Agent Tool
+
+**Date:** 2026-07-22
+
+**Context:** DEC-008's 4-stage context-selection pipeline (rules filter → capped Ollama relevance scoring → token-budget packing → anonymize) runs entirely *before* the agentic tool-use loop (DEC-009/DEC-013) starts, rather than being exposed to the loop as an on-demand retrieval tool the way `get_medication_details`/`lookup_past_visits` are (DEC-013/DEC-015). This split was never separately justified in writing — DEC-008 specifies the mechanism, DEC-009 covers tool-calling reliability, DEC-006 covers anonymization ordering, but no entry states *why* retrieval itself isn't just another tool call. Worth closing that gap explicitly rather than leaving it to be reconstructed by reading three DEC entries side by side.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Fold context selection into the agentic loop as a `search_past_visits`-style tool the model calls on demand | One retrieval mechanism instead of two; more "agentic" in spirit | Relevance judgment competes with everything else for the same bounded `agent_max_turns` (6, DEC-009) on a backend already flagged as unreliable at multi-turn tool use on small local models; the agent has no context to reason from in its *first* turn unless something is pre-loaded anyway; makes retrieval quality non-deterministic and harder to eval in isolation (DEC-018 scores retrieval and generation as separate surfaces precisely because they fail differently) |
+| **Keep it a separate deterministic pre-processing pipeline; let the agentic loop's tools handle only on-demand "go deeper" lookups** | Baseline context is available before the loop's first turn by construction; relevance judgment happens once, outside the turn budget, so it can't be starved by tool-call unreliability; deterministic stages (1, 3, 4) are exactly assertable in eval (DEC-018) without a judge model; anonymization ordering (DEC-006: nothing leaves the machine unanonymized) is enforced once at a single choke point instead of per-tool-call | Two retrieval paths to reason about (pipeline-selected baseline vs. agent-requested lookups); DEC-018 has to explicitly check `lookup_past_visits` doesn't just redundantly re-surface what Stage 1 already selected |
+
+**Decision:** Context selection stays a separate, deterministic 4-stage pipeline that runs to completion before the agentic loop is invoked. The agentic loop's tools (`get_medication_details`, `lookup_past_visits`) are scoped to supplement that baseline on demand, not to replace or duplicate its retrieval judgment — DEC-018's eval harness treats redundant re-surfacing by `lookup_past_visits` as a signal worth tracking, confirming the two are meant to be complementary layers rather than overlapping ones.
+
+**Reasoning:** Two constraints from earlier decisions compound here. First, DEC-009's finding that small local models produce unreliable tool-calling means anything load-bearing for output quality shouldn't be made to depend on the agent choosing to call it correctly, within a small turn budget, on the default local backend — Stage 1–3 relevance judgment is exactly that kind of load-bearing step, so it runs deterministically outside the loop instead. Second, the loop needs *some* context in its first prompt to reason from at all — full agent-driven retrieval would still need a bootstrapping mechanism, at which point most of the pipeline's value has already been re-invented, just less reliably. Making retrieval quality deterministic and pre-computed also lines up with DEC-018's eval design, which specifically separates retrieval (checkable by exact assertion) from generation (needs a judge) — folding retrieval into the agent loop would blur that line and make Stage 1–3 much harder to eval in isolation.
+
+**Status:** Documented (retroactive — describes the rationale behind the existing DEC-008/DEC-009/DEC-013 architecture; no code change).
+
+---
+
+### DEC-024: Enforce Retrieval Non-Redundancy Between Context Selection and `lookup_past_visits`
+
+**Date:** 2026-07-22
+
+**Context:** DEC-023 describes context selection and the agentic loop's tools as intentionally complementary, non-overlapping layers — but that separation was never actually enforced. `lookup_past_visits` (`src/agents/tools.py`) queried all completed appointments independently, with no awareness of which visits DEC-008's 4-stage pipeline had already selected into the base prompt. `eval/scorers.py`'s `score_retrieval_redundancy` only measured overlap after the fact (its own docstring called it "Observational") — a nonzero overlap rate was a quality signal to notice, not something the system prevented. Auditing whether this was cheap to fix found the original `Appointment.id` was already in scope right up until Stage 4's anonymization step (`context_selection.py`); it just wasn't threaded any further.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Leave as observational-only, rely on eval to catch regressions | No code change | The gap was silent — an agent could burn part of its bounded `agent_max_turns` (DEC-009) re-fetching a visit already in its own prompt, with nothing surfacing that as a bug rather than a quality footnote |
+| **Thread selected-visit ids from context selection through to the tool executor; filter them out of the `lookup_past_visits` query** | Closes the gap at its root (SQL-level exclusion, not a post-hoc check); trivial given the id was already in scope pre-anonymization; makes DEC-023's "complementary layers" claim actually true | One more field on `ContextSelectionResult` and one more constructor param to keep in sync if either side changes shape |
+
+**Decision:** Added `ContextSelectionResult.selected_visit_ids: list[str]` (`src/utils/context_selection.py`), populated from the pre-anonymization `Appointment.id`s at the same point Stage 4 anonymizes them. Threaded through `VisitPrepAgent._run_agentic_loop`'s new `exclude_appointment_ids` param (`src/agents/visit_prep.py`) into `VisitPrepTools.__init__` (`src/agents/tools.py`), which filters them out of `_lookup_past_visits`'s query via `Appointment.id.notin_(...)`. `eval/scorers.py::score_retrieval_redundancy`'s docstring was updated to reflect that overlap is now a regression signal (the exclusion filter broke) rather than a quality-tuning signal (the model chose to re-fetch). Added `tests/test_agent_tools.py::test_lookup_past_visits_excludes_context_selection_visits`.
+
+**Reasoning:** The fix doesn't cross the anonymization trust boundary (DEC-006) — the excluded-id list is derived from real `Appointment.id`s before anonymization, but only ever used as a SQL filter inside the tool executor; it's never rendered into anything the LLM sees. Since the id was already sitting in scope for free, there was no reason to leave this as an eval-only signal once the gap was noticed.
+
+**Status:** Implemented.
+
+---
+
+*Last updated: 2026-07-22*
