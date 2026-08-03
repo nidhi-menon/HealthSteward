@@ -10,6 +10,7 @@ import type {
   Appointment,
   AppointmentCreate,
   VisitPrep,
+  VisitPrepUpdate,
   ScannedFile,
   ParsedItemsResponse,
   ApplyItemsRequest,
@@ -231,6 +232,11 @@ export const visitPrep = {
     }),
   get: (appointmentId: string) =>
     request<VisitPrep>(`/visits/${appointmentId}/prep`),
+  update: (appointmentId: string, data: VisitPrepUpdate) =>
+    request<VisitPrep>(`/visits/${appointmentId}/prep`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 };
 
 // App Settings (DEC-016)

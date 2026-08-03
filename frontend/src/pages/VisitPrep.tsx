@@ -5,6 +5,7 @@ import { profiles, appointments, doctors, visitPrep } from '../api/client';
 import { Card, CardHeader, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { Textarea } from '../components/Input';
+import type { VisitPrepUpdate } from '../types';
 
 export default function VisitPrep() {
   const { profileId, appointmentId } = useParams<{ profileId: string; appointmentId: string }>();
@@ -13,6 +14,15 @@ export default function VisitPrep() {
   const [visitNotes, setVisitNotes] = useState('');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
 
+  // Issue #14: in-place editing of generated questions. Each category's
+  // questions are edited as one newline-delimited textarea — one line per
+  // question — which covers all three things the issue asks for (reword a
+  // question, add one of your own, drop one that doesn't apply) without
+  // needing per-question widgets or a change to generated_questions' shape.
+  const [isEditingPrep, setIsEditingPrep] = useState(false);
+  const [draftQuestions, setDraftQuestions] = useState<Record<string, string>>({});
+  const [draftSummary, setDraftSummary] = useState('');
+
   // Queries
   const { data: profile } = useQuery({
     queryKey: ['profile', profileId],
@@ -20,7 +30,7 @@ export default function VisitPrep() {
     enabled: !!profileId,
   });
 
-  const { data: appointment, refetch: refetchAppointment } = useQuery({
+  const { data: appointment } = useQuery({
     queryKey: ['appointment', profileId, appointmentId],
     queryFn: () => appointments.get(profileId!, appointmentId!),
     enabled: !!profileId && !!appointmentId,
@@ -54,6 +64,47 @@ export default function VisitPrep() {
       queryClient.invalidateQueries({ queryKey: ['upcomingWithoutPrep', profileId] });
     },
   });
+
+  // Save edited prep (issue #14). Regenerate still replaces everything —
+  // this only persists what the user changed by hand.
+  const updatePrepMutation = useMutation({
+    mutationFn: (data: VisitPrepUpdate) => visitPrep.update(appointmentId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['visitPrep', appointmentId] });
+      setIsEditingPrep(false);
+    },
+  });
+
+  const startEditingPrep = () => {
+    const questions = prep?.generated_questions ?? {};
+    setDraftQuestions(
+      Object.fromEntries(
+        Object.entries(questions).map(([category, list]) => [category, list.join('\n')])
+      )
+    );
+    setDraftSummary(prep?.context_summary ?? '');
+    setIsEditingPrep(true);
+  };
+
+  const saveEditedPrep = () => {
+    // Blank lines are how a question gets deleted, so drop them. A category
+    // left entirely empty is dropped too, rather than persisting a heading with
+    // nothing under it — clearing a category is a legitimate way to remove one.
+    const cleaned: Record<string, string[]> = {};
+    for (const [category, text] of Object.entries(draftQuestions)) {
+      const items = text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      if (items.length > 0) {
+        cleaned[category] = items;
+      }
+    }
+    updatePrepMutation.mutate({
+      generated_questions: cleaned,
+      context_summary: draftSummary,
+    });
+  };
 
   // Update appointment mutation (for visit notes)
   const updateAppointmentMutation = useMutation({
@@ -212,13 +263,23 @@ export default function VisitPrep() {
           )}
 
           {/* Context Summary */}
-          {prep.context_summary && (
+          {(prep.context_summary || isEditingPrep) && (
             <Card>
               <CardHeader>
                 <h3 className="font-semibold text-gray-900">Health Context Summary</h3>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-700">{prep.context_summary}</p>
+                {isEditingPrep ? (
+                  <Textarea
+                    label=""
+                    value={draftSummary}
+                    onChange={(e) => setDraftSummary(e.target.value)}
+                    placeholder="Summary of the health context behind these questions..."
+                    rows={4}
+                  />
+                ) : (
+                  <p className="text-gray-700">{prep.context_summary}</p>
+                )}
               </CardContent>
             </Card>
           )}
@@ -226,40 +287,87 @@ export default function VisitPrep() {
           {/* Questions by Category */}
           {prep.generated_questions && Object.keys(prep.generated_questions).length > 0 && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-gray-900 text-lg">Questions to Ask Your Doctor</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 text-lg">Questions to Ask Your Doctor</h3>
+                {!isCompleted && !isEditingPrep && (
+                  <Button size="sm" variant="secondary" onClick={startEditingPrep}>
+                    Edit
+                  </Button>
+                )}
+              </div>
+
+              {isEditingPrep && (
+                <p className="text-sm text-gray-600">
+                  One question per line. Delete a line to remove that question, or add a line to
+                  ask something of your own. Clearing a whole category removes it.
+                </p>
+              )}
+
               {Object.entries(prep.generated_questions).map(([category, questions]) => (
                 <Card key={category}>
                   <CardHeader className="bg-gray-50">
                     <h4 className="font-medium text-gray-900">{category}</h4>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-3">
-                      {(questions as string[]).map((question, idx) => (
-                        <li key={idx} className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 bg-brand-teal-bright/15 text-brand-teal rounded-full flex items-center justify-center text-sm font-medium">
-                            {idx + 1}
-                          </span>
-                          <span className="text-gray-700">{question}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {isEditingPrep ? (
+                      <Textarea
+                        label=""
+                        value={draftQuestions[category] ?? ''}
+                        onChange={(e) =>
+                          setDraftQuestions((d) => ({ ...d, [category]: e.target.value }))
+                        }
+                        rows={Math.max(3, (draftQuestions[category] ?? '').split('\n').length + 1)}
+                      />
+                    ) : (
+                      <ul className="space-y-3">
+                        {(questions as string[]).map((question, idx) => (
+                          <li key={idx} className="flex gap-3">
+                            <span className="flex-shrink-0 w-6 h-6 bg-brand-teal-bright/15 text-brand-teal rounded-full flex items-center justify-center text-sm font-medium">
+                              {idx + 1}
+                            </span>
+                            <span className="text-gray-700">{question}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </CardContent>
                 </Card>
               ))}
             </div>
           )}
 
-          {/* Regenerate Button - Only show if not completed */}
+          {/* Save/Cancel while editing, Regenerate otherwise */}
           {!isCompleted && (
-            <div className="flex justify-center">
-              <Button
-                variant="secondary"
-                onClick={() => generateMutation.mutate()}
-                disabled={generateMutation.isPending}
-              >
-                {generateMutation.isPending ? 'Regenerating...' : 'Regenerate Questions'}
-              </Button>
+            <div className="flex justify-center gap-3">
+              {isEditingPrep ? (
+                <>
+                  <Button onClick={saveEditedPrep} disabled={updatePrepMutation.isPending}>
+                    {updatePrepMutation.isPending ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsEditingPrep(false)}
+                    disabled={updatePrepMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="secondary"
+                  onClick={() => generateMutation.mutate()}
+                  disabled={generateMutation.isPending}
+                >
+                  {generateMutation.isPending ? 'Regenerating...' : 'Regenerate Questions'}
+                </Button>
+              )}
             </div>
+          )}
+
+          {updatePrepMutation.isError && (
+            <p className="text-sm text-red-600 text-center">
+              Failed to save your changes. Please try again.
+            </p>
           )}
         </div>
       )}

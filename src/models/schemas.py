@@ -264,6 +264,25 @@ class VisitPrepRequest(BaseModel):
     additional_concerns: Optional[str] = None
 
 
+class VisitPrepUpdate(BaseModel):
+    """Schema for editing an existing visit prep in place (issue #14).
+
+    Both fields are optional and applied only when explicitly present, so a
+    client can save just the questions or just the summary without having to
+    round-trip the other. Distinguishing "absent" from "explicitly null" is why
+    the route uses `exclude_unset` rather than `exclude_none`.
+
+    `generated_questions` is typed as `dict[str, list[str]]` rather than the
+    bare `dict` used on the response model. The response has to accept whatever
+    the generation path produced, but this is a user-writable endpoint and the
+    frontend renders every value as a list of strings — accepting arbitrary JSON
+    here would let a malformed save break the page that has to display it.
+    """
+
+    generated_questions: Optional[dict[str, list[str]]] = None
+    context_summary: Optional[str] = None
+
+
 # ============================================================================
 # Conversation Log Schemas
 # ============================================================================
