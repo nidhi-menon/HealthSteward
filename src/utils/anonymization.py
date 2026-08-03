@@ -3,8 +3,14 @@
 This module provides functionality to anonymize personally identifiable information
 before sending data to external LLM APIs (like Claude). It uses a combination of:
 - Deterministic replacement for structured fields
-- Regex patterns for common PII patterns (phone, email, SSN)
+- Regex patterns for common PII shapes (phone incl. international, email, SSN,
+  ZIP+4, numeric/ISO/written dates, PO boxes, street addresses, and
+  label-anchored medical-record and insurance identifiers)
 - spaCy NER for detecting names in free-text fields
+
+Free-text anonymization is best-effort, not a guarantee — the pattern list is
+regex-based and cannot cover every real-world PII shape. See issue #92 for the
+separate evaluation of a dedicated PII-detection library.
 
 Per DEC-006:
 - Patient name → omitted entirely (AnonymizedProfile has no name field at
@@ -69,8 +75,59 @@ class AnonymizedAppointment:
     visit_notes: Optional[str]  # Anonymized — notes during/after the visit (what was discussed, outcomes)
 
 
-# Common regex patterns for PII detection
+# Street-type suffixes recognized by the address pattern, as both the spelled-out
+# form and the USPS-style abbreviation. Deliberately excludes bare nouns that are
+# common in clinical prose (Park, Point, Row, Run, Path, Bend) — the false-positive
+# cost there outweighs the coverage gain.
+_STREET_SUFFIXES = (
+    r'St|Street|Ave|Avenue|Blvd|Boulevard|Rd|Road|Dr|Drive|Ln|Lane|Way|Ct|Court'
+    r'|Pl|Place|Ter|Terrace|Cir|Circle|Pkwy|Parkway|Hwy|Highway|Trl|Trail'
+    r'|Sq|Square|Loop|Aly|Alley|Cres|Crescent|Plz|Plaza|Xing|Crossing'
+    r'|Tpke|Turnpike|Expy|Expressway|Fwy|Freeway|Hts|Heights|Trce|Trace'
+)
+
+# Secondary address designators (apartment/unit/suite), matched only as a trailing
+# part of an already-matched street address so they are redacted along with it.
+_UNIT_DESIGNATORS = r'Apt|Apartment|Unit|Ste|Suite|Rm|Room|Fl|Floor|Bldg|Building'
+
+# Month names for written-out dates, spelled-out and 3-letter abbreviated.
+_MONTHS = (
+    r'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?'
+    r'|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?'
+)
+
+# Common regex patterns for PII detection.
+#
+# Ordering matters: `anonymize_text` applies these in declaration order, and an
+# earlier pattern that matches a superset of a later one wins. In particular the
+# ZIP+4 and international-phone patterns must precede `phone`, which would
+# otherwise match only a fragment and leave the rest of the identifier in place.
+#
+# Patterns fall into two groups:
+#   - *Shape* patterns (phone, email, SSN, address, dates) match the identifier
+#     itself and are safe to apply unconditionally.
+#   - *Labeled* patterns (MRN, insurance IDs) match a bare digit/alnum run that
+#     is only identifiable as PII because of an adjacent label. These capture the
+#     label in a group and keep it (see PII_REPLACEMENTS) so the redacted text
+#     still reads as "MRN: [REDACTED]" rather than losing the clinical context.
+#     They deliberately do NOT match unlabeled numbers: an unanchored "any long
+#     digit run" pattern would redact dosages, lab values, and vitals.
 PII_PATTERNS = {
+    # ZIP+4 and state-qualified ZIP codes. Must run first: `phone`'s 7-digit
+    # branch would otherwise consume the "103-1234" of a ZIP+4 and leave a bare
+    # "94" behind. A bare 5-digit ZIP is deliberately not matched — it is
+    # indistinguishable from an ordinary number in clinical text.
+    'zip_code': re.compile(
+        r'\b\d{5}-\d{4}\b'
+        r'|'
+        r'\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b'
+    ),
+    # International / E.164-style numbers: a leading "+" country code followed by
+    # at least two more digit groups. Runs before `phone` so the whole number is
+    # redacted rather than just its trailing 10 digits.
+    'phone_intl': re.compile(
+        r'\+\d{1,3}(?:[-.\s]?\(?\d{1,5}\)?){2,6}'
+    ),
     # Phone numbers (various formats)
     'phone': re.compile(
         r'(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
@@ -85,16 +142,67 @@ PII_PATTERNS = {
     'ssn': re.compile(
         r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b'
     ),
-    # Dates that might be birthdates (MM/DD/YYYY, MM-DD-YYYY, etc.)
+    # Numeric dates. Widened from MM/DD/YYYY-only to also cover day-first
+    # (DD/MM/YYYY) ordering and 2-digit years, since a birthdate written
+    # "15/06/1985" or "06/15/85" is exactly as identifying as "06/15/1985".
+    # Requires all three components, so dose ranges ("25-50 mg"), ratios
+    # ("120/80"), and fractions ("1/2 tablet") are left alone.
     'date': re.compile(
-        r'\b(?:0?[1-9]|1[0-2])[/\-.](?:0?[1-9]|[12]\d|3[01])[/\-.](?:19|20)\d{2}\b'
+        r'\b\d{1,2}[/\-.]\d{1,2}[/\-.](?:19|20)?\d{2}\b'
     ),
-    # Street addresses (simplified pattern)
-    'address': re.compile(
-        r'\b\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:St|Street|Ave|Avenue|Blvd|Boulevard|Rd|Road|Dr|Drive|Ln|Lane|Way|Ct|Court|Pl|Place)\.?\b',
+    # ISO-8601 dates (YYYY-MM-DD).
+    'date_iso': re.compile(
+        r'\b(?:19|20)\d{2}-(?:0?[1-9]|1[0-2])-(?:0?[1-9]|[12]\d|3[01])\b'
+    ),
+    # Written-out dates ("June 15, 1985" / "15 June 1985"). Requires an explicit
+    # day number, so a bare month-and-year ("follow up January 2026") stays
+    # readable — that's scheduling context, not a birthdate.
+    'date_written': re.compile(
+        rf'\b(?:{_MONTHS})\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+(?:19|20)\d{{2}}\b'
+        r'|'
+        rf'\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:{_MONTHS})\s+(?:19|20)\d{{2}}\b',
         re.IGNORECASE
     ),
+    # PO boxes ("P.O. Box 1234", "Post Office Box 567").
+    'po_box': re.compile(
+        r'\b(?:P\.?\s*O\.?|Post\s+Office)\s*Box\s*#?\s*\d+\b',
+        re.IGNORECASE
+    ),
+    # Street addresses, with an optional trailing apartment/unit designator so
+    # "742 Evergreen Terrace Apt 4B" is redacted whole rather than leaving the
+    # unit number behind.
+    'address': re.compile(
+        rf'\b\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:{_STREET_SUFFIXES})\.?'
+        rf'(?:[,\s]+(?:{_UNIT_DESIGNATORS})\.?\s*#?\s*[\w-]+|[,\s]+#\s*[\w-]+)?\b',
+        re.IGNORECASE
+    ),
+    # Medical record / chart numbers. Label-anchored (see module note above).
+    'mrn': re.compile(
+        r'(?P<label>\b(?:MRN|MR\s*#|Medical\s+Record\s+(?:Number|No\.?|#)?'
+        r'|Record\s+(?:Number|No\.?|#)|Chart\s+(?:Number|No\.?|#))\s*[:#]?\s*)'
+        r'(?=[A-Za-z0-9-]*\d)[A-Za-z]{0,3}[-\s]?\d[\d-]{3,11}\b',
+        re.IGNORECASE
+    ),
+    # Insurance member / policy / group identifiers. Label-anchored, and the
+    # value must be uppercase-alnum containing at least one digit — matching the
+    # value case-insensitively would let an ordinary lowercase word ("Plan:
+    # increase dose") read as an identifier.
+    'insurance_id': re.compile(
+        r'(?P<label>(?i:\b(?:Member|Subscriber|Policy|Group|Insurance|Plan|Beneficiary)'
+        r'\s*(?:ID|No\.?|Number|#)?)\s*[:#]?\s*)'
+        r'(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b'
+    ),
 }
+
+# Per-pattern replacement templates for `re.sub`. Patterns absent from this map
+# fall back to redacting the entire match. Label-anchored patterns keep their
+# label so anonymized text still says what kind of identifier was removed.
+PII_REPLACEMENTS = {
+    'mrn': r'\g<label>[REDACTED]',
+    'insurance_id': r'\g<label>[REDACTED]',
+}
+
+DEFAULT_REDACTION = '[REDACTED]'
 
 
 class Anonymizer:
@@ -184,9 +292,12 @@ class Anonymizer:
 
         result = text
 
-        # Apply regex patterns
+        # Apply regex patterns in declaration order — see the ordering note on
+        # PII_PATTERNS. Label-anchored patterns use a replacement template that
+        # preserves their label; everything else redacts the whole match.
         for pattern_name, pattern in PII_PATTERNS.items():
-            result = pattern.sub('[REDACTED]', result)
+            replacement = PII_REPLACEMENTS.get(pattern_name, DEFAULT_REDACTION)
+            result = pattern.sub(replacement, result)
 
         # Apply NER if available
         if self.use_ner and self.nlp:

@@ -48,6 +48,231 @@ class TestPIIPatterns:
         assert pattern.search("123 45 6789")
 
 
+class TestHardenedPIIPatterns:
+    """Coverage for the PII shapes added in issue #73.
+
+    The original 5-pattern list (phone/email/SSN/date/simplified-address) let a
+    range of real-world PII shapes through unredacted. Each case below is a shape
+    that leaked before the pattern list was hardened; the negative cases guard
+    the other direction — this runs on clinical free text, so redacting dosages,
+    vitals, or lab values would be its own kind of failure.
+    """
+
+    @pytest.fixture
+    def anonymizer(self):
+        return Anonymizer(use_ner=False)
+
+    def _redacted(self, anonymizer, text):
+        return anonymizer.anonymize_text(text)
+
+    # --- International phone numbers ---
+
+    @pytest.mark.parametrize("text,leaked", [
+        ("Call +44 20 7946 0958", "+44 20 7946 0958"),
+        ("Reach me on +91 98765 43210", "+91 98765 43210"),
+        ("Clinic line +33 1 42 68 53 00", "+33 1 42 68 53 00"),
+        ("Office: +81-3-1234-5678", "+81-3-1234-5678"),
+        ("+44 (0)20 7946 0958", "+44 (0)20 7946 0958"),
+    ])
+    def test_international_phone_redacted_whole(self, anonymizer, text, leaked):
+        """International numbers must be redacted entirely.
+
+        The pre-existing `phone` pattern matched only the trailing 10 digits of
+        these, leaving the country and area code (e.g. "+44 20 7") in place —
+        a partial redaction is still a leak.
+        """
+        result = self._redacted(anonymizer, text)
+        assert "[REDACTED]" in result
+        assert leaked not in result
+        # No stray digits survive from the number itself
+        assert not any(ch.isdigit() for ch in result)
+
+    # --- PO boxes ---
+
+    @pytest.mark.parametrize("text", [
+        "Mail to P.O. Box 1234",
+        "PO Box 567, Springfield",
+        "Post Office Box 89",
+        "p.o. box 42",
+    ])
+    def test_po_box_redacted(self, anonymizer, text):
+        result = self._redacted(anonymizer, text)
+        assert "[REDACTED]" in result
+        assert "Box" not in result
+
+    # --- Street addresses: widened suffixes and unit designators ---
+
+    @pytest.mark.parametrize("text", [
+        "742 Evergreen Terrace",
+        "742 Evergreen Ter",
+        "12 Oak Circle",
+        "900 Bay Parkway",
+        "900 Bay Pkwy",
+        "45 Country Highway",
+        "88 Cedar Trail",
+        "5 Union Square",
+        "17 Mill Crossing",
+        "3 Harbor Plaza",
+    ])
+    def test_widened_street_suffixes_redacted(self, anonymizer, text):
+        """Suffixes beyond the original St/Ave/Blvd/Rd/Dr/Ln/Way/Ct/Pl list."""
+        result = self._redacted(anonymizer, text)
+        assert result == "[REDACTED]"
+
+    @pytest.mark.parametrize("text", [
+        "742 Evergreen Terrace Apt 4B",
+        "123 Main St Unit 5",
+        "50 Elm Road Suite 200",
+        "9 Pine Lane, Apt 12",
+        "9 Pine Lane #12",
+    ])
+    def test_address_unit_designator_redacted_with_address(self, anonymizer, text):
+        """Apartment/unit numbers must be redacted along with the street address,
+        not left dangling after it."""
+        result = self._redacted(anonymizer, text)
+        assert result == "[REDACTED]"
+
+    def test_original_address_suffixes_still_work(self, anonymizer):
+        """Regression guard: widening the suffix list must not break the
+        suffixes the original pattern already covered."""
+        for text in ["123 Main St", "45 Oak Avenue", "9 Elm Blvd", "77 Sunset Drive"]:
+            assert self._redacted(anonymizer, text) == "[REDACTED]"
+
+    # --- ZIP codes ---
+
+    def test_zip_plus_four_redacted_whole(self, anonymizer):
+        """ZIP+4 must redact whole. The `phone` pattern's 7-digit branch used to
+        consume "103-1234" and leave a bare "94" behind."""
+        result = self._redacted(anonymizer, "Lives at 94103-1234")
+        assert result == "Lives at [REDACTED]"
+
+    def test_state_qualified_zip_redacted(self, anonymizer):
+        result = self._redacted(anonymizer, "Springfield, IL 62704")
+        assert "62704" not in result
+        assert "[REDACTED]" in result
+
+    def test_bare_five_digit_number_not_redacted(self, anonymizer):
+        """A bare 5-digit number is not treated as a ZIP — indistinguishable
+        from an ordinary number in clinical text."""
+        result = self._redacted(anonymizer, "Step count averaged 12500 per day")
+        assert "12500" in result
+
+    # --- Dates ---
+
+    @pytest.mark.parametrize("text,leaked", [
+        ("DOB 15/06/1985", "15/06/1985"),        # day-first ordering
+        ("DOB 06/15/85", "06/15/85"),            # 2-digit year
+        ("DOB: 1985-06-15", "1985-06-15"),       # ISO-8601
+        ("Born June 15, 1985", "June 15, 1985"),  # written, month-first
+        ("Born 15 June 1985", "15 June 1985"),    # written, day-first
+        ("Born Jun 15, 1985", "Jun 15, 1985"),    # abbreviated month
+    ])
+    def test_additional_date_formats_redacted(self, anonymizer, text, leaked):
+        result = self._redacted(anonymizer, text)
+        assert "[REDACTED]" in result
+        assert leaked not in result
+
+    def test_original_date_format_still_redacted(self, anonymizer):
+        """Regression guard for the original MM/DD/YYYY pattern."""
+        result = self._redacted(anonymizer, "DOB 06/15/1985")
+        assert "06/15/1985" not in result
+        assert "[REDACTED]" in result
+
+    def test_month_and_year_without_day_preserved(self, anonymizer):
+        """A bare month+year is scheduling context, not a birthdate — keeping it
+        is what makes the anonymized text still useful for visit prep."""
+        result = self._redacted(anonymizer, "Follow up in January 2026")
+        assert "January 2026" in result
+
+    # --- Label-anchored identifiers: MRN ---
+
+    @pytest.mark.parametrize("text,label", [
+        ("MRN: 12345678", "MRN:"),
+        ("MRN 004512", "MRN"),
+        ("Medical Record Number: 987654", "Medical Record Number:"),
+        ("MRN: A00123456", "MRN:"),
+        ("Chart Number: 55501234", "Chart Number:"),
+    ])
+    def test_mrn_value_redacted_label_kept(self, anonymizer, text, label):
+        """The identifier value is redacted but its label survives, so the
+        anonymized text still reads as "MRN: [REDACTED]" — the LLM keeps the
+        clinical context without receiving the identifier."""
+        result = self._redacted(anonymizer, text)
+        assert result.startswith(label)
+        assert "[REDACTED]" in result
+        assert not any(ch.isdigit() for ch in result)
+
+    # --- Label-anchored identifiers: insurance ---
+
+    @pytest.mark.parametrize("text,label", [
+        ("Member ID: XZY123456789", "Member ID:"),
+        ("Policy #: ABC-12345678", "Policy #:"),
+        ("Group Number: 0012345", "Group Number:"),
+        ("Subscriber ID 998877665", "Subscriber ID"),
+    ])
+    def test_insurance_id_value_redacted_label_kept(self, anonymizer, text, label):
+        result = self._redacted(anonymizer, text)
+        assert result.startswith(label)
+        assert "[REDACTED]" in result
+
+    def test_labeled_patterns_do_not_match_lowercase_prose(self, anonymizer):
+        """The insurance-ID value is matched case-sensitively on purpose. Matching
+        it case-insensitively would let ordinary prose after one of these labels
+        ("Plan: increase dose") read as an identifier and get redacted."""
+        result = self._redacted(anonymizer, "Plan: increase dose gradually")
+        assert "increase dose gradually" in result
+        assert "[REDACTED]" not in result
+
+    def test_unlabeled_numbers_not_treated_as_identifiers(self, anonymizer):
+        """MRN/insurance patterns are label-anchored by design — an unanchored
+        "long digit run" pattern would redact lab values and dosages."""
+        result = self._redacted(anonymizer, "Platelet count 250000 and ferritin 45")
+        assert "250000" in result
+        assert "45" in result
+
+    # --- Negative cases: clinical content must survive ---
+
+    @pytest.mark.parametrize("text", [
+        "Metformin 500mg twice daily",
+        "Lisinopril 10 mg daily",
+        "BP 120/80",
+        "A1C was 7.2",
+        "Vitamin D 32 ng/mL",
+        "Type 2 Diabetes, managed",
+        "Diagnosis code E11.9",
+        "Symptoms for 3 years",
+        "Appointment at 10:30",
+        "Weight 185 lbs",
+        "LDL 130, HDL 55, total 210",
+        "Titrate 25-50 mg",
+        "Fasting glucose 95-110 range",
+        "Take 1/2 tablet in the morning",
+    ])
+    def test_clinical_content_not_redacted(self, anonymizer, text):
+        """Over-redaction is a real failure mode for the widened patterns: dose
+        ranges, ratios, and fractions all look date- or identifier-shaped."""
+        result = self._redacted(anonymizer, text)
+        assert result == text
+
+    def test_mixed_note_redacts_pii_and_keeps_medicine(self, anonymizer):
+        """End-to-end shape of a realistic AVS-style note."""
+        text = (
+            "Patient reports fatigue. Continue Metformin 500mg twice daily. "
+            "MRN: 12345678. Call the office at +44 20 7946 0958 or write to "
+            "742 Evergreen Terrace Apt 4B. DOB 15/06/1985."
+        )
+        result = anonymizer.anonymize_text(text)
+
+        # PII gone
+        assert "12345678" not in result
+        assert "+44 20 7946 0958" not in result
+        assert "742 Evergreen Terrace" not in result
+        assert "15/06/1985" not in result
+        # Medicine kept
+        assert "Metformin 500mg twice daily" in result
+        assert "fatigue" in result
+
+
 class TestAnonymizer:
     """Test the Anonymizer class."""
 
