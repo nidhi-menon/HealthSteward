@@ -368,6 +368,8 @@ Before finalizing your response, count your questions. You must have between 8 a
                         appointment.profile_id, messages, system_prompt, temperature=temperature,
                         prompt_version=system_prompt_version,
                         exclude_appointment_ids=context_result.selected_visit_ids,
+                        target_doctor_id=appointment.doctor_id,
+                        current_appointment_id=appointment.id,
                     )
                 except (ToolCallParsingError, UnknownToolError, RuntimeError) as e:
                     logger.warning(f"Agentic tool-use loop failed, falling back to single-shot: {e}")
@@ -407,6 +409,8 @@ Before finalizing your response, count your questions. You must have between 8 a
         temperature: float = 0.7,
         prompt_version: Optional[str] = None,
         exclude_appointment_ids: Optional[list[str]] = None,
+        target_doctor_id: Optional[str] = None,
+        current_appointment_id: Optional[str] = None,
     ) -> str:
         """Run the bounded agentic tool-use loop (DEC-009, DEC-013).
 
@@ -418,12 +422,19 @@ Before finalizing your response, count your questions. You must have between 8 a
         context by context_selection.py's Stage 1-4 pipeline — passed
         through to VisitPrepTools so lookup_past_visits can't redundantly
         re-surface them (DEC-024).
+
+        target_doctor_id / current_appointment_id: the provider being seen and
+        the appointment being prepped — used to anchor lookup_past_visits'
+        default date window to "since the patient last saw this provider"
+        (issue #21). Both optional; without them the lookup stays unbounded.
         """
         backend = get_llm_backend(self.settings)
         tools = get_tools_for_provider(self.settings.llm_provider)
         tool_executor = VisitPrepTools(
             self.db, self.anonymizer, profile_id,
             exclude_appointment_ids=exclude_appointment_ids,
+            target_doctor_id=target_doctor_id,
+            current_appointment_id=current_appointment_id,
         )
 
         conversation = list(messages)
