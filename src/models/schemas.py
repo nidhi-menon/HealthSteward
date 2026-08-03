@@ -494,6 +494,7 @@ class AppSettingsUpdate(BaseModel):
     anthropic_model: Optional[str] = None
     ollama_base_url: Optional[str] = None
     ollama_model: Optional[str] = None
+    avs_parser_model: Optional[str] = None
     custom_llm_base_url: Optional[str] = None
     custom_llm_api_key: Optional[str] = None
     custom_llm_model: Optional[str] = None
@@ -507,6 +508,7 @@ class AppSettingsResponse(BaseModel):
     anthropic_model: str
     ollama_base_url: str
     ollama_model: str
+    avs_parser_model: str
     custom_llm_base_url: Optional[str] = None
     custom_llm_api_key: Optional[str] = None
     custom_llm_model: Optional[str] = None
