@@ -1419,4 +1419,33 @@ Related: #38, DEC-015, issue #89.
 
 ---
 
+## 40. Allow Editing and Saving Visit Prep Questions
+
+**Date:** 2026-08-03
+
+**Context:** Visit prep was generate-only. `POST /api/visits/{id}/prepare` re-ran the whole agent and replaced `generated_questions`/`context_summary` wholesale; there was no way to touch the output otherwise. Since this is content the patient carries into a real appointment, an AI question that's slightly off — wrong wording, an angle that doesn't apply, a missing concern of their own — meant either living with it or rolling the dice on a full regeneration. Issue #14.
+
+**What was built:**
+- `PATCH /api/visits/{appointment_id}/prep` (`src/api/visits.py`) with a new `VisitPrepUpdate` schema. Both fields optional and applied via `exclude_unset`, so a client can save just the questions or just the summary.
+- Frontend edit mode on `VisitPrep.tsx`: an Edit button beside the questions heading swaps each category card's rendered list for a textarea (one question per line) and the summary for a textarea, with Save/Cancel replacing Regenerate while editing.
+- 10 new tests in `tests/test_visit_prep.py`. Suite 140 → 150.
+
+**Design notes:**
+
+1. **Newline-delimited textarea per category, not per-question widgets.** The issue asks for three things — reword a question, add one of your own, drop one that doesn't apply. All three are just line edits, and this needs no change to `generated_questions`' `{category: [question, ...]}` shape, confirming the assumption flagged when the issue was picked up. Blank lines are filtered on save (that's how a question gets deleted), and a category emptied entirely is dropped rather than persisting a heading with nothing under it.
+2. **`generated_questions` is typed `dict[str, list[str]]` on the update schema**, unlike the bare `dict` on `VisitPrepResponse`. The response has to accept whatever generation produced; this endpoint is user-writable and the frontend renders every value as a list of strings, so accepting arbitrary JSON would let a malformed save break the page that has to display it. A bad shape is a 422 and the stored prep is untouched.
+3. **`exclude_unset`, not `exclude_none`.** An omitted field means "leave it alone"; an explicit null means "clear it". Collapsing them would make it impossible to clear a context summary.
+4. **Edit-only — PATCH will not create a prep.** Editing an appointment with no prep is a 404; silently creating one would hide a client bug.
+5. **`used_fallback` is left alone on edit.** It records how the prep was *generated* (issue #47) — editing the text afterwards doesn't change that the backend was unreachable at generation time. This does mean the "these are generic defaults, regenerate" banner keeps showing over questions the patient has since edited by hand; flagged on the PR rather than decided unilaterally.
+6. **No draft/unsaved-confirm step**, per the repo owner's own resolved comment on the issue: once editing exists, a bad generation is as fixable by editing as by blocking the save.
+7. **Regenerate still replaces wholesale**, so edits are lost by design — pinned by `test_regenerate_after_edit_replaces_edits` so a future change to that is deliberate rather than accidental.
+
+**Also:** removed an unused `refetchAppointment` binding in `VisitPrep.tsx` that `tsc -b` was failing on. Pre-existing, but in a file this change rewrites heavily. Two further pre-existing `tsc` errors in `PostAvsActionPanel.tsx` were left alone as an unrelated file.
+
+**Files changed:** `src/api/visits.py`, `src/models/schemas.py`, `frontend/src/pages/VisitPrep.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `tests/test_visit_prep.py`.
+
+Related: issue #14, issue #47.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

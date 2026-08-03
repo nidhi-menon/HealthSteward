@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from src.data.database import get_db
 from src.data.models import Appointment, HealthProfile, VisitPrep
-from src.models.schemas import VisitPrepRequest, VisitPrepResponse
+from src.models.schemas import VisitPrepRequest, VisitPrepResponse, VisitPrepUpdate
 
 router = APIRouter(prefix="/api/visits", tags=["Visit Preparation"])
 
@@ -103,4 +103,62 @@ async def get_visit_prep(
             f"Use POST /api/visits/{appointment_id}/prepare to generate one.",
         )
 
+    return visit_prep
+
+
+@router.patch("/{appointment_id}/prep", response_model=VisitPrepResponse)
+async def update_visit_prep(
+    appointment_id: str,
+    updates: VisitPrepUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> VisitPrep:
+    """Edit an existing visit prep's questions or context summary (issue #14).
+
+    Generation is wholesale — POST /prepare re-runs the agent and replaces the
+    output entirely. This lets the patient fix a question's wording, add one of
+    their own, or drop one that doesn't apply, without discarding the rest.
+
+    Deliberately edit-only: it will not create a prep for an appointment that
+    doesn't have one, since there'd be nothing to edit and silently creating one
+    would hide a client bug.
+    """
+    appt_result = await db.execute(
+        select(Appointment).where(Appointment.id == appointment_id)
+    )
+    if not appt_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment with id {appointment_id} not found",
+        )
+
+    result = await db.execute(
+        select(VisitPrep).where(VisitPrep.appointment_id == appointment_id)
+    )
+    visit_prep = result.scalar_one_or_none()
+
+    if not visit_prep:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Visit preparation for appointment {appointment_id} not found. "
+            f"Use POST /api/visits/{appointment_id}/prepare to generate one first.",
+        )
+
+    # exclude_unset, not exclude_none: an omitted field means "leave it alone",
+    # while an explicit null means "clear it" — both are legitimate here, and
+    # collapsing them would make it impossible to clear a context summary.
+    payload = updates.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields to update",
+        )
+
+    for field, value in payload.items():
+        setattr(visit_prep, field, value)
+
+    # used_fallback is deliberately left as-is. It records how this prep was
+    # *generated* (issue #47) — editing the text afterwards doesn't change that
+    # the backend was unreachable at generation time.
+    await db.flush()
+    await db.refresh(visit_prep)
     return visit_prep

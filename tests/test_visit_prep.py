@@ -807,3 +807,281 @@ async def test_prepare_visit_falls_back_when_agentic_loop_calls_unknown_tool(
     assert response.status_code == 200
     data = response.json()
     assert data["generated_questions"] == {"General": ["Fallback question"]}
+
+
+# ============================================================================
+# PATCH /api/visits/{appointment_id}/prep — editing generated prep (issue #14)
+# ============================================================================
+
+
+async def _generate_prep(
+    client: AsyncClient,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+    questions_json: str = '{"questions": {"Medication Review": ["Original question"], '
+                          '"Lifestyle": ["Keep me"]}, "context_summary": "Original summary"}',
+) -> str:
+    """Create profile/doctor/appointment and generate a prep against a mocked
+    Claude call. Returns the appointment id."""
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(questions_json)
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
+        await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    return appointment_id
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_updates_questions(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """The core of issue #14: reword a question, add one of your own, and drop
+    one that doesn't apply — without re-running the agent."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+
+    edited = {
+        "Medication Review": ["Reworded question", "A question of my own"],
+    }
+    response = await client.patch(
+        f"/api/visits/{appointment_id}/prep", json={"generated_questions": edited}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["generated_questions"] == edited
+
+    # Persisted, not just echoed back.
+    fetched = await client.get(f"/api/visits/{appointment_id}/prep")
+    assert fetched.json()["generated_questions"] == edited
+    # The dropped category is really gone.
+    assert "Lifestyle" not in fetched.json()["generated_questions"]
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_updates_context_summary_only(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """A partial update must leave the omitted field untouched — saving a
+    summary tweak shouldn't require round-tripping every question."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+
+    response = await client.patch(
+        f"/api/visits/{appointment_id}/prep", json={"context_summary": "My own summary"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["context_summary"] == "My own summary"
+    assert data["generated_questions"] == {
+        "Medication Review": ["Original question"],
+        "Lifestyle": ["Keep me"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_questions_only_leaves_summary(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """The mirror of the above — the other single-field partial update."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+
+    response = await client.patch(
+        f"/api/visits/{appointment_id}/prep",
+        json={"generated_questions": {"Only": ["One"]}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["context_summary"] == "Original summary"
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_bumps_updated_at(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """updated_at must move, so the UI can show when the patient last edited."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    before = (await client.get(f"/api/visits/{appointment_id}/prep")).json()["updated_at"]
+
+    response = await client.patch(
+        f"/api/visits/{appointment_id}/prep",
+        json={"context_summary": "Edited"},
+    )
+    assert response.status_code == 200
+    assert response.json()["updated_at"] >= before
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_404_when_no_prep_exists(
+    client: AsyncClient, sample_profile_data, sample_doctor_data, sample_appointment_data,
+):
+    """Editing an appointment that has no prep is a 404, not a silent create —
+    there'd be nothing to edit, and creating one would hide a client bug."""
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_response.json()["id"]}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    response = await client.patch(
+        f"/api/visits/{appointment_id}/prep", json={"context_summary": "x"}
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_404_when_appointment_missing(client: AsyncClient):
+    response = await client.patch(
+        "/api/visits/does-not-exist/prep", json={"context_summary": "x"}
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_empty_payload_rejected(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    response = await client.patch(f"/api/visits/{appointment_id}/prep", json={})
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_rejects_malformed_questions_shape(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """generated_questions is typed dict[str, list[str]] on the update schema
+    specifically because this endpoint is user-writable and the frontend renders
+    every value as a list of strings — arbitrary JSON would break the page that
+    has to display it."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+
+    response = await client.patch(
+        f"/api/visits/{appointment_id}/prep",
+        json={"generated_questions": {"Category": "not a list"}},
+    )
+    assert response.status_code == 422
+
+    # And the stored prep is untouched by the rejected write.
+    fetched = await client.get(f"/api/visits/{appointment_id}/prep")
+    assert fetched.json()["generated_questions"] == {
+        "Medication Review": ["Original question"],
+        "Lifestyle": ["Keep me"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_patch_prep_preserves_used_fallback(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """used_fallback records how the prep was *generated* (issue #47). Editing
+    the text afterwards doesn't change that the backend was unreachable at
+    generation time, so PATCH leaves the flag alone."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    original_flag = (await client.get(f"/api/visits/{appointment_id}/prep")).json()["used_fallback"]
+
+    response = await client.patch(
+        f"/api/visits/{appointment_id}/prep",
+        json={"generated_questions": {"Edited": ["Question"]}},
+    )
+    assert response.status_code == 200
+    assert response.json()["used_fallback"] == original_flag
+
+
+@pytest.mark.asyncio
+async def test_regenerate_after_edit_replaces_edits(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """Documents the interaction the issue's own resolved comment settled:
+    Regenerate still replaces wholesale, so edits are lost by design. Pinned as
+    a test so a future change to that behavior is a deliberate one."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    await client.patch(
+        f"/api/visits/{appointment_id}/prep",
+        json={"generated_questions": {"Mine": ["Hand-written"]}},
+    )
+
+    regenerated = _mock_text_response(
+        '{"questions": {"Fresh": ["Regenerated question"]}, "context_summary": "Fresh summary"}'
+    )
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=regenerated)
+        mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    assert response.json()["generated_questions"] == {"Fresh": ["Regenerated question"]}
