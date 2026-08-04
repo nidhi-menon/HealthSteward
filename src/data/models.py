@@ -465,6 +465,11 @@ class AppSettings(Base):
     anthropic_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ollama_base_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     ollama_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Model used by the AVS PDF parser's section-routing LLM calls. Separate
+    # from ollama_model (the agentic loop's model) — the two tasks have
+    # different demands (structured extraction vs. multi-turn tool calling)
+    # and are deliberately switchable independently.
+    avs_parser_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     custom_llm_base_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     custom_llm_api_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     custom_llm_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
