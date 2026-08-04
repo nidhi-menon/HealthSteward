@@ -1030,27 +1030,30 @@ async def test_patch_prep_rejects_malformed_questions_shape(
 
 
 @pytest.mark.asyncio
-async def test_patch_prep_preserves_used_fallback(
+async def test_patch_prep_clears_used_fallback(
     client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
     sample_appointment_data,
 ):
-    """used_fallback records how the prep was *generated* (issue #47). Editing
-    the text afterwards doesn't change that the backend was unreachable at
-    generation time, so PATCH leaves the flag alone."""
+    """used_fallback drives the "these are generic default questions, not
+    personalized — regenerate" warning (issue #47). Once the patient has
+    hand-edited the content, that warning is no longer true, so PATCH clears
+    the flag regardless of how the prep was originally generated."""
     from src.config import get_settings
     monkeypatch.setattr(get_settings(), "llm_provider", "claude")
 
     appointment_id = await _generate_prep(
         client, sample_profile_data, sample_doctor_data, sample_appointment_data
     )
-    original_flag = (await client.get(f"/api/visits/{appointment_id}/prep")).json()["used_fallback"]
 
     response = await client.patch(
         f"/api/visits/{appointment_id}/prep",
         json={"generated_questions": {"Edited": ["Question"]}},
     )
     assert response.status_code == 200
-    assert response.json()["used_fallback"] == original_flag
+    assert response.json()["used_fallback"] is False
+
+    fetched = await client.get(f"/api/visits/{appointment_id}/prep")
+    assert fetched.json()["used_fallback"] is False
 
 
 @pytest.mark.asyncio
