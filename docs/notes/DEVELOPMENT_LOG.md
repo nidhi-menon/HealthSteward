@@ -1419,7 +1419,26 @@ Related: #38, DEC-015, issue #89.
 
 ---
 
-## 40. Allow Editing and Saving Visit Prep Questions
+## 40. Harden `PII_PATTERNS` Against Common Real-World PII Shapes
+
+**Date:** 2026-08-03
+
+**Context:** `PII_PATTERNS` (`src/utils/anonymization.py`) was 5 hand-authored regexes guarding DEC-006's anonymization boundary — everything free-text that reaches an external LLM provider passes through them. Issue #73 flagged the list as narrower than the "best-effort" language in README/CONTRIBUTING implies. Started by writing a throwaway audit harness over ~44 candidate strings (plausible PII shapes on one side, realistic clinical text on the other) to find out what actually leaked rather than guessing: **23 shapes passed through completely unredacted**, and 2 more were partially redacted, which is its own leak — an international number kept "+44 20 7" and a ZIP+4 kept "94", because `phone`'s 7-digit branch consumed the tail before the more specific pattern ran.
+
+**What was built:**
+- Added 6 patterns: `phone_intl` (E.164-style `+` numbers), `zip_code` (ZIP+4 and state-qualified ZIPs), `date_iso`, `date_written` (both month orderings, abbreviated months), `po_box`, `mrn`, `insurance_id`.
+- Widened 2 existing patterns: `address` grew from 9 street suffixes to ~30 (spelled-out plus USPS abbreviations) and now absorbs a trailing apartment/unit/suite designator so the unit number isn't left dangling after the street is redacted; `date` now covers day-first ordering and 2-digit years, not just MM/DD/YYYY.
+- Introduced `PII_REPLACEMENTS`, a per-pattern replacement-template map (defaulting to whole-match redaction). Label-anchored patterns use it to keep their label, so text reads `MRN: [REDACTED]` rather than losing the clinical context along with the identifier.
+- Reordered `PII_PATTERNS` so `zip_code`/`phone_intl` precede `phone`, and documented that the ordering is load-bearing — a future reorder would silently reintroduce partial-redaction leaks.
+- 41 new test cases in `tests/test_anonymization.py` (`TestHardenedPIIPatterns`). Verified they're real coverage by stashing the source change and confirming all 41 fail against the pre-change module.
+- Suite: 140 → 181 tests, all passing.
+
+**Reasoning:** Scoped to hardening the existing list rather than adopting Presidio/`scrubadub` — the repo owner's explicit written call on the issue; library adoption is tracked separately as #92. The binding constraint throughout was over-redaction, not coverage: this runs on clinical free text where dose ranges, BP ratios, and fractions are all date- or identifier-shaped, so every widened pattern is paired with negative cases asserting clinical content survives, and several tempting patterns (bare 5-digit ZIP, bare month+year, street suffixes like Park/Point/Row) were deliberately left out because the false-positive cost exceeds the privacy gain. MRN and insurance IDs are label-anchored for the same reason — an unanchored long-digit-run pattern would eat platelet counts and lab values. The accepted consequence is that an unlabeled MRN in bare free text still isn't caught; anonymization here stays best-effort by construction.
+
+**Files changed:** `src/utils/anonymization.py`, `tests/test_anonymization.py`, `docs/notes/DECISIONS.md`.
+
+Related: issue #73, issue #92, DEC-006, DEC-025.
+## 43. Allow Editing and Saving Visit Prep Questions
 
 **Date:** 2026-08-03
 
