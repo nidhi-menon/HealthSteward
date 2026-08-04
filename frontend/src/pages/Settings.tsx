@@ -70,6 +70,7 @@ export default function Settings() {
         anthropic_model: data.anthropic_model,
         ollama_base_url: data.ollama_base_url,
         ollama_model: data.ollama_model,
+        avs_parser_model: data.avs_parser_model,
         custom_llm_base_url: data.custom_llm_base_url ?? undefined,
         custom_llm_model: data.custom_llm_model ?? undefined,
       });
@@ -252,6 +253,34 @@ export default function Settings() {
             </CardContent>
           </Card>
         )}
+
+        {/*
+          Deliberately outside the `provider === 'ollama'` block. AVS PDF
+          parsing always runs against local Ollama regardless of which provider
+          generates visit prep — nothing about a document leaves the machine —
+          so nesting this field in the Ollama card would hide it from Claude and
+          custom-provider users even though the setting is still in effect for
+          them. See issue #59.
+        */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-900">Document Parsing</h2>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              label="AVS parser model"
+              placeholder={data.avs_parser_model}
+              value={form.avs_parser_model ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, avs_parser_model: e.target.value }))}
+            />
+            <p className="text-sm text-gray-600">
+              Local Ollama model used to parse after-visit summary PDFs. Always runs on-device,
+              whichever provider is selected above. Leave blank to use the default
+              (<code>{data.avs_parser_model}</code>). The model must already be pulled in Ollama —
+              an unknown tag surfaces as an error on the next parse, not here.
+            </p>
+          </CardContent>
+        </Card>
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={updateMutation.isPending}>

@@ -40,6 +40,7 @@ from src.models.schemas import (
     ParsedVitals,
     ScannedFileResponse,
 )
+from src.services import settings_service
 
 router = APIRouter(prefix="/api/profiles/{profile_id}/documents", tags=["documents"])
 
@@ -131,8 +132,16 @@ async def get_parsed_items(
     try:
         from src.parsers import parse_avs_pdf
 
+        # Resolve the parser model here rather than letting parse_avs_pdf fall
+        # back to the env default: the DB overlay is only reachable from an
+        # async session, and parse_avs_pdf runs in a thread executor. Without
+        # this the Settings-page value would be stored but never applied.
+        effective = await settings_service.get_effective_settings(db)
+
         loop = asyncio.get_event_loop()
-        parsed = await loop.run_in_executor(None, parse_avs_pdf, doc.file_path)
+        parsed = await loop.run_in_executor(
+            None, parse_avs_pdf, doc.file_path, effective.avs_parser_model
+        )
 
         doc.raw_parse_result = parsed
         doc.parse_status = "completed"
