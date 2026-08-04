@@ -156,9 +156,12 @@ async def update_visit_prep(
     for field, value in payload.items():
         setattr(visit_prep, field, value)
 
-    # used_fallback is deliberately left as-is. It records how this prep was
-    # *generated* (issue #47) — editing the text afterwards doesn't change that
-    # the backend was unreachable at generation time.
+    # Clear used_fallback on any edit. It exists to drive the "these are
+    # generic default questions, not personalized — regenerate" warning
+    # (issue #47); once the patient has hand-edited the content, that warning
+    # is no longer true and reads as wrong over text they just wrote.
+    visit_prep.used_fallback = False
+
     await db.flush()
     await db.refresh(visit_prep)
     return visit_prep
