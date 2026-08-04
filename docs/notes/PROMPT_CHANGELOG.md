@@ -79,3 +79,21 @@ Built inline in `ContextSelector.stage2_llm_scoring`, not yet extracted to a nam
 
 ### v1 (baseline, 2026-07-19)
 `VITALS_SYSTEM`, `DIAGNOSES_SYSTEM`, `LAB_ORDERS_SYSTEM`, `NOTES_SYSTEM`, `REFERRALS_SYSTEM` — no content changes made, version tags added for traceability as part of establishing this convention project-wide. **Gap:** same as Stage 2 scoring above — `Document.raw_parse_result` stores the parse *output* but not which prompt version produced it. Worth closing if/when the AVS parser's prompts start changing with any frequency; not urgent while they're stable.
+
+---
+
+## `src/agents/tools.py` — agentic-loop tool specs (`TOOL_SPECS_VERSION`)
+
+The `description` strings in `TOOL_SPECS` are model-facing prompt content: the model reads them to decide which tool to call and with what arguments. They were not covered by a version tag when this changelog was established — this section closes that gap.
+
+### v2-2026-08-03
+`lookup_past_visits`' description updated to state its new default behavior (issue #21). Previously: *"Look up past completed visits beyond what's already included in the provided context, optionally filtered by specialty or keyword."* Now additionally: *"With no filters, returns visits since the patient last saw the provider for this appointment — i.e. what's happened in between. Pass a specialty or keyword to search the patient's full history instead."*
+
+**Why:** the tool's no-argument behavior changed from "every completed visit ever" to "visits since the last one with this provider." Leaving the description unchanged would have left the model with a wrong model of what it gets back — and, worse, no way to know that passing an explicit `specialty`/`keyword` is now what widens the search to full history. The second sentence exists specifically to make that escape hatch discoverable.
+
+**Eval evidence:** none. Same blocker as v4-2026-07-22 of the visit-prep system prompts — `python -m eval.run` can't currently complete a generation pass on this hardware (issue #89), so there's no before/after comparison to cite. The change is descriptive rather than directive (it tells the model what the tool now does, matching a behavior change landing in the same commit), so the risk of leaving it un-evaled is lower than for a rule change in a system prompt — but it is genuinely un-evaled, not "validated by inspection."
+
+**Gap:** `TOOL_SPECS_VERSION` isn't threaded into `ConversationLog`'s `extra_data` the way the visit-prep system prompts' versions are, so a logged conversation records which system prompt produced it but not which tool-spec wording was in play. Same unclosed gap as the Stage 2 and AVS parser prompts above.
+
+### v1 (retroactive baseline, prior to 2026-08-03)
+The original `get_medication_details` and `lookup_past_visits` descriptions, as written when the tools were added under DEC-013/DEC-015. Recorded here for completeness — no version constant existed at the time.

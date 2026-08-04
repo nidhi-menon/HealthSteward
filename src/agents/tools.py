@@ -15,6 +15,7 @@ with how prepare_visit() already anonymizes the main context regardless
 of provider.
 """
 
+from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -34,6 +35,18 @@ class UnknownToolError(Exception):
     fallback as other loop failures rather than being fed back into the
     conversation as if it were a real tool result.
     """
+
+# Version tag for the model-facing text in TOOL_SPECS below (the `description`
+# strings and their `parameters` descriptions). These are prompt content — the
+# model reads them to decide which tool to call and with what arguments — so
+# they fall under the project's prompt-versioning convention, even though they
+# aren't a system prompt. Bump this and add a PROMPT_CHANGELOG.md entry for any
+# wording change that could plausibly affect tool-selection behavior.
+#
+# Not yet carried into ConversationLog's extra_data the way the visit-prep
+# system prompts' versions are — same traceability gap PROMPT_CHANGELOG.md
+# already notes for the Stage 2 and AVS parser prompts.
+TOOL_SPECS_VERSION = "v2-2026-08-03"
 
 # Canonical tool specs (name, description, JSON-schema parameters).
 # Adapted per-backend below since Claude and Ollama expect different shapes.
@@ -60,7 +73,11 @@ TOOL_SPECS: list[dict[str, Any]] = [
         "name": "lookup_past_visits",
         "description": (
             "Look up past completed visits beyond what's already included in "
-            "the provided context, optionally filtered by specialty or keyword."
+            "the provided context, optionally filtered by specialty or keyword. "
+            "With no filters, returns visits since the patient last saw the "
+            "provider for this appointment — i.e. what's happened in between. "
+            "Pass a specialty or keyword to search the patient's full history "
+            "instead."
         ),
         "parameters": {
             "type": "object",
@@ -127,6 +144,8 @@ class VisitPrepTools:
         anonymizer: Anonymizer,
         profile_id: str,
         exclude_appointment_ids: Optional[list[str]] = None,
+        target_doctor_id: Optional[str] = None,
+        current_appointment_id: Optional[str] = None,
     ):
         self.db = db
         self.anonymizer = anonymizer
@@ -135,6 +154,17 @@ class VisitPrepTools:
         # into the base prompt — excluded here so lookup_past_visits can't
         # redundantly re-fetch them (DEC-024).
         self.exclude_appointment_ids = exclude_appointment_ids or []
+        # The doctor for the appointment being prepped. Anchors
+        # lookup_past_visits' default date window to "since the patient last
+        # saw this provider" (issue #21). None (no doctor on the appointment)
+        # leaves the lookup unbounded, as it was before.
+        self.target_doctor_id = target_doctor_id
+        # The appointment being prepped. Excluded when picking the window
+        # anchor, matching _get_past_appointments' `Appointment.id !=` guard —
+        # prep can be run on an already-completed appointment, and without this
+        # such an appointment would anchor the window to its own date and
+        # window out the very history it's asking about.
+        self.current_appointment_id = current_appointment_id
 
     async def execute(self, name: str, tool_input: dict[str, Any]) -> str:
         """Execute a tool by name and return an anonymized string result."""
@@ -176,6 +206,37 @@ class VisitPrepTools:
 
         return "\n".join(lines)
 
+    async def _last_visit_date_with_target_provider(self) -> Optional[datetime]:
+        """Date of the patient's most recent completed visit with the doctor
+        this appointment is being prepped for, or None if there isn't one.
+
+        Deliberately ignores `exclude_appointment_ids`: that list exists to stop
+        the tool re-surfacing visits already in the prompt (DEC-024), but an
+        excluded visit is still a real visit and still the correct anchor for
+        "what's happened since then." Anchoring off a filtered set would silently
+        widen the window whenever the anchor visit was already selected — which
+        is the common case, since the last visit with this provider is exactly
+        what context selection tends to pick.
+        """
+        if not self.target_doctor_id:
+            return None
+
+        query = (
+            select(Appointment.scheduled_date)
+            .where(
+                Appointment.profile_id == self.profile_id,
+                Appointment.doctor_id == self.target_doctor_id,
+                Appointment.status == "completed",
+            )
+            .order_by(Appointment.scheduled_date.desc())
+            .limit(1)
+        )
+        if self.current_appointment_id:
+            query = query.where(Appointment.id != self.current_appointment_id)
+
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
     async def _lookup_past_visits(self, specialty: Optional[str], keyword: Optional[str]) -> str:
         query = (
             select(Appointment)
@@ -186,6 +247,21 @@ class VisitPrepTools:
             )
             .order_by(Appointment.scheduled_date.desc())
         )
+
+        # With no explicit filter, default to "what's happened since I last saw
+        # this provider" rather than an unbounded history dig (issue #21). An
+        # explicit specialty/keyword means the model is asking a targeted
+        # question, so the window would only get in its way — the issue asks for
+        # the filters to compose *on top of* the window, but the window itself
+        # only applies when neither is supplied.
+        window_start: Optional[datetime] = None
+        if not specialty and not keyword:
+            window_start = await self._last_visit_date_with_target_provider()
+            if window_start is not None:
+                # Inclusive, per the issue: the anchor visit is itself useful
+                # context for what was covered last time.
+                query = query.where(Appointment.scheduled_date >= window_start)
+
         if self.exclude_appointment_ids:
             query = query.where(Appointment.id.notin_(self.exclude_appointment_ids))
         result = await self.db.execute(query)

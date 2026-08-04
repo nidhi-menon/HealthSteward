@@ -1461,6 +1461,30 @@ Related: issue #73, issue #92, DEC-006, DEC-025.
 **Files changed:** `src/data/models.py`, `src/services/settings_service.py`, `src/models/schemas.py`, `src/api/settings.py`, `src/api/documents.py`, `alembic/versions/b7c4e2a91d38_add_avs_parser_model_to_app_settings.py`, `frontend/src/types/index.ts`, `frontend/src/pages/Settings.tsx`, `.env.example`, `tests/test_settings_api.py`.
 
 Related: issue #59, issue #91, DEC-016.
+## 42. Default `lookup_past_visits` to "Since the Last Visit With This Provider"
+
+**Date:** 2026-08-03
+
+**Context:** `lookup_past_visits` (`src/agents/tools.py`) filtered by `specialty`/`keyword` but had no date bound at all — called with no arguments, it returned every completed visit the patient had ever had, capped only by the `[:10]` slice at render time. For visit prep the useful question is narrower: *what's happened since I last saw this provider*, across all providers. Issue #21, a DEC-015 follow-up.
+
+**What was built:**
+- `VisitPrepTools` gained `target_doctor_id` and `current_appointment_id`. When `lookup_past_visits` is called with neither `specialty` nor `keyword`, it resolves the patient's most recent completed visit with the target provider and filters `scheduled_date >= that date` (inclusive, per the issue).
+- No prior completed visit with that provider — or no doctor on the appointment at all — falls back to the previous unbounded behavior, per the issue's own note, rather than inventing a 12-month default.
+- `visit_prep.py` threads both values through `_run_agentic_loop` into the tool executor.
+- Tool description updated so the model knows what the no-argument call now returns, and that an explicit filter is what widens the search back to full history. Introduced `TOOL_SPECS_VERSION` and a `PROMPT_CHANGELOG.md` section for it.
+- 10 new tests in `tests/test_agent_tools.py`. Suite 140 → 150.
+
+**Three decisions inside the implementation worth recording:**
+
+1. **The anchor query deliberately ignores `exclude_appointment_ids`.** That list (DEC-024) exists to stop the tool re-surfacing visits already in the prompt — but an excluded visit is still a real visit, and still the correct anchor for "what's happened since." Anchoring off the filtered set would silently widen the window precisely when the anchor had already been selected into context, which is the common case: the last visit with this provider is exactly what context selection tends to pick. Pinned by `test_window_composes_with_exclude_appointment_ids`.
+2. **The appointment being prepped is excluded from the anchor query.** Prep can be re-run on an already-completed appointment, in which case it would otherwise anchor to its own date and window out the entire history it's asking about. This mirrors the `Appointment.id != current_appointment_id` guard `_get_past_appointments` already carries for the same reason.
+3. **The window applies only when neither filter is supplied.** The issue's first sentence conditions the window on "no explicit specialty/keyword args," while a later sentence asks for the filters to stay "composable on top of that window" — mildly contradictory. Read the first literally: an explicit filter signals a targeted question, and bounding a `specialty="Cardiology"` lookup to "since I last saw my endocrinologist" would hide the older cardiology history the model was reaching for. Flagged on the PR.
+
+**Reasoning:** Tool-layer only, no schema change, matching the issue's own scoping. The new constructor arguments are optional and default to the previous behavior, so nothing that builds `VisitPrepTools` without them changes — covered by `test_backwards_compatible_when_no_window_args_supplied`. Only `status == "completed"` visits anchor the window; a cancelled appointment isn't a visit, which has its own test since it would otherwise be an easy silent bug.
+
+**Files changed:** `src/agents/tools.py`, `src/agents/visit_prep.py`, `tests/test_agent_tools.py`, `docs/notes/PROMPT_CHANGELOG.md`.
+
+Related: issue #21, DEC-015, DEC-023, DEC-024, issue #89 (eval blocked).
 ## 43. Allow Editing and Saving Visit Prep Questions
 
 **Date:** 2026-08-03
