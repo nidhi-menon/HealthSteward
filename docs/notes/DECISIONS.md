@@ -840,4 +840,33 @@ Oncology → Relevant to all
 
 ---
 
-*Last updated: 2026-07-22*
+### DEC-025: Harden the Hand-Rolled PII Regex List Rather Than Adopt a PII-Detection Library
+
+**Date:** 2026-08-03
+
+**Context:** `PII_PATTERNS` (`src/utils/anonymization.py`) was a hand-authored list of 5 regexes — phone, email, SSN, MM/DD/YYYY date, and a street-address pattern its own comment labelled "simplified" — applied to every free-text field before it crosses DEC-006's trust boundary to an external LLM provider. Unlike a coverage gap in a quality-affecting table, a gap here is a privacy failure: unredacted PII reaches the provider silently, with no error and no visibility. An audit of the 5 patterns against plausible AVS/clinic text found 23 distinct shapes passing through unredacted, including international phone numbers, PO boxes, apartment/unit addresses, most USPS street suffixes beyond the original 9, medical record numbers, insurance member/policy/group IDs, day-first and ISO-8601 and written-out dates, and 2-digit-year birthdates. Two shapes were *partially* redacted, which is its own leak: an international number kept its country and area code ("+44 20 7[REDACTED]"), and a ZIP+4 kept its first two digits, because `phone`'s 7-digit branch consumed the tail first.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Harden the existing hand-rolled regex list in place** | No new dependency; contained entirely to one module and its tests; each added pattern is individually reviewable and testable; ships now | Still fundamentally regex-based — cannot catch PII that has no distinctive lexical shape (names, unlabeled identifiers), so it remains best-effort by construction |
+| Adopt an established PII-detection library (Microsoft Presidio, `scrubadub`) | Far broader coverage, actively maintained, NLP-backed rather than shape-matching | New external dependency on the anonymization critical path — a DEC-worthy choice in its own right per the issue's own scope note; heavier install; needs its own evaluation of false-positive behavior against clinical text |
+| Leave as-is, document the limitation | Zero risk of over-redaction | Leaves a known privacy gap open on a path DEC-006 designates a hard constraint |
+
+**Decision:** Hardened the existing regex list in place; did not adopt a library. Explicitly the repo owner's call, made in writing on [issue #73](https://github.com/nidhi-menon/HealthSteward/issues/73#issuecomment-5162050035) ("go with Option A — harden the existing regex list ... no new dependency, no schema change"). Library adoption is tracked separately as [issue #92](https://github.com/nidhi-menon/HealthSteward/issues/92) so it can be evaluated deliberately rather than decided under this run's time pressure.
+
+Two structural choices inside that scope are worth recording, since both constrain how the list can be extended later:
+
+1. **Identifier patterns are label-anchored, not shape-anchored.** MRNs and insurance IDs have no distinctive shape — they are bare digit or alphanumeric runs. An unanchored "long digit run" pattern would redact platelet counts, dosages, and lab values. Both patterns therefore require an adjacent label (`MRN:`, `Member ID:`, `Policy #:`) and capture it in a named group, so the label survives redaction and the anonymized text reads `MRN: [REDACTED]`.
+
+   **Amendment (2026-08-03, during PR #114 review):** the repo owner revisited the accepted "unlabeled MRN not caught" gap and judged it the wrong tradeoff on a hard trust boundary — over-redacting an occasional unlabeled clinical value was preferred to missing a real unlabeled MRN. Added `mrn_unlabeled`: a bare 7-10 digit run with no label, excluded when immediately followed by a clinical unit (`mg`, `mmHg`, `IU`, etc.) so measurement-shaped values aren't caught, and placed last in `PII_PATTERNS` so it can't steal digits from a label-anchored match. The length band (7-10) keeps 6-digit values like a typical platelet count out of range; this is a heuristic, not a guarantee — an unlabeled value that happens to be 7-10 digits with no adjacent unit will still be redacted.
+2. **Pattern order is load-bearing.** `anonymize_text` applies patterns in declaration order, so a pattern matching a superset must precede one matching a fragment. `zip_code` and `phone_intl` run before `phone` for exactly this reason. This is now stated in a comment on `PII_PATTERNS`, because it is not obvious and a future reordering would silently reintroduce partial-redaction leaks.
+
+**Reasoning:** The issue framed this as a choice between a contained hardening pass and a dependency-adding investigation, and the owner picked the former — correctly, since the two aren't mutually exclusive and the hardening closes 23 concrete leaks now without prejudicing the library evaluation later. The over-redaction risk is the real constraint on how aggressive these patterns can be: this runs on clinical free text, where dose ranges ("25-50 mg"), ratios ("120/80"), fractions ("1/2 tablet"), and lab panels are all date- or identifier-shaped, so every widened pattern is paired with negative test cases asserting clinical content survives. That is also why bare 5-digit ZIPs, bare month-and-year references ("follow up January 2026"), and the street-suffix words most likely to appear in ordinary prose (Park, Point, Row, Run, Path, Bend) are deliberately *not* matched. Redacting a follow-up month would degrade visit prep for no privacy gain.
+
+**Status:** Implemented, including the `mrn_unlabeled` amendment above. Free-text anonymization remains best-effort by design (as README/CONTRIBUTING already state) — this narrows the gap, it does not close it. Library evaluation pending in #92.
+
+---
+
+*Last updated: 2026-08-03*
