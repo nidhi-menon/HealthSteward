@@ -70,6 +70,36 @@ export const profiles = {
     request<void>(`/profiles/${id}`, { method: 'DELETE' }),
 };
 
+/**
+ * Download a profile's JSON backup (issue #93).
+ *
+ * Deliberately not routed through `request()` — that helper parses the body as
+ * JSON, and the point here is to hand the bytes to the browser as a file. The
+ * filename comes from the server's Content-Disposition header so the two can't
+ * drift apart.
+ */
+export async function downloadProfileExport(profileId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/profiles/${profileId}/export`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Export failed: ${response.status}`);
+  }
+
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `healthsteward-${profileId}.json`;
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 // Conditions
 export const conditions = {
   list: (profileId: string) =>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { profiles, conditions, medications, doctors, appointments, documents } from '../api/client';
+import { profiles, conditions, medications, doctors, appointments, documents, downloadProfileExport } from '../api/client';
 import { formatDateString } from '../utils/date';
 import { Card, CardHeader, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -100,6 +100,14 @@ export default function ProfileDetail() {
           <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>
           {profile.blood_type && <span className="text-gray-500">Blood Type: {profile.blood_type}</span>}
         </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => downloadProfileExport(profileId!)}
+          title="Download a JSON backup of everything under this profile"
+        >
+          Export
+        </Button>
         <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)}>
           Delete Profile
         </Button>
