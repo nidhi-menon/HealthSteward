@@ -43,6 +43,12 @@ class HealthProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )
+    # Set instead of deleting the row, so a mistaken profile deletion is
+    # recoverable for 30 days (issue #50, DEC-027). NULL means "live"; every
+    # profile lookup filters on that. Nothing under the profile is touched
+    # while this is set — the profile just becomes invisible. The real
+    # cascading delete happens when the window expires.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     conditions: Mapped[list["Condition"]] = relationship(

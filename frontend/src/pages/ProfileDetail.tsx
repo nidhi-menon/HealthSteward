@@ -11,6 +11,7 @@ import { DocumentCard } from '../components/DocumentCard';
 import { ParsedItemsReview } from '../components/ParsedItemsReview';
 import { PostAvsActionPanel } from '../components/PostAvsActionPanel';
 import { ActionItemsSection } from '../components/ActionItemsSection';
+import { SOFT_DELETE_RETENTION_DAYS } from '../constants';
 import type { Condition, ConditionCreate, Medication, MedicationCreate, Doctor, DoctorCreate, Appointment, AppointmentCreate, ScannedFile, ParsedItemsResponse, ApplyItemsRequest, ActionItems } from '../types';
 
 type Tab = 'overview' | 'conditions' | 'medications' | 'doctors' | 'appointments' | 'documents';
@@ -206,6 +207,7 @@ export default function ProfileDetail() {
         itemName={profile.name}
         itemType="profile"
         isDeleting={deleteMutation.isPending}
+        recoveryDays={SOFT_DELETE_RETENTION_DAYS}
       />
     </div>
   );
