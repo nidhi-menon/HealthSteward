@@ -102,16 +102,19 @@ _MONTHS = (
 # earlier pattern that matches a superset of a later one wins. In particular the
 # ZIP+4 and international-phone patterns must precede `phone`, which would
 # otherwise match only a fragment and leave the rest of the identifier in place.
+# `mrn_unlabeled` must run last, after the label-anchored patterns, so it
+# doesn't steal digits from a match that needs to keep its label.
 #
-# Patterns fall into two groups:
+# Patterns fall into three groups:
 #   - *Shape* patterns (phone, email, SSN, address, dates) match the identifier
 #     itself and are safe to apply unconditionally.
 #   - *Labeled* patterns (MRN, insurance IDs) match a bare digit/alnum run that
 #     is only identifiable as PII because of an adjacent label. These capture the
 #     label in a group and keep it (see PII_REPLACEMENTS) so the redacted text
 #     still reads as "MRN: [REDACTED]" rather than losing the clinical context.
-#     They deliberately do NOT match unlabeled numbers: an unanchored "any long
-#     digit run" pattern would redact dosages, lab values, and vitals.
+#   - *Unlabeled length-band* (`mrn_unlabeled`): a bare 7-10 digit run with no
+#     label at all. Narrower than "any long digit run" — see its own comment
+#     below for the length band and unit-exclusion reasoning.
 PII_PATTERNS = {
     # ZIP+4 and state-qualified ZIP codes. Must run first: `phone`'s 7-digit
     # branch would otherwise consume the "103-1234" of a ZIP+4 and leave a bare
@@ -191,6 +194,21 @@ PII_PATTERNS = {
         r'(?P<label>(?i:\b(?:Member|Subscriber|Policy|Group|Insurance|Plan|Beneficiary)'
         r'\s*(?:ID|No\.?|Number|#)?)\s*[:#]?\s*)'
         r'(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b'
+    ),
+    # Bare digit runs of MRN-typical length (7-10 digits) with no adjacent
+    # label. Deliberately narrower than "any long digit run": most clinical
+    # values that could collide (dosages, A1C, LDL/HDL, ratios) fall outside
+    # this length band, and a run immediately followed by a unit is excluded
+    # so vitals/labs written with a value+unit shape ("12345678 mmHg") aren't
+    # caught. Six-digit values (e.g. a platelet count) are still out of range
+    # and pass through untouched. Must run last: it must not steal digits from
+    # a label-anchored `mrn`/`insurance_id` match, which needs its label kept.
+    # Accepted false-positive risk: an unlabeled 7-10 digit clinical value with
+    # no unit context will still be redacted — judged the better tradeoff on
+    # DEC-006's trust boundary than leaving unlabeled MRNs uncaught.
+    'mrn_unlabeled': re.compile(
+        r'\b\d{7,10}\b'
+        r'(?!\s*(?:mg|mcg|mL|ml|L|mmHg|bpm|kg|lbs?|%|IU|mmol(?:/L)?|mg/dL|°[CF]|units?)\b)'
     ),
 }
 

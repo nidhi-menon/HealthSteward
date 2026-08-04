@@ -224,11 +224,39 @@ class TestHardenedPIIPatterns:
         assert "[REDACTED]" not in result
 
     def test_unlabeled_numbers_not_treated_as_identifiers(self, anonymizer):
-        """MRN/insurance patterns are label-anchored by design — an unanchored
-        "long digit run" pattern would redact lab values and dosages."""
+        """Six-digit lab values fall outside the unlabeled-MRN length band
+        (7-10 digits) and short values are never in range, so ordinary
+        clinical numbers still pass through untouched."""
         result = self._redacted(anonymizer, "Platelet count 250000 and ferritin 45")
         assert "250000" in result
         assert "45" in result
+
+    # --- Unlabeled MRN-shaped digit runs ---
+
+    @pytest.mark.parametrize("text,leaked", [
+        ("Chart 12345678 shows no changes", "12345678"),
+        ("Reference number 5551234 on file", "5551234"),
+        ("Patient identifier 9988776655", "9988776655"),
+    ])
+    def test_unlabeled_mrn_length_digit_runs_redacted(self, anonymizer, text, leaked):
+        """Bare 7-10 digit runs with no label are still redacted — the accepted
+        false-positive tradeoff from DEC-025's follow-up: catching unlabeled
+        MRNs was judged more important than the risk of over-redacting an
+        unlabeled clinical value of the same length."""
+        result = self._redacted(anonymizer, text)
+        assert leaked not in result
+        assert "[REDACTED]" in result
+
+    @pytest.mark.parametrize("text", [
+        "Dose adjusted to 1234567 mcg",
+        "Reading was 12345678 mmHg",
+        "Infusion rate 5551234 mL",
+    ])
+    def test_unlabeled_mrn_length_digit_runs_with_unit_preserved(self, anonymizer, text):
+        """A 7-10 digit value immediately followed by a clinical unit is
+        excluded — it reads as a measurement, not an identifier."""
+        result = self._redacted(anonymizer, text)
+        assert result == text
 
     # --- Negative cases: clinical content must survive ---
 
