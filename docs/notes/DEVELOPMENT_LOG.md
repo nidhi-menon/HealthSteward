@@ -1438,6 +1438,29 @@ Related: #38, DEC-015, issue #89.
 **Files changed:** `src/utils/anonymization.py`, `tests/test_anonymization.py`, `docs/notes/DECISIONS.md`.
 
 Related: issue #73, issue #92, DEC-006, DEC-025.
+## 41. Make `avs_parser_model` Runtime-Configurable, Matching `ollama_model`
+
+**Date:** 2026-08-03
+
+**Context:** DEC-016 made `ollama_model` runtime-editable — an `AppSettings` column, overlaid on the env default, exposed via `GET`/`PUT /api/settings` and the Settings page, switchable without a restart. `avs_parser_model` (`src/config.py`, default `qwen2.5:7b`) never got the same treatment: it was a static config default, absent from `.env.example` entirely, with no DB overlay and no UI. Changing the AVS parser's model meant editing source and restarting; changing the agentic loop's model was a text field in Settings. Issue #59.
+
+**What was built:**
+- `avs_parser_model` column on `AppSettings` (`src/data/models.py`) + migration `b7c4e2a91d38`, nullable with no server default — NULL means "fall back to the env default", matching every other overlay column, so existing rows need no backfill.
+- Added to `_OVERLAY_FIELDS` (`settings_service.py`), `AppSettingsUpdate`/`AppSettingsResponse` (`schemas.py`), and both `/api/settings` handlers.
+- Frontend: `AppSettings`/`AppSettingsUpdate` types, and a new always-visible **Document Parsing** card on the Settings page.
+- `AVS_PARSER_MODEL` added to `.env.example` (was missing entirely).
+- 5 new tests in `tests/test_settings_api.py`. Suite 140 → 145.
+
+**Two things worth calling out, because neither is in the issue's step list:**
+
+1. **The overlay wasn't reachable from the parse path.** `parse_avs_pdf` resolves its model via `get_settings().avs_parser_model` — the *env* settings, not the DB-overlaid ones — and runs in a thread executor where an async DB session isn't available. Following the issue's 5 steps literally would have produced a Settings field that persists correctly, round-trips correctly through the API, and is never actually read by the parser. `src/api/documents.py` now resolves the effective settings before dispatching to the executor and passes the model explicitly.
+2. **The Settings field is deliberately not in the Ollama card.** The issue proposed "same section as the existing Ollama config", but that card renders only when `provider === 'ollama'`. AVS parsing always runs on local Ollama regardless of which provider generates visit prep, so nesting the field there would hide it from Claude and custom-provider users while the setting stayed in effect for them. It lives in its own always-visible card instead, with a test (`test_avs_parser_model_override_survives_provider_switch`) pinning the behavior that motivated the split.
+
+**Reasoning:** Free-text field rather than a curated dropdown, per the repo owner's call on the issue — a vetted-model list doesn't exist yet and isn't worth inventing here; a dropdown can layer onto the same field later. Scoped to configurability plumbing only: the `qwen2.5:7b` default itself is unchanged and `src/parsers/agent/prompts.py` was not re-validated against alternative models, so no DEC entry is warranted (a DEC would be needed only if the default choice changed). The rationale-for-the-default question folds into #91 per the owner rather than becoming a new issue.
+
+**Files changed:** `src/data/models.py`, `src/services/settings_service.py`, `src/models/schemas.py`, `src/api/settings.py`, `src/api/documents.py`, `alembic/versions/b7c4e2a91d38_add_avs_parser_model_to_app_settings.py`, `frontend/src/types/index.ts`, `frontend/src/pages/Settings.tsx`, `.env.example`, `tests/test_settings_api.py`.
+
+Related: issue #59, issue #91, DEC-016.
 ## 43. Allow Editing and Saving Visit Prep Questions
 
 **Date:** 2026-08-03

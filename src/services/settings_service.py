@@ -21,6 +21,7 @@ _OVERLAY_FIELDS = (
     "anthropic_model",
     "ollama_base_url",
     "ollama_model",
+    "avs_parser_model",
     "custom_llm_base_url",
     "custom_llm_api_key",
     "custom_llm_model",
