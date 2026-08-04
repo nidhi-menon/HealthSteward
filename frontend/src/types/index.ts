@@ -308,6 +308,7 @@ export interface AppSettings {
   anthropic_model: string;
   ollama_base_url: string;
   ollama_model: string;
+  avs_parser_model: string;
   custom_llm_base_url: string | null;
   custom_llm_api_key: string | null; // masked
   custom_llm_model: string | null;
@@ -319,6 +320,7 @@ export interface AppSettingsUpdate {
   anthropic_model?: string;
   ollama_base_url?: string;
   ollama_model?: string;
+  avs_parser_model?: string;
   custom_llm_base_url?: string;
   custom_llm_api_key?: string;
   custom_llm_model?: string;
