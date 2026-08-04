@@ -129,6 +129,13 @@ export interface VisitPrep {
   updated_at: string;
 }
 
+// Issue #14: in-place edits to an existing prep. Both fields optional — an
+// omitted field is left untouched by the PATCH.
+export interface VisitPrepUpdate {
+  generated_questions?: Record<string, string[]>;
+  context_summary?: string;
+}
+
 // Scanned File (from data/avs/ directory)
 export interface ScannedFile {
   filename: string;
