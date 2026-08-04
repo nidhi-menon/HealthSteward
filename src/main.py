@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from src.api import action_items, appointments, conditions, doctors, documents, health_profile, medications, settings as settings_api, visits
+from src.api import action_items, appointments, conditions, diagnostics, doctors, documents, health_profile, medications, settings as settings_api, visits
 from src.config import get_settings
 from src.data.database import init_db
 from src.utils.logging import setup_logging
@@ -63,6 +63,7 @@ app.include_router(documents.router)
 app.include_router(visits.router)
 app.include_router(action_items.router)
 app.include_router(settings_api.router)
+app.include_router(diagnostics.router)
 
 
 @app.get("/")

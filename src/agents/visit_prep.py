@@ -25,6 +25,28 @@ from src.utils.anonymization import Anonymizer, AnonymizedAppointment, Anonymize
 from src.utils.context_selection import ContextSelectionResult, ContextSelector
 
 
+class AgenticLoopNotConvergedError(RuntimeError):
+    """The agentic loop ran out of turns without producing a final answer.
+
+    Subclasses RuntimeError so the existing `except (..., RuntimeError)` in
+    `prepare_visit` keeps catching it, but lets non-convergence (an expected,
+    benign outcome of the bounded loop — DEC-009/DEC-013) be told apart from a
+    RuntimeError raised by the backend itself, which is a real defect. Issue #30
+    exists because those two were indistinguishable.
+    """
+
+
+# Why a given prepare_visit() run did NOT come from the agentic loop. Stored on
+# the ConversationLog row (see DEC-026) so a backend degrading at tool use is
+# visible instead of silently downgrading every call to single-shot.
+FALLBACK_TOOL_USE_DISABLED = "tool_use_disabled"   # agent_tool_use_enabled is off — not a failure
+FALLBACK_NON_CONVERGENCE = "non_convergence"       # loop hit agent_max_turns; expected, benign
+FALLBACK_PARSE_ERROR = "parse_error"               # backend emitted a malformed tool call
+FALLBACK_UNKNOWN_TOOL = "unknown_tool"             # model called a tool that doesn't exist
+FALLBACK_LOOP_ERROR = "loop_error"                 # anything else the loop raised — a real bug
+FALLBACK_BACKEND_UNAVAILABLE = "backend_unavailable"  # both paths failed; placeholder returned
+
+
 # ICD-10 prefix → specialty mapping for tagging conditions
 ICD10_SPECIALTY_MAP: dict[str, list[str]] = {
     "E00-E07": ["Endocrinology"],       # Thyroid disorders
@@ -43,6 +65,24 @@ ICD10_SPECIALTY_MAP: dict[str, list[str]] = {
     "N00-N29": ["Nephrology"],          # Kidney
     "N30-N39": ["Urology"],             # Urinary
 }
+
+
+def _classify_agentic_failure(error: Exception) -> str:
+    """Map an exception that aborted the agentic loop to a FALLBACK_* reason.
+
+    The point of the distinction (issue #30, DEC-013): non-convergence is the
+    bounded loop working as designed, while a parse error, an unknown tool, or
+    an unexpected RuntimeError from the backend all mean something is actually
+    broken. Collapsing them into one "fell back" counter would hide a degrading
+    backend behind a number that looks normal.
+    """
+    if isinstance(error, AgenticLoopNotConvergedError):
+        return FALLBACK_NON_CONVERGENCE
+    if isinstance(error, ToolCallParsingError):
+        return FALLBACK_PARSE_ERROR
+    if isinstance(error, UnknownToolError):
+        return FALLBACK_UNKNOWN_TOOL
+    return FALLBACK_LOOP_ERROR
 
 
 def _icd10_to_specialties(icd_10: Optional[str]) -> list[str]:
@@ -357,6 +397,10 @@ Before finalizing your response, count your questions. You must have between 8 a
         system_prompt_version = self._get_system_prompt_version(target_specialty)
         messages = [{"role": "user", "content": context}]
 
+        # Why this run didn't use the agentic loop, if it didn't. None means it
+        # did (or hasn't been decided yet) — see the FALLBACK_* constants.
+        fallback_reason: Optional[str] = None
+
         try:
             # Step 7: Call LLM — try the agentic tool-use loop first (DEC-009),
             # falling back to single-shot generation if it's disabled, the
@@ -372,12 +416,20 @@ Before finalizing your response, count your questions. You must have between 8 a
                         current_appointment_id=appointment.id,
                     )
                 except (ToolCallParsingError, UnknownToolError, RuntimeError) as e:
-                    logger.warning(f"Agentic tool-use loop failed, falling back to single-shot: {e}")
+                    fallback_reason = _classify_agentic_failure(e)
+                    logger.warning(
+                        f"Agentic tool-use loop failed ({fallback_reason}), "
+                        f"falling back to single-shot: {e}"
+                    )
                     response = None
+            else:
+                fallback_reason = FALLBACK_TOOL_USE_DISABLED
 
             if response is None:
                 response = await self._call_backend(
-                    messages, system_prompt, temperature=temperature, prompt_version=system_prompt_version
+                    messages, system_prompt, temperature=temperature,
+                    prompt_version=system_prompt_version,
+                    fallback_reason=fallback_reason,
                 )
 
             # Step 8: Parse JSON response
@@ -388,6 +440,8 @@ Before finalizing your response, count your questions. You must have between 8 a
                     "questions": parsed.get("questions", {}),
                     "context_summary": parsed.get("context_summary", ""),
                     "used_fallback": False,
+                    "agentic_path": fallback_reason is None,
+                    "fallback_reason": fallback_reason,
                 }
             else:
                 logger.warning("Could not parse JSON from LLM response")
@@ -395,11 +449,23 @@ Before finalizing your response, count your questions. You must have between 8 a
                     "questions": {"General Questions": [response]},
                     "context_summary": "AI generated visit preparation (raw response).",
                     "used_fallback": False,
+                    "agentic_path": fallback_reason is None,
+                    "fallback_reason": fallback_reason,
                 }
 
         except Exception as e:
             logger.error(f"Visit prep generation failed: {e}")
-            return self._get_fallback_response()
+            # Nothing was logged on this path — the backend call raised before
+            # _log_conversation ran — so record the hard failure explicitly.
+            # Without this, a wholly unreachable backend would be *invisible*
+            # to the fallback-rate diagnostics, which is the exact blind spot
+            # issue #30 is about.
+            await self._log_hard_failure(
+                system_prompt_version=system_prompt_version,
+                prior_agentic_failure=fallback_reason,
+                error=e,
+            )
+            return self._get_fallback_response(prior_agentic_failure=fallback_reason)
 
     async def _run_agentic_loop(
         self,
@@ -453,6 +519,7 @@ Before finalizing your response, count your questions. You must have between 8 a
                     model=self._model_name_for_provider(),
                     tool_calls=tool_call_log or None,
                     prompt_version=prompt_version,
+                    run_diagnostics={"agentic_path": True, "fallback_reason": None},
                 )
                 return result.text or ""
 
@@ -466,7 +533,9 @@ Before finalizing your response, count your questions. You must have between 8 a
                     "result": tool_result,
                 })
 
-        raise RuntimeError(f"Agentic loop did not converge within {self.settings.agent_max_turns} turns")
+        raise AgenticLoopNotConvergedError(
+            f"Agentic loop did not converge within {self.settings.agent_max_turns} turns"
+        )
 
     def _model_name_for_provider(self) -> str:
         """Model name to log against, for whichever provider is configured."""
@@ -477,9 +546,19 @@ Before finalizing your response, count your questions. You must have between 8 a
         return self.settings.anthropic_model
 
     async def _call_backend(
-        self, messages: list[dict], system: str, temperature: float = 0.7, prompt_version: Optional[str] = None
+        self,
+        messages: list[dict],
+        system: str,
+        temperature: float = 0.7,
+        prompt_version: Optional[str] = None,
+        fallback_reason: Optional[str] = None,
     ) -> str:
-        """Single-shot (non-agentic) generation via whichever backend is configured."""
+        """Single-shot (non-agentic) generation via whichever backend is configured.
+
+        fallback_reason: why the agentic loop didn't produce this response (a
+        FALLBACK_* constant), recorded on the ConversationLog row. None means
+        this was a direct single-shot call rather than a fallback.
+        """
         backend = get_llm_backend(self.settings)
         result = await backend.call(messages, system, tools=None, temperature=temperature)
         response = result.text or ""
@@ -492,9 +571,46 @@ Before finalizing your response, count your questions. You must have between 8 a
             output_tokens=result.output_tokens,
             model=self._model_name_for_provider(),
             prompt_version=prompt_version,
+            run_diagnostics={"agentic_path": False, "fallback_reason": fallback_reason},
         )
 
         return response
+
+    async def _log_hard_failure(
+        self,
+        system_prompt_version: Optional[str] = None,
+        prior_agentic_failure: Optional[str] = None,
+        error: Optional[Exception] = None,
+    ) -> None:
+        """Record a run where neither the agentic loop nor single-shot produced anything.
+
+        On this path no LLM response exists to log, so `_log_conversation`'s
+        normal call sites never ran. The row written here carries no prompt or
+        user content — only the diagnostics — so the fallback-rate view can
+        count hard failures alongside the runs that did produce output.
+
+        `prior_agentic_failure` preserves *why* the agentic loop was abandoned
+        before single-shot also failed; without it a backend that stops
+        supporting tool use and then goes down entirely would look like a plain
+        outage.
+        """
+        diagnostics: dict[str, Any] = {
+            "agentic_path": False,
+            "fallback_reason": FALLBACK_BACKEND_UNAVAILABLE,
+        }
+        if prior_agentic_failure:
+            diagnostics["prior_agentic_failure"] = prior_agentic_failure
+        if error is not None:
+            diagnostics["error_type"] = type(error).__name__
+
+        await self._log_conversation(
+            messages=[],
+            response="",
+            system=None,
+            model=self._model_name_for_provider(),
+            prompt_version=system_prompt_version,
+            run_diagnostics=diagnostics,
+        )
 
     def _build_med_specialty_map(self, profile) -> dict[str, str]:
         """Build a mapping of medication name → prescribing specialty.
@@ -674,7 +790,7 @@ Before finalizing your response, count your questions. You must have between 8 a
 
         return "\n".join(lines)
 
-    def _get_fallback_response(self) -> dict[str, Any]:
+    def _get_fallback_response(self, prior_agentic_failure: Optional[str] = None) -> dict[str, Any]:
         """Get fallback response when LLM is unavailable.
 
         `used_fallback: True` is the only signal (besides a backend log)
@@ -693,4 +809,7 @@ Before finalizing your response, count your questions. You must have between 8 a
             },
             "context_summary": "Default questions generated due to AI service unavailability.",
             "used_fallback": True,
+            "agentic_path": False,
+            "fallback_reason": FALLBACK_BACKEND_UNAVAILABLE,
+            "prior_agentic_failure": prior_agentic_failure,
         }
