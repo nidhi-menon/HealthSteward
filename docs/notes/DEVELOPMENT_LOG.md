@@ -1514,4 +1514,31 @@ Related: issue #14, issue #47.
 
 ---
 
+## 44. Per-Profile JSON Export (#93, DEC-028)
+
+**Date:** 2026-08-04
+
+**Context:** No export path existed — HealthSteward was the sole copy of a user's health history on a single unbacked-up machine. Issue #93. The issue's three open questions (per-profile vs. everything, plaintext vs. encrypted, local vs. cloud) were all resolved by the repo owner before implementation.
+
+**What was built:**
+- `GET /api/profiles/{profile_id}/export` (`src/api/profile_export.py`, new router) returning a full-fidelity JSON document: format version, export timestamp, app version, the profile's own fields, and a top-level list per profile-scoped table, plus `visit_preps`. Served as a file download.
+- Frontend: an "Export" button on the profile header; `downloadProfileExport()` in `api/client.ts` takes the filename from the server's `Content-Disposition` header so the two can't drift.
+- 10 new tests in `tests/test_profile_export.py`. Suite 233 → 243.
+
+**Design notes:**
+
+1. **Serialization is mapper-driven, not a field list** — a column added to a model is exported automatically, because the alternative fails silently and is only discovered at restore time.
+2. **Keys are included.** Which appointment was with which doctor is part of the data; an export that drops the foreign keys is a summary, not a backup.
+3. **`export_format_version` ships in v1** — the one field that can't be added retroactively, since files already on disk won't have it.
+4. **Documents are metadata + parsed contents, not the source PDFs**, with a `documents_note` field inside the file stating so.
+5. **Nothing is anonymized.** DEC-006 governs data crossing to an external LLM; this file never leaves the machine, and redacting it would corrupt the backup.
+
+**Import was deliberately not built.** The approved plan called for `POST /api/profiles/{profile_id}/import`, but implementing it surfaced a question the plan doesn't answer: importing into an *existing* profile can either append (duplicating everything on a re-import), replace its contents (destructive), or the endpoint could instead create a new profile from the document (non-destructive, and the only shape that works on a fresh machine with no profile to import into). Those are three materially different features, and the failure modes are duplication or data loss on a user's only copy of their history — so it was raised as an open question on #93 rather than guessed at. #93 stays open.
+
+**Files changed:** `src/api/profile_export.py`, `src/main.py`, `frontend/src/api/client.ts`, `frontend/src/pages/ProfileDetail.tsx`, `tests/test_profile_export.py`.
+
+Related: issue #93, issue #92 (encryption at rest), issue #99 (human-readable share-with-provider export), DEC-006, DEC-028.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
