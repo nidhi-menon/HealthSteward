@@ -869,6 +869,35 @@ Two structural choices inside that scope are worth recording, since both constra
 
 ---
 
+### DEC-026: Record Visit-Prep Run Path on `ConversationLog.extra_data` Rather Than a Dedicated Counter Table
+
+**Date:** 2026-08-04
+
+**Context:** DEC-013's agentic tool-use loop is fallback-not-hard-failure by design — if it can't converge within `agent_max_turns`, or a backend emits a malformed tool call, `prepare_visit()` (`src/agents/visit_prep.py`) catches the exception and quietly re-runs the request single-shot. That is the right behavior for the patient (no broken visit prep), but it means a backend degrading specifically at tool use — an Ollama or Claude version change that breaks tool-calling reliability — produces no error, no user-visible symptom, and no record. The app just silently stops using the feature DEC-009 exists to provide. `docs/notes/DESIGN.md` §8 listed this as one of three real remaining gaps, mapping to a standard ML design doc's "Model Drift / Alerting" section. Issue #30.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Record per-run diagnostics in `ConversationLog.extra_data`** | No migration — the column is already a flexible JSON blob carrying `system`, `model`, `prompt_version`, `tool_calls`; same shallow-cost pattern issue #16 proposes for redaction events; aggregation is a single indexed-by-timestamp query | JSON-keyed reads aren't indexable, so a large-N aggregate query is a table scan; querying it needs `json_extract`, which is SQLite/MySQL syntax rather than portable SQL |
+| A dedicated counter/event table | Indexable, cheap aggregate queries, schema-enforced shape | A migration and a second write path for something a single-user local app reads by hand, at most, a few times a year |
+| Log-only (loguru), no persistence | Zero storage cost | Not readable back through the app at all — the existing `logger.warning` on the fallback path is exactly what proved insufficient |
+
+**Decision:** Store `{"agentic_path": bool, "fallback_reason": str | None}` under `extra_data["run_diagnostics"]` on the assistant `ConversationLog` row for every `prepare_visit()` run, and read it back via `GET /api/diagnostics/visit-prep-fallback?limit=N` (`src/api/diagnostics.py`), which reports the rate over a rolling window of the last N runs broken down by reason. Explicitly the repo owner's call, made in writing on [issue #30](https://github.com/nidhi-menon/HealthSteward/issues/30#issuecomment-5175382279) ("reuse `ConversationLog.extra_data`, as planned ... a dedicated counter table is only worth it once there's an actual need for indexed/aggregate queries at scale, which a single-user app doesn't have").
+
+Two choices inside that scope constrain how this can be extended:
+
+1. **The reasons are an enumerated vocabulary, not free text**, and non-convergence gets its own exception type. `_run_agentic_loop` previously raised a bare `RuntimeError` on turn exhaustion, which `prepare_visit` caught alongside `RuntimeError`s raised by the backend itself — so the expected, benign outcome and a genuine defect were literally the same exception. `AgenticLoopNotConvergedError(RuntimeError)` now separates them, and `_classify_agentic_failure` maps each caught exception to one of `tool_use_disabled` / `non_convergence` / `parse_error` / `unknown_tool` / `loop_error` / `backend_unavailable`. Issue #30's third point — "log the failure reason distinctly ... so a real tool-execution bug isn't indistinguishable from expected non-convergence" — is only satisfiable if that distinction exists at the raise site.
+2. **The hard-failure path writes its own log row.** When both the loop and single-shot fail, no LLM response exists, so `_log_conversation`'s normal call sites never run and the run would leave no trace at all — the *worst* outcome would have been the one invisible to a feature built to surface bad outcomes. `_log_hard_failure` writes a content-free row carrying only the diagnostics, and preserves any preceding agentic failure as `prior_agentic_failure` so a backend that breaks tool use on its way down doesn't read as a plain outage.
+
+**Reasoning:** The deciding factor is who reads this and how often. This is a single-user local app; the realistic access pattern is a human checking "is tool use still working" after noticing prep output got worse, not a monitoring system polling continuously. At that cadence a table scan over a few hundred JSON blobs is irrelevant, and the migration a counter table would need is real cost paid now against a benefit that only materializes at a scale this app doesn't have. The reverse is also cheap: if aggregate queries ever do matter, the JSON rows are a complete history to backfill a real table from.
+
+Deliberately *not* overloading the existing `VisitPrep.used_fallback` column (DEC-020) for this, despite the name collision being tempting: that flag means "the model produced nothing and these are hardcoded placeholder questions," and drives a user-facing warning banner. Agentic → single-shot fallback still produces a real, personalized answer, so setting `used_fallback` for it would show the patient a "these are generic default questions" warning over questions that are nothing of the sort.
+
+**Status:** Implemented. Read-on-demand only — nothing alerts on a rising fallback rate, which remains open (`DESIGN.md` §8).
+
+---
+
 ### DEC-028: Profile Export Format — Full-Fidelity JSON Dump, Metadata-Only for Documents
 
 **Date:** 2026-08-04
