@@ -1,6 +1,7 @@
 import type {
   HealthProfile,
   HealthProfileCreate,
+  DeletedHealthProfile,
   Condition,
   ConditionCreate,
   Medication,
@@ -66,8 +67,13 @@ export const profiles = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+  // Soft-deletes (issue #50) — the profile stays recoverable via restore()
+  // for the backend's retention window, then is permanently removed.
   delete: (id: string) =>
     request<void>(`/profiles/${id}`, { method: 'DELETE' }),
+  listDeleted: () => request<DeletedHealthProfile[]>('/profiles/deleted'),
+  restore: (id: string) =>
+    request<HealthProfile>(`/profiles/${id}/restore`, { method: 'POST' }),
 };
 
 /**

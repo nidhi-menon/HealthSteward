@@ -1544,6 +1544,35 @@ Related: issue #30, DEC-009, DEC-013, DEC-020, DEC-026, `DESIGN.md` §8.
 
 ---
 
+## 45. Soft-Delete Profiles with a 30-Day Recovery Window (#50, DEC-027)
+
+**Date:** 2026-08-04
+
+**Context:** Deleting a profile was immediate and permanent, cascading through every related table. The type-to-confirm modal is a high bar, but nothing existed on the other side of it — a mis-aimed confirmation destroyed months or years of caregiver-entered history with no undo. Issue #50.
+
+**What was built:**
+- Nullable `HealthProfile.deleted_at` (`src/data/models.py`) + Alembic migration `c8f2b41d7e93`.
+- `DELETE /api/profiles/{id}` sets `deleted_at` instead of deleting; `GET /api/profiles/deleted` lists soft-deleted profiles with `expires_at`/`days_remaining`; `POST /api/profiles/{id}/restore` clears the field.
+- `get_live_profile_or_404()` and `purge_expired_profiles()` (`src/api/health_profile.py`); the four child routers' `verify_profile_exists` now filter `deleted_at IS NULL` too.
+- Frontend: a collapsible "Recently deleted (n)" section on `ProfileList.tsx` with per-profile time remaining and a Restore button; `DeleteConfirmModal` gained an optional `recoveryDays` prop so its warning stops claiming the deletion can't be undone.
+- 16 new tests in `tests/test_soft_delete_profiles.py`. Suite 233 → 249.
+
+**Design notes:**
+
+1. **Lazy cleanup, not a scheduler** — the repo owner's call on the issue, to avoid building scheduling infrastructure speculatively for #25. Runs from both list endpoints, so the "Recently deleted" view alone is enough to trigger expiry.
+2. **Nothing under the profile is touched at delete time.** No cascade until the window expires, which is what makes restore a single field write and lets the retention window change later without touching any child table.
+3. **Restore doesn't purge first**, deliberately — otherwise a restore click could destroy the profile it was trying to bring back. A past-window profile stays restorable until something else purges it; `test_past_window_profile_is_still_restorable_until_purged` pins that.
+4. **`/profiles/deleted` is declared before `/profiles/{profile_id}`.** FastAPI matches in declaration order, so the reverse reads "deleted" as a profile id. Pinned by its own test, since a future reorder would break it silently.
+5. **`days_remaining` is computed server-side and floored at 0**, and `expires_at` is derived from `deleted_at` + the retention constant rather than stored — so changing the constant moves every existing countdown instead of leaving rows frozen at whatever it was when they were deleted.
+6. **The type-to-confirm bar stayed.** Recoverable isn't the same as cheap; the point of that modal is to stop the wrong profile being deleted at all, and #50 didn't ask to lower it.
+7. **Two routers deliberately out of scope.** `action_items.py` and `documents.py` never verified the profile existed (unknown ids return `200 []`), so a soft-deleted profile's action items stay readable to a stale URL. Bringing them in line is a behavior change beyond soft-delete — filed as #119.
+
+**Files changed:** `src/data/models.py`, `src/api/health_profile.py`, `src/api/{conditions,medications,doctors,appointments}.py`, `src/models/schemas.py`, `alembic/versions/c8f2b41d7e93_add_deleted_at_to_health_profiles.py`, `frontend/src/pages/{ProfileList,ProfileDetail}.tsx`, `frontend/src/components/Modal.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `frontend/src/constants.ts`, `tests/test_soft_delete_profiles.py`.
+
+Related: issue #50, issue #25 (scheduler), issue #49 (AVS file deletion — its natural hook point is now the purge path), issue #93, issue #119, DEC-027.
+
+---
+
 ## 46. Per-Profile JSON Export (#93, DEC-028)
 
 **Date:** 2026-08-04

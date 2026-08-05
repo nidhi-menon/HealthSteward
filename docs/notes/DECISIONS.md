@@ -898,6 +898,40 @@ Deliberately *not* overloading the existing `VisitPrep.used_fallback` column (DE
 
 ---
 
+### DEC-027: Soft-Delete Profiles with Lazy Expiry Cleanup, Not a Scheduled Job
+
+**Date:** 2026-08-04
+
+**Context:** `delete_profile` (`src/api/health_profile.py`) was a true, immediate `db.delete(profile)`, cascading through every related table. The frontend guards it with a type-to-confirm modal (`DeleteConfirmModal` — the user must type the exact profile name), which is a genuinely high bar, but there was no recovery path once that bar was cleared: no undo, no window, nothing. For the target caregiver persona — tracking a parent's or child's health over months or years, including hand-entered notes that exist in no other system — one mis-aimed confirmation destroys everything irrecoverably. Low probability, maximum severity. Issue #50.
+
+Export-before-delete was considered and explicitly rejected on the issue before implementation: it addresses a different use case (leaving the app, switching devices — now tracked as #93) and would not have helped the person who just deleted the wrong profile.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Soft-delete (`deleted_at`) + lazy cleanup on next profile-list access** | Recovery path with no new infrastructure; cleanup runs exactly when someone is already querying profiles; nothing under the profile is altered at delete time, so restore is a single field write | Expiry is only enforced when the app is used — a profile can outlive its 30 days on disk if nobody opens the app |
+| Soft-delete + a background scheduler | Expiry happens on time regardless of use | No job-scheduling infrastructure exists in the app; building it here means building it speculatively for #25 (scheduled push notifications), which isn't scoped or started |
+| Keep hard delete, add an export-before-delete step | No schema change | Doesn't address the actual failure mode — the person who deleted the wrong profile still has nothing to restore from |
+
+**Decision:** Added a nullable `HealthProfile.deleted_at` (migration `c8f2b41d7e93`). `DELETE /api/profiles/{id}` sets it instead of deleting the row; every profile lookup filters `deleted_at IS NULL`; `GET /api/profiles/deleted` lists soft-deleted profiles with a computed countdown; `POST /api/profiles/{id}/restore` clears the field. After `SOFT_DELETE_RETENTION_DAYS` (30), `purge_expired_profiles()` performs the real cascading delete, invoked lazily from the two list endpoints.
+
+Lazy cleanup over a scheduler is explicitly the repo owner's call, made in writing on [issue #50](https://github.com/nidhi-menon/HealthSteward/issues/50#issuecomment-5175382109) ("go with lazy cleanup on next relevant access ... Building shared scheduler infrastructure speculatively for #25 would be premature here"), with a cross-link left on #25 so the migration path isn't lost if a real scheduler is ever built.
+
+Three choices inside that scope constrain how this can be extended:
+
+1. **No cascade at soft-delete time.** Conditions, medications, documents and the rest are left exactly as they are, merely unreachable. This is what makes restore a single field write rather than an undo log, and it is why the recovery window can be extended or shortened later without touching any child table.
+2. **Restore deliberately does not purge first.** A profile past its window but not yet cleaned up is still restorable. The alternative — running cleanup on the restore path — means a restore click could destroy the very profile it was trying to bring back, which inverts the point of the feature.
+3. **Child routers filter too, but two routers were left out of scope.** `conditions`/`medications`/`doctors`/`appointments` all resolve the profile through `verify_profile_exists` and now 404 for a soft-deleted one, so a stale open tab can't keep reading or writing. `action_items.py` and `documents.py` never verified the profile at all (an unknown id returns `200 []` there today), so bringing them in line is a behavior change beyond soft-delete — filed as [issue #119](https://github.com/nidhi-menon/HealthSteward/issues/119) rather than folded in silently.
+
+**Reasoning:** The deciding constraint is that the failure mode being defended against is rare but total. That argues for the cheapest mechanism that makes it recoverable, not the most complete one — hence a nullable timestamp and a filter, rather than an audit log, a tombstone table, or a versioned-record scheme. Lazy cleanup's known weakness (expiry not enforced while the app sits unused) affects *when data is destroyed*, never *when it stops being visible*, so the user-facing contract holds regardless; the residual risk is data lingering on disk longer than 30 days, which is strictly the safer direction to fail in for a recovery feature.
+
+Scoped to profile-level deletion only, per the issue. Individual conditions/medications are single-item deletes where manual re-entry is a reasonable recovery path, and giving every table a recovery window would be a much larger change than the failure mode justifies.
+
+**Status:** Implemented. Follow-up gap tracked in [#119](https://github.com/nidhi-menon/HealthSteward/issues/119).
+
+---
+
 ### DEC-028: Profile Export Format — Full-Fidelity JSON Dump, Metadata-Only for Documents
 
 **Date:** 2026-08-04
