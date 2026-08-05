@@ -167,3 +167,7 @@ Desktop.ini
 # Linux
 *~
 .directory
+
+# Personal content drafts (not project docs)
+linkedin-posts/
+medium-posts/
