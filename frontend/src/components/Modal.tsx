@@ -67,6 +67,11 @@ interface DeleteConfirmModalProps {
   itemName: string;
   itemType?: string;
   isDeleting?: boolean;
+  // When set, the deletion is recoverable for this many days (issue #50) and
+  // the warning says so instead of claiming it can't be undone. The
+  // type-to-confirm bar stays either way — recoverable isn't the same as
+  // cheap, and the point is to stop the wrong profile being deleted at all.
+  recoveryDays?: number;
 }
 
 export function DeleteConfirmModal({
@@ -77,6 +82,7 @@ export function DeleteConfirmModal({
   itemName,
   itemType = 'item',
   isDeleting = false,
+  recoveryDays,
 }: DeleteConfirmModalProps) {
   const [confirmText, setConfirmText] = useState('');
 
@@ -108,10 +114,24 @@ export function DeleteConfirmModal({
             </div>
             <div>
               <h3 className="text-sm font-medium text-red-800">
-                This action cannot be undone
+                {recoveryDays
+                  ? `Recoverable for ${recoveryDays} days`
+                  : 'This action cannot be undone'}
               </h3>
               <p className="mt-1 text-sm text-red-700">
-                This will permanently delete the {itemType} <strong>"{itemName}"</strong> and all associated data including conditions, medications, doctors, and appointments.
+                {recoveryDays ? (
+                  <>
+                    This will delete the {itemType} <strong>"{itemName}"</strong> and all associated
+                    data including conditions, medications, doctors, and appointments. You can
+                    restore it from "Recently deleted" for {recoveryDays} days, after which it is
+                    permanently deleted.
+                  </>
+                ) : (
+                  <>
+                    This will permanently delete the {itemType} <strong>"{itemName}"</strong> and all
+                    associated data including conditions, medications, doctors, and appointments.
+                  </>
+                )}
               </p>
             </div>
           </div>

@@ -49,6 +49,21 @@ class HealthProfileResponse(HealthProfileBase):
     updated_at: datetime
 
 
+class DeletedHealthProfileResponse(HealthProfileResponse):
+    """A soft-deleted profile in the "Recently deleted" view (issue #50).
+
+    `expires_at` and `days_remaining` are computed, not stored — the only
+    persisted state is `deleted_at`, and the retention window is a constant
+    (`SOFT_DELETE_RETENTION_DAYS`). Deriving them here keeps the countdown
+    correct if that constant ever changes, rather than freezing whatever it
+    was at deletion time into every row.
+    """
+
+    deleted_at: datetime
+    expires_at: datetime
+    days_remaining: int
+
+
 # ============================================================================
 # Condition Schemas
 # ============================================================================

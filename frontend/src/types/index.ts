@@ -11,6 +11,16 @@ export interface HealthProfile {
   updated_at: string;
 }
 
+// A soft-deleted profile in the "Recently deleted" view (issue #50).
+// expires_at/days_remaining are computed server-side from deleted_at and the
+// backend's retention constant — don't recompute them here, or the countdown
+// silently disagrees with the server if that constant ever changes.
+export interface DeletedHealthProfile extends HealthProfile {
+  deleted_at: string;
+  expires_at: string;
+  days_remaining: number;
+}
+
 export interface HealthProfileCreate {
   name: string;
   date_of_birth?: string | null;
