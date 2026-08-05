@@ -7,10 +7,12 @@ import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { Input, DatePicker } from '../components/Input';
+import { SOFT_DELETE_RETENTION_DAYS } from '../constants';
 import type { HealthProfileCreate } from '../types';
 
 export default function ProfileList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [formData, setFormData] = useState<HealthProfileCreate>({ name: '' });
   const queryClient = useQueryClient();
 
@@ -19,12 +21,27 @@ export default function ProfileList() {
     queryFn: profiles.list,
   });
 
+  // Soft-deleted profiles still inside their recovery window (issue #50).
+  // Always fetched rather than only on expand, so the "Recently deleted (n)"
+  // toggle can be hidden entirely when there's nothing to recover.
+  const { data: deletedList } = useQuery({
+    queryKey: ['profiles', 'deleted'],
+    queryFn: profiles.listDeleted,
+  });
+
   const createMutation = useMutation({
     mutationFn: profiles.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       setIsModalOpen(false);
       setFormData({ name: '' });
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: profiles.restore,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
     },
   });
 
@@ -88,6 +105,49 @@ export default function ProfileList() {
               </Card>
             </Link>
           ))}
+        </div>
+      )}
+
+      {deletedList && deletedList.length > 0 && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setShowDeleted((open) => !open)}
+            className="text-sm font-medium text-gray-500 hover:text-gray-700"
+          >
+            {showDeleted ? '▾' : '▸'} Recently deleted ({deletedList.length})
+          </button>
+
+          {showDeleted && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm text-gray-500">
+                Deleted profiles are kept for {SOFT_DELETE_RETENTION_DAYS} days, then permanently
+                deleted. Restore one to bring it back with all of its data.
+              </p>
+              {deletedList.map((profile) => (
+                <Card key={profile.id}>
+                  <CardContent className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <h3 className="font-medium text-gray-900 truncate">{profile.name}</h3>
+                      <p className="text-sm text-gray-500">
+                        Deleted {formatDateString(profile.deleted_at)} ·{' '}
+                        {profile.days_remaining === 0
+                          ? 'less than a day left'
+                          : `${profile.days_remaining} day${profile.days_remaining === 1 ? '' : 's'} left`}
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      onClick={() => restoreMutation.mutate(profile.id)}
+                      disabled={restoreMutation.isPending}
+                    >
+                      Restore
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

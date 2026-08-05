@@ -16,9 +16,17 @@ router = APIRouter(prefix="/api/profiles/{profile_id}/medications", tags=["Medic
 
 
 async def verify_profile_exists(profile_id: str, db: AsyncSession) -> None:
-    """Verify that the profile exists."""
+    """Verify that the profile exists and hasn't been soft-deleted.
+
+    A soft-deleted profile (issue #50, DEC-027) has to 404 here too, not just
+    on the profile routes — otherwise its data would stay readable and
+    writable through a URL the user still had open after deleting it.
+    """
     result = await db.execute(
-        select(HealthProfile).where(HealthProfile.id == profile_id)
+        select(HealthProfile).where(
+            HealthProfile.id == profile_id,
+            HealthProfile.deleted_at.is_(None),
+        )
     )
     if not result.scalar_one_or_none():
         raise HTTPException(
