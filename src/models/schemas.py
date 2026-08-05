@@ -303,6 +303,34 @@ class ConversationLogResponse(BaseModel):
 
 
 # ============================================================================
+# Diagnostics Schemas
+# ============================================================================
+
+
+class VisitPrepFallbackRateResponse(BaseModel):
+    """How often recent visit-prep runs fell back off the agentic loop (issue #30).
+
+    `agentic_runs + fallback_runs == runs_considered`. `hard_failure_runs` is a
+    subset of `fallback_runs` (the runs where single-shot failed too and the
+    user got hardcoded placeholder questions), not a third category.
+
+    `reasons` can sum to more than `fallback_runs`: a run that abandoned the
+    agentic loop for one reason and then hit an unreachable backend contributes
+    to both, which is the point — otherwise a backend breaking tool use on its
+    way down would be indistinguishable from a plain outage.
+    """
+
+    runs_considered: int
+    agentic_runs: int
+    fallback_runs: int
+    hard_failure_runs: int
+    fallback_rate: float
+    reasons: dict[str, int]
+    oldest_run_at: Optional[datetime] = None
+    newest_run_at: Optional[datetime] = None
+
+
+# ============================================================================
 # Document Schemas
 # ============================================================================
 
