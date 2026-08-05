@@ -103,7 +103,7 @@ Results are diffed against the prior run (`eval/results/`, gitignored) rather th
 
 **What's still missing (real gaps, not scope cuts):**
 - **LLM-as-judge tier (v2), not yet built.** The properties v1's deterministic checks can't reach — relevance/usefulness (no cheap proxy, needs a rubric), non-redundancy, and deeper groundedness for inferential claims a simple entity-string match can't verify (e.g. "how is my TSH trending" — conceptually grounded in lab data mentioned elsewhere in the same response, but not a literal string match; tracked as issue #76) — are the named v2 backlog per `docs/tdd.html`'s Evaluation Plan tab.
-- **No visibility into agentic-loop fallback rate in production.** `ConversationLog` has the data, but nothing surfaces how often the loop falls back to single-shot in practice outside of an eval run. A silently degrading backend (e.g. a Claude API or Ollama version change that breaks tool-calling) would be invisible.
+- ~~**No visibility into agentic-loop fallback rate in production.**~~ *Closed by DEC-026 (issue #30):* every `prepare_visit()` run now records how it was actually produced — agentic loop, or single-shot fallback and why — in `ConversationLog.extra_data["run_diagnostics"]`, readable via `GET /api/diagnostics/visit-prep-fallback`. Still a read-on-demand number rather than an alert: nothing notices a rising fallback rate unless someone looks.
 - **No frontend test coverage** (tracked: issue #27).
 
 ## 9. Alternatives Considered

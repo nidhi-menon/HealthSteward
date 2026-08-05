@@ -1514,4 +1514,34 @@ Related: issue #14, issue #47.
 
 ---
 
+## 44. Surfaced the Agentic-Loop Fallback Rate (#30, DEC-026)
+
+**Date:** 2026-08-04
+
+**Context:** DEC-013's agentic loop falls back to single-shot generation rather than failing — the right call for the patient, but it meant a backend that stopped doing reliable tool use would degrade the app silently. `prepare_visit()` logged a `logger.warning` and moved on; nothing was readable back through the app. `DESIGN.md` §8 listed this as one of three remaining real gaps. Issue #30.
+
+**What was built:**
+- Per-run diagnostics on every `prepare_visit()` run, stored as `ConversationLog.extra_data["run_diagnostics"]` = `{"agentic_path": bool, "fallback_reason": str | None}` (`src/agents/base.py`'s `_log_conversation` gained a `run_diagnostics` param; `src/agents/visit_prep.py` threads the reason through).
+- `AgenticLoopNotConvergedError(RuntimeError)` and `_classify_agentic_failure()`, so turn exhaustion is distinguishable from a backend error — previously both were a bare `RuntimeError` caught by the same handler.
+- `_log_hard_failure()`, covering the case where both paths fail and there is no response to log at all.
+- `GET /api/diagnostics/visit-prep-fallback?limit=N` (`src/api/diagnostics.py`, new router) returning runs considered, agentic vs. fallback counts, the rate, hard failures, and a per-reason breakdown over a rolling window.
+- 11 new tests in `tests/test_diagnostics.py` — one per fallback reason plus endpoint aggregation. Suite 233 → 244.
+
+**Design notes:**
+
+1. **No migration.** `extra_data` is an existing JSON column already carrying `system` / `model` / `prompt_version` / `tool_calls`; the repo owner picked it over a dedicated counter table on the issue. See DEC-026 for the full tradeoff.
+2. **`used_fallback` was deliberately left alone.** The name collides, but DEC-020's flag means "the model produced nothing, these are placeholders" and drives a user-facing warning. An agentic → single-shot fallback still returns a real personalized answer; reusing the flag would warn the patient that good questions are generic ones.
+3. **Reasons are an enum, not free text**, and a hard failure records both `backend_unavailable` and the `prior_agentic_failure` that preceded it — a backend breaking tool use on its way down would otherwise look like a plain outage.
+4. **Rolling window, not an all-time rate.** The operative question is "is tool use working *now*"; an all-time average is slow to move once a backend starts failing.
+5. **Not admin-gated, because there is no auth to gate on.** The issue asked for an "admin-only" endpoint; this app has no authentication anywhere (`/api/settings` exposes and accepts API keys unauthenticated today), so this is a plain endpoint on a localhost-only app. Flagged for review rather than inventing an auth scheme here.
+6. **`json_extract` in the query** filters to rows that actually carry diagnostics, so `limit` means "the last N visit-prep runs" rather than "whatever survives filtering the last N assistant rows." SQLite-specific; noted in the code as the line to change if the DB ever moves.
+
+**Also:** updated `DESIGN.md` §8's "no visibility into agentic-loop fallback rate" bullet, which this makes untrue — struck through with a pointer to DEC-026 rather than deleted, since the weaker residual gap (nothing *alerts*, someone has to look) is still real.
+
+**Files changed:** `src/agents/visit_prep.py`, `src/agents/base.py`, `src/api/diagnostics.py`, `src/main.py`, `src/models/schemas.py`, `tests/test_diagnostics.py`, `docs/notes/DECISIONS.md`, `docs/notes/DESIGN.md`.
+
+Related: issue #30, DEC-009, DEC-013, DEC-020, DEC-026, `DESIGN.md` §8.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

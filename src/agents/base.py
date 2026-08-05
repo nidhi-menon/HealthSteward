@@ -78,6 +78,7 @@ class BaseAgent:
         model: Optional[str] = None,
         tool_calls: Optional[list[dict[str, Any]]] = None,
         prompt_version: Optional[str] = None,
+        run_diagnostics: Optional[dict[str, Any]] = None,
     ) -> None:
         """Log conversation to database for training data collection.
 
@@ -91,6 +92,12 @@ class BaseAgent:
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
             model: Model used (defaults to anthropic_model from settings)
+            tool_calls: Agentic-loop tool calls made while producing this response
+            prompt_version: Version tag of the system prompt used
+            run_diagnostics: Per-run diagnostics stored under
+                `extra_data["run_diagnostics"]` on the assistant row — how this
+                response was actually produced (agentic loop vs. single-shot
+                fallback, and why). See DEC-026 and `src/api/diagnostics.py`.
         """
         try:
             model_name = model or self.settings.anthropic_model
@@ -117,6 +124,8 @@ class BaseAgent:
                 assistant_extra_data["tool_calls"] = tool_calls
             if prompt_version:
                 assistant_extra_data["prompt_version"] = prompt_version
+            if run_diagnostics:
+                assistant_extra_data["run_diagnostics"] = run_diagnostics
 
             assistant_log = ConversationLog(
                 role="assistant",
