@@ -932,4 +932,36 @@ Scoped to profile-level deletion only, per the issue. Individual conditions/medi
 
 ---
 
+### DEC-028: Profile Export Format — Full-Fidelity JSON Dump, Metadata-Only for Documents
+
+**Date:** 2026-08-04
+
+**Context:** HealthSteward holds the only copy of a user's health history, on one machine that probably isn't backed up. "Your data never leaves your machine" cuts both ways: it also means if the machine dies, the record dies with it. No export path existed at all — not structured, not human-readable. Issue #93.
+
+Three scoping questions were resolved by the repo owner in writing on [issue #93](https://github.com/nidhi-menon/HealthSteward/issues/93#issuecomment-5175381931) before implementation: **per-profile** rather than one-click-everything (matching the per-profile scoping DEC-027 uses for deletion); **plaintext** rather than encrypted, since no encryption-at-rest mechanism exists yet to hang it off (#92 is unstarted) and encrypting the export alone would be a partial, misleading guarantee; and a **local file the user manages themselves**, with no cloud destination, since a cloud target would need its own trust-boundary discussion rather than arriving as a quiet default.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Full-fidelity dump: every profile-scoped table, every column, keys included** | Restorable into a faithful copy; nothing silently missing; the shape is mechanical, so a column added to a model is exported automatically | Larger file; exposes internal ids and `file_path`s to anyone reading the backup |
+| Curated "user-meaningful fields only" export | Smaller, more readable by hand | Drops the foreign keys, so which appointment was with which doctor is unrecoverable — the file stops being a backup and becomes a summary |
+| Embed uploaded PDFs as base64 | Genuinely complete — a restore on a new machine has the source documents | Multiplies file size by the entire document corpus; makes the export unreadable as text; the parsed contents (which is what the app actually uses) are already included |
+
+**Decision:** One `GET /api/profiles/{id}/export` endpoint returning a JSON document with `export_format_version`, `exported_at`, `app_version`, the profile's own fields, and a top-level list per profile-scoped table — conditions, medications, doctors, appointments, documents, vitals, lab orders, referrals, follow-ups, nudge states — plus `visit_preps`, which hangs off appointments rather than the profile. Primary and foreign keys are included. Served with `Content-Disposition: attachment` so the browser saves it rather than rendering it.
+
+Three choices worth recording:
+
+1. **`export_format_version` ships in v1, before anything needs it.** It is the one field that is genuinely expensive to add later — files already written to disk won't have it, so a future importer would have to guess a document's shape from its contents. Cheap now, impossible retroactively.
+2. **Serialization is driven off the SQLAlchemy mapper, not a hand-written field list.** A column added to a model is exported automatically. The failure mode of the alternative is silent and only discovered at restore time: a new field simply wouldn't be in anyone's backup, and nothing would say so.
+3. **Documents are metadata + parsed contents, not the source PDFs.** The parsed contents are what the app actually reads; the PDFs are large, opaque as base64, and still sitting on disk where `file_path` records them. This is a real limitation, so the export states it in a `documents_note` field inside the file itself rather than leaving a reader years later to infer it from an absence.
+
+Nothing is redacted. DEC-006's anonymization exists to protect data crossing a boundary to an external LLM provider; this file is written by the user, for the user, and never leaves their machine — anonymizing it would corrupt the backup to defend against a threat model that doesn't apply.
+
+**Reasoning:** The value of a backup is measured entirely at restore time, and every reduction in fidelity is a restore that silently produces something less than what was lost. That argues for dumping everything and accepting a larger file, rather than curating — the curated version is a *report*, which is a legitimate but different feature (the human-readable export in #99). The one place fidelity was traded away, the source PDFs, is the one place where the alternative is a category change in file size for content the application doesn't read back.
+
+**Status:** Export implemented. **Import deliberately not implemented** — its semantics (merge into an existing profile, replace that profile's contents, or create a new profile from the document) determine whether a restore can duplicate or destroy a user's only copy of their history, and the three readings lead to materially different features. Raised as an open question on [issue #93](https://github.com/nidhi-menon/HealthSteward/issues/93) rather than guessed at; #93 stays open until it lands.
+
+---
+
 *Last updated: 2026-08-04*
