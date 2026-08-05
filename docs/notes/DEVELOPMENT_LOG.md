@@ -1665,4 +1665,43 @@ Related: issue #49, issue #50, DEC-027, DEC-030.
 
 ---
 
+## 50. OpenMed PII Benchmark Harness — Baselines Measured, OpenMed Half Blocked (#122)
+
+**Date:** 2026-08-05
+
+**Context:** DEC-025 hardened the hand-rolled regex list rather than adopting a PII-detection library, and parked library adoption on #92. #122 asked for a prototype benchmark of OpenMed (Apache-2.0, local-first, 18 HIPAA Safe Harbor categories) against the current approach — explicitly an evaluation, not a production swap: no changes to `src/utils/anonymization.py`, and no `openmed` in `requirements.txt`/`environment.yml`.
+
+**What was built:**
+- `eval/openmed_pii_cases.py` — 67 positive and 24 negative cases transcribed from `tests/test_anonymization.py`, each citing the test it came from, tagged by PII category.
+- `eval/openmed_pii_prototype.py` — scores three systems (`regex`, `regex+ner`, `openmed`) on that corpus by one rule, reports per-category rather than as one accuracy number, and measures load time, per-text latency, and peak RSS. `--json` writes a machine-readable report stamped with the platform it ran on.
+- Nothing in `src/` imports either file and `tests/` does not collect them; suite unchanged at 270.
+
+**What the baselines say** (the useful half — see below for what's missing):
+
+| system | PII caught | clinical text intact | mean/text | peak RSS |
+|--------|-----------|---------------------|-----------|----------|
+| `regex` (fresh clone: spaCy in neither manifest) | 63/67 (94%) | 24/24 (100%) | 0.02 ms | 15 MB |
+| `regex+ner` (DEC-006 as described) | 66/67 (99%) | 23/24 (96%) | 5.4 ms | 159 MB |
+
+Two findings worth more than the aggregate:
+
+1. **The NER half over-redacts clinical content.** `"Lisinopril 10 mg daily"` → `"[REDACTED] 10 mg daily"` — spaCy tags the drug name as a PERSON. DEC-025's reasoning leans hard on negative cases asserting clinical content survives, but every one of those tests constructs `Anonymizer(use_ner=False)`, so the NER path has no negative coverage at all and this was invisible. Filed as its own issue rather than fixed here, since #122 is explicitly scoped to not touch production anonymization.
+2. **`Dr. Smith` still leaks in `"Call Dr. Smith at 555-123-4567"`** even with NER on — spaCy doesn't tag it as PERSON in that construction, though it does in `"Referred by Dr. Sarah Johnson last spring"`. Single-token surnames after a title are the weak case.
+
+**What's missing, and why:** the OpenMed numbers. `huggingface.co` is denied by this environment's egress policy (403 at CONNECT), so model weights can't be fetched and no OpenMed accuracy, latency, or memory figure was measured. The harness reports this as an explicitly skipped system with the failure reason attached — deliberately, so "couldn't load the model" can never be silently scored as "detected no PII," which would read as a real result. Everything determinable from the offline package registry is in the issue's findings comment: the English default is 44M params (`OpenMed-PII-SuperClinical-Small-44M-v1`) and the smallest is 33M, both well under the 109M-434M the issue estimated.
+
+**Design notes:**
+
+1. **Scoring is asymmetric on purpose.** A leak (PII survives) and an over-redaction (clinical text altered) are both failures but not the same failure — a detector that redacts everything has a perfect leak rate and is useless. Positives pass when no `must_remove` substring survives; negatives pass only on byte-identical output.
+2. **`extract_pii`, not `deidentify`.** `deidentify` does its own masking with per-label placeholders (`[NAME]`, `[EMAIL]`); rewriting OpenMed's spans with the same `[REDACTED]` the current anonymizer uses is what makes the exact-equality check on negatives meaningful.
+3. **The probe call is eager.** The first `extract_pii` is what downloads weights, so it runs at build time — that's the only way an unreachable model host surfaces as an unavailable system rather than as 91 silent misses.
+4. **`regex+ner` is scored separately from `regex`, and skipped loudly if spaCy is absent.** spaCy is in neither manifest, so the regex-only row is what a fresh clone actually runs; reporting those numbers under the DEC-006 label would overstate the real baseline.
+5. **Peak RSS is process-cumulative** (`ru_maxrss` is a high-water mark), so the report prints the post-import floor and says to compare deltas or isolate with `--systems`. Worth stating because the number moves ~500 MB depending on whether torch happens to be installed next to spaCy — thinc imports it when it finds it.
+
+**Files changed:** `eval/openmed_pii_cases.py`, `eval/openmed_pii_prototype.py`.
+
+Related: issue #122, issue #73, issue #92, DEC-006, DEC-025, DEC-009.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
