@@ -1685,7 +1685,7 @@ Related: issue #49, issue #50, DEC-027, DEC-030.
 
 Two findings worth more than the aggregate:
 
-1. **The NER half over-redacts clinical content.** `"Lisinopril 10 mg daily"` → `"[REDACTED] 10 mg daily"` — spaCy tags the drug name as a PERSON. DEC-025's reasoning leans hard on negative cases asserting clinical content survives, but every one of those tests constructs `Anonymizer(use_ner=False)`, so the NER path has no negative coverage at all and this was invisible. Filed as its own issue rather than fixed here, since #122 is explicitly scoped to not touch production anonymization.
+1. **The NER half over-redacts clinical content.** `"Lisinopril 10 mg daily"` → `"[REDACTED] 10 mg daily"` — spaCy tags the drug name as a PERSON. DEC-025's reasoning leans hard on negative cases asserting clinical content survives, but every one of those tests constructs `Anonymizer(use_ner=False)`, so the NER path has no negative coverage at all and this was invisible. Filed as #125 rather than fixed here, since #122 is explicitly scoped to not touch production anonymization.
 2. **`Dr. Smith` still leaks in `"Call Dr. Smith at 555-123-4567"`** even with NER on — spaCy doesn't tag it as PERSON in that construction, though it does in `"Referred by Dr. Sarah Johnson last spring"`. Single-token surnames after a title are the weak case.
 
 **What's missing, and why:** the OpenMed numbers. `huggingface.co` is denied by this environment's egress policy (403 at CONNECT), so model weights can't be fetched and no OpenMed accuracy, latency, or memory figure was measured. The harness reports this as an explicitly skipped system with the failure reason attached — deliberately, so "couldn't load the model" can never be silently scored as "detected no PII," which would read as a real result. Everything determinable from the offline package registry is in the issue's findings comment: the English default is 44M params (`OpenMed-PII-SuperClinical-Small-44M-v1`) and the smallest is 33M, both well under the 109M-434M the issue estimated.
@@ -1700,7 +1700,7 @@ Two findings worth more than the aggregate:
 
 **Files changed:** `eval/openmed_pii_cases.py`, `eval/openmed_pii_prototype.py`.
 
-Related: issue #122, issue #73, issue #92, DEC-006, DEC-025, DEC-009.
+Related: issue #122, issue #125 (NER over-redaction), PR #124, issue #73, issue #92, DEC-006, DEC-025, DEC-009.
 
 ---
 
