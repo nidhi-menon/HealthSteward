@@ -24,7 +24,7 @@ from sqlalchemy.orm import selectinload
 
 from src.agents.llm_backend import uses_openai_style_wire_format
 from src.data.models import Appointment, Medication
-from src.utils.anonymization import Anonymizer
+from src.utils.anonymization import Anonymizer, RedactionEvent
 
 
 class UnknownToolError(Exception):
@@ -165,6 +165,11 @@ class VisitPrepTools:
         # such an appointment would anchor the window to its own date and
         # window out the very history it's asking about.
         self.current_appointment_id = current_appointment_id
+        # Redaction events (issue #16) from anonymizing tool results,
+        # aggregated across every tool call this executor makes — read by
+        # the caller after the agentic loop finishes and folded into the
+        # per-visit-prep-request total logged on ConversationLog.
+        self.redaction_events: list[RedactionEvent] = []
 
     async def execute(self, name: str, tool_input: dict[str, Any]) -> str:
         """Execute a tool by name and return an anonymized string result."""
@@ -286,7 +291,8 @@ class VisitPrepTools:
 
         lines = []
         for appt in appointments[:10]:  # bound the result size
-            anon = self.anonymizer.anonymize_appointment(appt)
+            anon, events = self.anonymizer.anonymize_appointment(appt)
+            self.redaction_events.extend(events)
             lines.append(f"### Visit with {anon.doctor.title} on {anon.scheduled_date}")
             if anon.purpose:
                 lines.append(f"Purpose: {anon.purpose}")
