@@ -964,4 +964,35 @@ Nothing is redacted. DEC-006's anonymization exists to protect data crossing a b
 
 ---
 
-*Last updated: 2026-08-04*
+---
+
+### DEC-029: Log Redaction Events (Type + Span + Stable Hashed ID) Per Visit-Prep Request
+
+**Date:** 2026-08-05
+
+**Context:** `Anonymizer.anonymize_text()` (DEC-006's implementation) did the regex/NER substitution and discarded what it matched. There was no record of what was found and redacted for a given visit-prep call, so a name or identifier slipping past the regex/NER net was unauditable after the fact — a Reddit comment on the pluggable-backend post put it as "redaction recall is the whole ballgame ... worth logging what got redacted so you can audit misses." Issue #16.
+
+A community follow-up on the issue clarified two points before implementation: the correct aggregation granularity is **per visit-prep request**, not per-document — AVS PDFs are parsed entirely locally by Ollama and never anonymized at all, since nothing derived from them leaves the machine at that stage; redaction only happens on live profile/appointment data at the moment it's about to reach whichever LLM is generating visit prep. And entities should carry a **stable per-entity ID**, not just an aggregate count, so a later write-back-capable agentic tool could be checked against exactly which entities a given run could and couldn't see.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Return `(text, list[RedactionEvent])` from every anonymize_* method; aggregate per-request in `ConversationLog.extra_data`** | No schema migration (`extra_data` is already a flexible JSON column); type+span is auditable without ever re-exposing the matched value; stable ids support future write-back auditing | Threads a second return value through every call site (`anonymize_profile`, `anonymize_doctor`, `anonymize_appointment`, `VisitPrepTools`, Stage 4 of context selection) |
+| Log a per-pattern redaction *count* only | Simplest possible change | Can't answer "did entity X make it into this specific run" — the exact question a future write-back tool would need answered, per the issue's follow-up discussion |
+| Log the matched substring alongside its type | Maximally useful for auditing false negatives by hand | Directly defeats DEC-006's purpose — logging the very PII that redaction exists to keep off the LLM's — and off disk's — audit trail |
+| Random UUID per redaction event | Simple to generate | Not reproducible — two runs against the same unchanged field would log unrelated ids, making "is this the same entity as last time" unanswerable |
+
+**Decision:** `anonymize_text()` now returns `(anonymized_text, list[RedactionEvent])`; `RedactionEvent` carries `entity_id`, `entity_type` (the `PII_PATTERNS` key or `"PERSON"` for NER), `start`/`end` span offsets, `field_name`, and an optional `document_id`. `entity_id` is `sha256(profile_id | field_name | entity_type | occurrence_index)`, truncated — deterministic and reproducible across runs against the same underlying field, never derived from the matched content. Every anonymize_* method (`anonymize_text`, `anonymize_profile`, `anonymize_doctor`, `anonymize_appointment`) and both call sites that use them (`VisitPrepTools` in `src/agents/tools.py`, Stage 4 of `context_selection.py`) now return/aggregate events. `VisitPrepAgent.prepare_visit` collects everything into `self.last_redaction_events` across the whole request — profile/appointment anonymization, Stage 4 context selection, and any agentic-loop tool-result anonymization — and `_log_conversation` (`src/agents/base.py`) writes it to the assistant `ConversationLog` row under `extra_data["redaction_events"]`.
+
+Where the underlying record has a `document_id` column (`Vitals`, `LabOrder`, `Referral`, `FollowUp` per `src/data/models.py`), an event can be tagged with it — `RedactionEvent.document_id` is threaded through as an optional parameter for exactly this. `Condition`, `Medication`, and `Appointment` have no `document_id` column and none was added — per the issue's explicit non-goal, most PII-bearing free text (visit notes, additional concerns) is user-typed and was never document-sourced to begin with, so a full migration wouldn't fully solve "per-document" traceability anyway. Fields with no document lineage — including all of today's actual anonymize_text call sites (condition/doctor notes, appointment purpose/notes, additional_concerns) — log `RedactionEvent.to_dict()`'s explicit `"document_link": "none"` rather than omitting the key or fabricating a value.
+
+**Reasoning:** The deciding factor is that this is an audit feature, and a redaction audit that logs the very thing it's trying to prove was removed is worse than no audit at all — so type+span+stable-id was the only shape on the table that doesn't reopen DEC-006's trust boundary while still being genuinely useful (a person or future tool can ask "was entity `<hash>` present in this run" without ever reconstructing what it was). Threading a second return value through every anonymize_* call site is real code churn, but it's a one-time cost paid once at the boundary that already exists (DEC-006's), rather than a new boundary.
+
+A pre-existing duplication was also fixed in passing: `VisitPrepAgent._build_anonymized_context` was calling `anonymize_text` on `condition.notes` a second time (the first being inside `anonymize_profile`, whose result went unused for that field). Left as-is it would have doubled every condition-notes redaction event; fixed by reusing `anonymize_profile`'s already-anonymized notes instead of re-anonymizing.
+
+**Status:** Implemented. No UI surfacing (matches the precedent set by #30/DEC-026's diagnostics fields) — the data is queryable directly from `extra_data`. New tests added to `tests/test_anonymization.py`, `tests/test_agent_tools.py`, and `tests/test_visit_prep.py` covering: type/span never the raw value; stable entity ids across repeated runs and distinct ids across different field names; `document_id` tagging when supplied and honest `"document_link": "none"` when not; and end-to-end aggregation into `ConversationLog.extra_data["redaction_events"]`.
+
+---
+
+*Last updated: 2026-08-05*

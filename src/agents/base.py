@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import get_settings
 from src.data.models import ConversationLog
+from src.utils.anonymization import RedactionEvent
 
 
 class BaseAgent:
@@ -79,6 +80,7 @@ class BaseAgent:
         tool_calls: Optional[list[dict[str, Any]]] = None,
         prompt_version: Optional[str] = None,
         run_diagnostics: Optional[dict[str, Any]] = None,
+        redaction_events: Optional[list[RedactionEvent]] = None,
     ) -> None:
         """Log conversation to database for training data collection.
 
@@ -98,6 +100,11 @@ class BaseAgent:
                 `extra_data["run_diagnostics"]` on the assistant row — how this
                 response was actually produced (agentic loop vs. single-shot
                 fallback, and why). See DEC-026 and `src/api/diagnostics.py`.
+            redaction_events: PII redaction events aggregated across this
+                whole visit-prep request, stored under
+                `extra_data["redaction_events"]` on the assistant row — type
+                + span + stable per-entity id only, never the matched
+                substring (issue #16, DEC-006).
         """
         try:
             model_name = model or self.settings.anthropic_model
@@ -126,6 +133,10 @@ class BaseAgent:
                 assistant_extra_data["prompt_version"] = prompt_version
             if run_diagnostics:
                 assistant_extra_data["run_diagnostics"] = run_diagnostics
+            if redaction_events:
+                assistant_extra_data["redaction_events"] = [
+                    e.to_dict() for e in redaction_events
+                ]
 
             assistant_log = ConversationLog(
                 role="assistant",

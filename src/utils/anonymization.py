@@ -25,6 +25,7 @@ Per DEC-006:
 - Free-text notes → Regex + NER scanning
 """
 
+import hashlib
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -37,6 +38,66 @@ try:
 except ImportError:
     SPACY_AVAILABLE = False
     spacy = None
+
+
+@dataclass
+class RedactionEvent:
+    """Record of a single PII match found and redacted (issue #16).
+
+    Deliberately carries only the entity TYPE and SPAN, never the matched
+    substring itself — logging the redacted value would defeat the purpose
+    of anonymization (DEC-006). `entity_id` is a deterministic hash, not a
+    random UUID, so repeated runs against the same underlying field produce
+    the same id — see `_make_entity_id`.
+    """
+
+    entity_id: str
+    entity_type: str  # PII_PATTERNS key (e.g. "phone", "mrn") or "PERSON" (NER)
+    start: int  # offset into the text state the match was found against
+    end: int
+    field_name: str
+    # Only set for fields sourced from a Document (Vitals/LabOrder/Referral/
+    # FollowUp per src/data/models.py). None for everything else — including
+    # Condition/Medication/Appointment, which have no document_id column at
+    # all, and user-typed fields (notes, additional_concerns) which were
+    # never document-sourced to begin with.
+    document_id: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        """Serialize for ConversationLog.extra_data.
+
+        Uses an explicit `"document_link": "none"` rather than omitting the
+        key when there's no document lineage — logging honestly that there
+        is no link, rather than a key's mere absence looking like an
+        oversight (issue #16).
+        """
+        d = {
+            "entity_id": self.entity_id,
+            "entity_type": self.entity_type,
+            "start": self.start,
+            "end": self.end,
+            "field_name": self.field_name,
+        }
+        if self.document_id:
+            d["document_id"] = self.document_id
+        else:
+            d["document_link"] = "none"
+        return d
+
+
+def _make_entity_id(
+    profile_id: Optional[str],
+    field_name: str,
+    entity_type: str,
+    occurrence_index: int,
+) -> str:
+    """Deterministic per-entity id: sha256((profile_id, field_name, entity_type,
+    occurrence_index)), truncated. NOT a random UUID and NOT derived from the
+    matched content itself — stable across repeated runs against the same
+    underlying field, which is the whole point (issue #16).
+    """
+    key = f"{profile_id}|{field_name}|{entity_type}|{occurrence_index}"
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
 @dataclass
@@ -293,7 +354,14 @@ class Anonymizer:
             return f"your {specialty}"
         return "Doctor"
 
-    def anonymize_text(self, text: Optional[str]) -> Optional[str]:
+    def anonymize_text(
+        self,
+        text: Optional[str],
+        *,
+        profile_id: Optional[str] = None,
+        field_name: str = "",
+        document_id: Optional[str] = None,
+    ) -> tuple[Optional[str], list[RedactionEvent]]:
         """Anonymize free-text by removing detected PII.
 
         Uses regex patterns for common PII formats, and optionally
@@ -301,52 +369,93 @@ class Anonymizer:
 
         Args:
             text: Free-text that may contain PII
+            profile_id: HealthProfile id the text belongs to, used only to
+                derive stable per-entity ids (issue #16) — never logged raw.
+            field_name: Identifier for which field this is (e.g.
+                "condition:<id>:notes"), also only used for entity-id
+                derivation and as the `field_name` on each RedactionEvent.
+            document_id: Document this field was sourced from, if any. Only
+                Vitals/LabOrder/Referral/FollowUp have document lineage —
+                see RedactionEvent's docstring.
 
         Returns:
-            Anonymized text with PII replaced by [REDACTED]
+            (anonymized_text, redaction_events) — events carry only entity
+            type + span, never the matched substring (DEC-006).
         """
         if not text:
-            return text
+            return text, []
 
         result = text
+        events: list[RedactionEvent] = []
+        occurrence_counts: dict[str, int] = {}
 
         # Apply regex patterns in declaration order — see the ordering note on
         # PII_PATTERNS. Label-anchored patterns use a replacement template that
         # preserves their label; everything else redacts the whole match.
         for pattern_name, pattern in PII_PATTERNS.items():
             replacement = PII_REPLACEMENTS.get(pattern_name, DEFAULT_REDACTION)
+            for match in pattern.finditer(result):
+                idx = occurrence_counts.get(pattern_name, 0)
+                occurrence_counts[pattern_name] = idx + 1
+                events.append(RedactionEvent(
+                    entity_id=_make_entity_id(profile_id, field_name, pattern_name, idx),
+                    entity_type=pattern_name,
+                    start=match.start(),
+                    end=match.end(),
+                    field_name=field_name,
+                    document_id=document_id,
+                ))
             result = pattern.sub(replacement, result)
 
         # Apply NER if available
         if self.use_ner and self.nlp:
             doc = self.nlp(result)
-            # Sort entities by start position in reverse to replace from end
-            entities = sorted(doc.ents, key=lambda e: e.start_char, reverse=True)
-            for ent in entities:
-                if ent.label_ in ('PERSON', 'ORG'):
-                    # Only redact PERSON, keep ORG (might be clinic names)
-                    if ent.label_ == 'PERSON':
-                        result = result[:ent.start_char] + '[REDACTED]' + result[ent.end_char:]
+            person_entities = [e for e in doc.ents if e.label_ == 'PERSON']
+            # Record events in left-to-right order for stable occurrence
+            # indices, then replace from the end so earlier offsets stay valid.
+            for ent in sorted(person_entities, key=lambda e: e.start_char):
+                idx = occurrence_counts.get('PERSON', 0)
+                occurrence_counts['PERSON'] = idx + 1
+                events.append(RedactionEvent(
+                    entity_id=_make_entity_id(profile_id, field_name, 'PERSON', idx),
+                    entity_type='PERSON',
+                    start=ent.start_char,
+                    end=ent.end_char,
+                    field_name=field_name,
+                    document_id=document_id,
+                ))
+            for ent in sorted(person_entities, key=lambda e: e.start_char, reverse=True):
+                result = result[:ent.start_char] + '[REDACTED]' + result[ent.end_char:]
 
-        return result
+        return result, events
 
-    def anonymize_profile(self, profile) -> AnonymizedProfile:
+    def anonymize_profile(self, profile) -> tuple[AnonymizedProfile, list[RedactionEvent]]:
         """Anonymize a full health profile for LLM consumption.
 
         Args:
             profile: HealthProfile ORM object with loaded relationships
 
         Returns:
-            AnonymizedProfile with PII removed
+            (AnonymizedProfile with PII removed, aggregated RedactionEvents)
         """
-        # Process conditions
+        profile_id = getattr(profile, 'id', None)
+        events: list[RedactionEvent] = []
+
+        # Process conditions. Condition has no document_id column (per
+        # src/data/models.py) so these events are always "no document link".
         conditions = []
         for condition in getattr(profile, 'conditions', []):
+            notes, notes_events = self.anonymize_text(
+                condition.notes,
+                profile_id=profile_id,
+                field_name=f"condition:{condition.id}:notes",
+            )
+            events.extend(notes_events)
             conditions.append({
                 'name': condition.name,
                 'severity': condition.severity,
                 'status': condition.status,
-                'notes': self.anonymize_text(condition.notes),
+                'notes': notes,
             })
 
         # Process medications
@@ -371,40 +480,70 @@ class Anonymizer:
             allergies=profile.allergies,
             conditions=conditions,
             medications=medications,
-        )
+        ), events
 
-    def anonymize_doctor(self, doctor) -> AnonymizedDoctor:
+    def anonymize_doctor(self, doctor) -> tuple[AnonymizedDoctor, list[RedactionEvent]]:
         """Anonymize doctor information for LLM consumption.
 
         Args:
             doctor: Doctor ORM object
 
         Returns:
-            AnonymizedDoctor with name/contact removed but specialty/clinic kept
+            (AnonymizedDoctor with name/contact removed but specialty/clinic
+            kept, RedactionEvents). Doctor has no document_id column, so
+            events are always "no document link".
         """
+        notes, events = self.anonymize_text(
+            doctor.notes,
+            profile_id=getattr(doctor, 'profile_id', None),
+            field_name=f"doctor:{doctor.id}:notes",
+        )
         return AnonymizedDoctor(
             title=self.anonymize_doctor_reference(doctor.name, doctor.specialty),
             specialty=doctor.specialty,
             clinic=doctor.clinic,  # Keep clinic name per DEC-006
-            notes=self.anonymize_text(doctor.notes),
-        )
+            notes=notes,
+        ), events
 
-    def anonymize_appointment(self, appointment) -> AnonymizedAppointment:
+    def anonymize_appointment(self, appointment) -> tuple[AnonymizedAppointment, list[RedactionEvent]]:
         """Anonymize appointment information for LLM consumption.
 
         Args:
             appointment: Appointment ORM object with doctor relationship loaded
 
         Returns:
-            AnonymizedAppointment with PII removed
+            (AnonymizedAppointment with PII removed, aggregated
+            RedactionEvents). Appointment has no document_id column, so
+            events are always "no document link".
         """
-        return AnonymizedAppointment(
-            doctor=self.anonymize_doctor(appointment.doctor),
-            scheduled_date=appointment.scheduled_date.isoformat() if appointment.scheduled_date else None,
-            purpose=self.anonymize_text(appointment.purpose),
-            prep_notes=self.anonymize_text(appointment.prep_notes),
-            visit_notes=self.anonymize_text(appointment.visit_notes),
+        events: list[RedactionEvent] = []
+        doctor, doctor_events = self.anonymize_doctor(appointment.doctor)
+        events.extend(doctor_events)
+
+        profile_id = getattr(appointment, 'profile_id', None)
+        purpose, purpose_events = self.anonymize_text(
+            appointment.purpose, profile_id=profile_id,
+            field_name=f"appointment:{appointment.id}:purpose",
         )
+        prep_notes, prep_events = self.anonymize_text(
+            appointment.prep_notes, profile_id=profile_id,
+            field_name=f"appointment:{appointment.id}:prep_notes",
+        )
+        visit_notes, visit_events = self.anonymize_text(
+            appointment.visit_notes, profile_id=profile_id,
+            field_name=f"appointment:{appointment.id}:visit_notes",
+        )
+        events.extend(purpose_events)
+        events.extend(prep_events)
+        events.extend(visit_events)
+
+        return AnonymizedAppointment(
+            doctor=doctor,
+            scheduled_date=appointment.scheduled_date.isoformat() if appointment.scheduled_date else None,
+            purpose=purpose,
+            prep_notes=prep_notes,
+            visit_notes=visit_notes,
+        ), events
 
 
 # Module-level convenience function
@@ -419,6 +558,14 @@ def get_anonymizer() -> Anonymizer:
     return _default_anonymizer
 
 
-def anonymize_text(text: Optional[str]) -> Optional[str]:
+def anonymize_text(
+    text: Optional[str],
+    *,
+    profile_id: Optional[str] = None,
+    field_name: str = "",
+    document_id: Optional[str] = None,
+) -> tuple[Optional[str], list[RedactionEvent]]:
     """Convenience function to anonymize text using the default anonymizer."""
-    return get_anonymizer().anonymize_text(text)
+    return get_anonymizer().anonymize_text(
+        text, profile_id=profile_id, field_name=field_name, document_id=document_id
+    )

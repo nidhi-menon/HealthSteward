@@ -319,6 +319,158 @@ async def test_prepare_visit_with_additional_concerns(
 
 
 @pytest.mark.asyncio
+async def test_prepare_visit_logs_redaction_events(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Issue #16: redaction events (type + span + stable id, never the raw
+    matched value) must land in the assistant ConversationLog row's
+    extra_data["redaction_events"], aggregated across the whole request.
+    """
+    from sqlalchemy import select
+
+    from src.config import get_settings
+    from src.data.models import ConversationLog
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {
+        **sample_appointment_data,
+        "doctor_id": doctor_id,
+        "purpose": "Follow-up, call patient at 555-123-4567 to confirm",
+    }
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(
+        '{"questions": {"Concerns": ["About fatigue"]}, "context_summary": "..."}'
+    )
+
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(
+            f"/api/visits/{appointment_id}/prepare",
+            json={"additional_concerns": "Also, MRN: 12345678 for reference"},
+        )
+
+    assert response.status_code == 200
+
+    result = await db_session.execute(
+        select(ConversationLog)
+        .where(ConversationLog.role == "assistant")
+        .order_by(ConversationLog.timestamp.desc())
+    )
+    latest_assistant_log = result.scalars().first()
+
+    events = latest_assistant_log.extra_data.get("redaction_events")
+    assert events is not None
+    assert len(events) >= 2  # phone in purpose, MRN in additional_concerns
+
+    entity_types = {e["entity_type"] for e in events}
+    assert "phone" in entity_types
+    assert "mrn" in entity_types
+
+    for event in events:
+        # Never the raw matched value, only type/span/id/field/document link
+        assert set(event.keys()) <= {
+            "entity_id", "entity_type", "start", "end", "field_name",
+            "document_id", "document_link",
+        }
+        assert "555-123-4567" not in str(event.values())
+        assert "12345678" not in str(event.values())
+        # No document lineage for appointment purpose / user-typed concerns
+        assert event.get("document_link") == "none"
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_redaction_entity_ids_stable_across_runs(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Same underlying field, redacted across two separate prepare_visit
+    calls, must produce the same entity ids (issue #16) — a deterministic
+    hash, not a random UUID per run."""
+    from sqlalchemy import select
+
+    from src.config import get_settings
+    from src.data.models import ConversationLog
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {
+        **sample_appointment_data,
+        "doctor_id": doctor_id,
+        "purpose": "Follow-up, call patient at 555-123-4567 to confirm",
+    }
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(
+        '{"questions": {"Concerns": ["About fatigue"]}, "context_summary": "..."}'
+    )
+
+    async def _run_once():
+        with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+             patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+            mock_client = AsyncMock()
+            mock_client.messages.create = AsyncMock(return_value=mock_message)
+            mock_anthropic.return_value = mock_client
+            mock_anthropic_backend.return_value = mock_client
+
+            resp = await client.post(f"/api/visits/{appointment_id}/prepare")
+        assert resp.status_code == 200
+
+        result = await db_session.execute(
+            select(ConversationLog)
+            .where(ConversationLog.role == "assistant")
+            .order_by(ConversationLog.timestamp.desc())
+        )
+        latest = result.scalars().first()
+        return latest.extra_data.get("redaction_events")
+
+    events1 = await _run_once()
+    events2 = await _run_once()
+
+    ids1 = sorted(e["entity_id"] for e in events1)
+    ids2 = sorted(e["entity_id"] for e in events2)
+    assert ids1 == ids2
+    assert len(ids1) > 0
+
+
+@pytest.mark.asyncio
 async def test_prepare_visit_appointment_not_found(client: AsyncClient):
     """Test visit preparation for non-existent appointment."""
     response = await client.post("/api/visits/non-existent-id/prepare")

@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from src.utils.anonymization import Anonymizer, AnonymizedAppointment
+from src.utils.anonymization import Anonymizer, AnonymizedAppointment, RedactionEvent
 
 
 # Specialty mapping: which specialties are relevant to each other
@@ -135,6 +135,14 @@ class ContextSelectionResult:
     # see issue #56 for the follow-up on grounding/reducing these.
     visits_dropped_stage2_cap: int = 0
     visits_dropped_stage3_budget: int = 0
+    # Redaction events (issue #16) from Stage 4's anonymization of
+    # selected_visits — folded into the per-visit-prep-request total
+    # VisitPrepAgent logs on ConversationLog.
+    redaction_events: list[RedactionEvent] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.redaction_events is None:
+            self.redaction_events = []
 
 
 def normalize_specialty(specialty: Optional[str]) -> Optional[str]:
@@ -551,10 +559,12 @@ Notes: {appt.visit_notes or 'N/A'}
         )
 
         # Stage 4: Anonymize
-        anonymized = [
-            self.anonymizer.anonymize_appointment(appt)
-            for appt in stage3_results
-        ]
+        anonymized = []
+        redaction_events: list[RedactionEvent] = []
+        for appt in stage3_results:
+            anon_appt, events = self.anonymizer.anonymize_appointment(appt)
+            anonymized.append(anon_appt)
+            redaction_events.extend(events)
 
         return ContextSelectionResult(
             selected_visits=anonymized,
@@ -566,6 +576,7 @@ Notes: {appt.visit_notes or 'N/A'}
             token_estimate=token_estimate,
             visits_dropped_stage2_cap=visits_dropped_stage2_cap,
             visits_dropped_stage3_budget=visits_dropped_stage3_budget,
+            redaction_events=redaction_events,
         )
 
 
