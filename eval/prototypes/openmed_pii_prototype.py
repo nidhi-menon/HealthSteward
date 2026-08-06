@@ -10,7 +10,7 @@ this script exists only to produce the evidence such a decision would need.
 
 ## What it measures
 
-Three systems, scored on the identical corpus (`eval/openmed_pii_cases.py`,
+Three systems, scored on the identical corpus (`eval/prototypes/openmed_pii_cases.py`,
 transcribed from `tests/test_anonymization.py`):
 
 - ``regex`` — the current `Anonymizer` with NER disabled. This is what actually
@@ -52,8 +52,8 @@ Install into an isolated environment — NOT the project env:
     /tmp/venv-openmed/bin/pip install spacy && \
         /tmp/venv-openmed/bin/python -m spacy download en_core_web_sm
 
-    /tmp/venv-openmed/bin/python -m eval.openmed_pii_prototype
-    /tmp/venv-openmed/bin/python -m eval.openmed_pii_prototype --json report.json
+    /tmp/venv-openmed/bin/python -m eval.prototypes.openmed_pii_prototype
+    /tmp/venv-openmed/bin/python -m eval.prototypes.openmed_pii_prototype --json report.json
 
 `--systems` limits which systems run (e.g. `--systems regex,regex+ner`), which
 makes the baselines runnable in the plain project env without openmed installed.
@@ -72,9 +72,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from eval.openmed_pii_cases import (  # noqa: E402
+from eval.prototypes.openmed_pii_cases import (  # noqa: E402
     ALL_CATEGORIES,
     NEGATIVE_CASES,
     POSITIVE_CASES,
@@ -582,7 +582,7 @@ def to_json(results: list[SystemResult]) -> dict:
             "positive_cases": len(POSITIVE_CASES),
             "negative_cases": len(NEGATIVE_CASES),
             "categories": list(ALL_CATEGORIES),
-            "source": "tests/test_anonymization.py (transcribed in eval/openmed_pii_cases.py)",
+            "source": "tests/test_anonymization.py (transcribed in eval/prototypes/openmed_pii_cases.py)",
         },
         "systems": [
             {

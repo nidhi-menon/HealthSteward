@@ -1,9 +1,9 @@
 """Benchmark corpus for the OpenMed PII prototype (issue #122).
 
 **Prototype/evaluation data only.** Nothing here is imported by production code
-or by `tests/` — it exists so `eval/openmed_pii_prototype.py` can score a
-third-party PII detector against the same real cases the current anonymizer is
-already held to.
+or by `tests/` — it exists so `eval/prototypes/openmed_pii_prototype.py` can
+score a third-party PII detector against the same real cases the current
+anonymizer is already held to.
 
 Every case below is transcribed from `tests/test_anonymization.py`, which is the
 de-facto specification of what `src/utils/anonymization.py` is expected to catch
