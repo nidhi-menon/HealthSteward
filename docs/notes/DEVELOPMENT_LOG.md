@@ -1665,30 +1665,40 @@ Related: issue #49, issue #50, DEC-027, DEC-030.
 
 ---
 
-## 50. OpenMed PII Benchmark Harness — Baselines Measured, OpenMed Half Blocked (#122)
+## 50. OpenMed PII Benchmark — Evaluated and Not Adopted (#122)
 
 **Date:** 2026-08-05
 
 **Context:** DEC-025 hardened the hand-rolled regex list rather than adopting a PII-detection library, and parked library adoption on #92. #122 asked for a prototype benchmark of OpenMed (Apache-2.0, local-first, 18 HIPAA Safe Harbor categories) against the current approach — explicitly an evaluation, not a production swap: no changes to `src/utils/anonymization.py`, and no `openmed` in `requirements.txt`/`environment.yml`.
 
 **What was built:**
-- `eval/openmed_pii_cases.py` — 67 positive and 24 negative cases transcribed from `tests/test_anonymization.py`, each citing the test it came from, tagged by PII category.
-- `eval/openmed_pii_prototype.py` — scores three systems (`regex`, `regex+ner`, `openmed`) on that corpus by one rule, reports per-category rather than as one accuracy number, and measures load time, per-text latency, and peak RSS. `--json` writes a machine-readable report stamped with the platform it ran on.
-- Nothing in `src/` imports either file and `tests/` does not collect them; suite unchanged at 270.
+- `eval/prototypes/openmed_pii_cases.py` — 67 positive and 24 negative cases transcribed from `tests/test_anonymization.py`, each citing the test it came from, tagged by PII category. (Moved from `eval/openmed_pii_cases.py` into its own `eval/prototypes/` subdirectory during PR #124 review, since it doesn't share `eval/`'s existing `run.py`/`scorers.py`/`fixtures.py` conventions.)
+- `eval/prototypes/openmed_pii_prototype.py` — scores systems (`regex`, `regex+ner`, `openmed`) on that corpus by one rule, reports per-category rather than as one accuracy number, and measures load time, per-text latency, and peak RSS. Supports `--confidence` and `--model` for sweeping OpenMed's threshold and testing different model sizes. `--json` writes a machine-readable report stamped with the platform it ran on.
+- `tests/test_openmed_pii_corpus.py` — pins the corpus's known case counts (67/24) so an edit to `test_anonymization.py`'s PII cases that isn't mirrored in the transcribed corpus fails loudly instead of drifting silently.
+- `eval/prototypes/OPENMED_FINDINGS.md` — full write-up: methodology, all six configurations tested, caveats, reproduction steps.
+- Nothing in `src/` imports these files and `tests/` (other than the corpus-count guard) does not collect them; full suite at 272.
 
-**What the baselines say** (the useful half — see below for what's missing):
+**The initial PR (#124) shipped with the OpenMed half unmeasured** — this sandbox's egress policy blocks `huggingface.co`, so the reviewer re-ran the missing half locally on the actual target hardware (8GB M3, the machine DEC-009 identifies as the binding constraint). That run hit its own snag: `openmed[hf]` pulls in `transformers==5.14.1`, which breaks OpenMed's pipeline construction (`AutoConfig.from_pretrained() got multiple values for keyword argument 'local_files_only'`, an OpenMed/transformers version incompatibility, not a harness bug) — downgrading to `transformers<4.45` fixed it.
+
+**Full results, six configurations:**
 
 | system | PII caught | clinical text intact | mean/text | peak RSS |
 |--------|-----------|---------------------|-----------|----------|
-| `regex` (fresh clone: spaCy in neither manifest) | 63/67 (94%) | 24/24 (100%) | 0.02 ms | 15 MB |
-| `regex+ner` (DEC-006 as described) | 66/67 (99%) | 23/24 (96%) | 5.4 ms | 159 MB |
+| `regex` (fresh clone: spaCy in neither manifest) | 63/67 (94%) | 24/24 (100%) | 0.007 ms | 15 MB |
+| `regex+ner` (DEC-006 as described) | 66/67 (99%) | 23/24 (96%) | 1.9 ms | ~304 MB |
+| `openmed` small-44M, conf 0.3 | 63/67 (94%) | 17/24 (71%) | 780 ms | ~513 MB |
+| `openmed` small-44M, conf 0.5 (default) | 62/67 (93%) | 17/24 (71%) | 785 ms | ~513 MB |
+| `openmed` small-44M, conf 0.7 | 55/67 (82%) | 18/24 (75%) | 872 ms | ~513 MB |
+| `openmed` large-434M, conf 0.5 | 56/67 (84%) | 21/24 (88%) | 2993 ms | ~1481 MB |
 
-Two findings worth more than the aggregate:
+**Verdict: no OpenMed configuration beats the current approach on both recall and precision at once, and every configuration is 400×–1500× slower than what's running today.** The large model trades recall for precision relative to the small one rather than dominating it — bigger wasn't strictly better. Full breakdown, including which specific cases leaked or over-redacted per configuration, is in `OPENMED_FINDINGS.md`.
 
-1. **The NER half over-redacts clinical content.** `"Lisinopril 10 mg daily"` → `"[REDACTED] 10 mg daily"` — spaCy tags the drug name as a PERSON. DEC-025's reasoning leans hard on negative cases asserting clinical content survives, but every one of those tests constructs `Anonymizer(use_ner=False)`, so the NER path has no negative coverage at all and this was invisible. Filed as #125 rather than fixed here, since #122 is explicitly scoped to not touch production anonymization.
+**Findings worth more than the aggregate:**
+
+1. **The NER half over-redacts clinical content.** `"Lisinopril 10 mg daily"` → `"[REDACTED] 10 mg daily"` — spaCy tags the drug name as a PERSON. DEC-025's reasoning leans hard on negative cases asserting clinical content survives, but every one of those tests constructs `Anonymizer(use_ner=False)`, so the NER path had no negative coverage at all and this was invisible. Filed as #125 rather than fixed here, since #122 is explicitly scoped to not touch production anonymization.
 2. **`Dr. Smith` still leaks in `"Call Dr. Smith at 555-123-4567"`** even with NER on — spaCy doesn't tag it as PERSON in that construction, though it does in `"Referred by Dr. Sarah Johnson last spring"`. Single-token surnames after a title are the weak case.
-
-**What's missing, and why:** the OpenMed numbers. `huggingface.co` is denied by this environment's egress policy (403 at CONNECT), so model weights can't be fetched and no OpenMed accuracy, latency, or memory figure was measured. The harness reports this as an explicitly skipped system with the failure reason attached — deliberately, so "couldn't load the model" can never be silently scored as "detected no PII," which would read as a real result. Everything determinable from the offline package registry is in the issue's findings comment: the English default is 44M params (`OpenMed-PII-SuperClinical-Small-44M-v1`) and the smallest is 33M, both well under the 109M-434M the issue estimated.
+3. **OpenMed's label taxonomy doesn't match this project's policy**, confirmed rather than just predicted: clinic names, appointment times, weights, and dosage numbers all got over-redacted under labels (`city`, `time`, `age`, `postcode`, `pin`) this project's `NegativeCase` corpus treats as clinical content to keep. Any future integration would need real label filtering, not wholesale acceptance of OpenMed's output.
+4. **DEC-006 vs. actual behavior gap surfaced separately** — spaCy isn't in either dependency manifest, so `regex` (94% recall) is what a fresh clone actually runs, not `regex+ner` (99%) which DEC-006 describes. Filed as [#126](https://github.com/nidhi-menon/HealthSteward/issues/126).
 
 **Design notes:**
 
@@ -1696,11 +1706,15 @@ Two findings worth more than the aggregate:
 2. **`extract_pii`, not `deidentify`.** `deidentify` does its own masking with per-label placeholders (`[NAME]`, `[EMAIL]`); rewriting OpenMed's spans with the same `[REDACTED]` the current anonymizer uses is what makes the exact-equality check on negatives meaningful.
 3. **The probe call is eager.** The first `extract_pii` is what downloads weights, so it runs at build time — that's the only way an unreachable model host surfaces as an unavailable system rather than as 91 silent misses.
 4. **`regex+ner` is scored separately from `regex`, and skipped loudly if spaCy is absent.** spaCy is in neither manifest, so the regex-only row is what a fresh clone actually runs; reporting those numbers under the DEC-006 label would overstate the real baseline.
-5. **Peak RSS is process-cumulative** (`ru_maxrss` is a high-water mark), so the report prints the post-import floor and says to compare deltas or isolate with `--systems`. Worth stating because the number moves ~500 MB depending on whether torch happens to be installed next to spaCy — thinc imports it when it finds it.
+5. **Peak RSS is process-cumulative** (`ru_maxrss` is a high-water mark), so the report prints the post-import floor and says to compare deltas or isolate with `--systems`.
 
-**Files changed:** `eval/openmed_pii_cases.py`, `eval/openmed_pii_prototype.py`.
+**Caveats on the numbers themselves** (see `OPENMED_FINDINGS.md` for the full list): per-category sample sizes are small enough that one case swings a rate 25-33%; the corpus was transcribed from tests written to validate the *regex* approach, so it's denser with exact-format edge cases regex is defined to catch and lighter on the free-text PII NER-style models target; only English models and three confidence points were tested. None of these caveats affect the latency/memory conclusions, which are decisive regardless.
 
-Related: issue #122, issue #125 (NER over-redaction), PR #124, issue #73, issue #92, DEC-006, DEC-025, DEC-009.
+**No DEC entry** — per #122's own scope note, this is an evaluation, not a production change: `src/utils/anonymization.py` is untouched and `openmed` is absent from both dependency manifests. Issue #122 closed as evaluated-and-not-adopted.
+
+**Files changed:** `eval/prototypes/openmed_pii_cases.py`, `eval/prototypes/openmed_pii_prototype.py`, `eval/prototypes/OPENMED_FINDINGS.md`, `tests/test_openmed_pii_corpus.py`.
+
+Related: issue #122 (closed), issue #125 (NER over-redaction), issue #126 (DEC-006 vs. actual behavior gap), PR #124, issue #73, issue #92, DEC-006, DEC-025, DEC-009.
 
 ---
 
