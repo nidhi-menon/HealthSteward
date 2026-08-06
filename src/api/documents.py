@@ -51,10 +51,16 @@ async def scan_documents(
     profile_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Scan the AVS directory and return all PDF files with their processing status."""
+    """Scan the profile's AVS subdirectory and return all PDF files with their status.
+
+    Per-profile partitioning (issue #49, DEC-030): each profile's files live
+    under `data/avs/<profile_id>/`, not a flat shared folder. This makes
+    cross-profile visibility structurally impossible rather than merely
+    filtered out in the response.
+    """
     await get_live_profile_or_404(profile_id, db)
     settings = get_settings()
-    scan_dir = Path(settings.avs_scan_path)
+    scan_dir = Path(settings.avs_scan_path) / profile_id
     scan_dir.mkdir(parents=True, exist_ok=True)
 
     # Get all existing Document records for this profile
@@ -181,7 +187,7 @@ async def parse_file(
     """Create a Document record for a scanned file and trigger parsing."""
     await get_live_profile_or_404(profile_id, db)
     settings = get_settings()
-    file_path = Path(settings.avs_scan_path) / filename
+    file_path = Path(settings.avs_scan_path) / profile_id / filename
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found in scan directory.")

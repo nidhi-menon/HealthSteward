@@ -49,6 +49,16 @@ class HealthProfile(Base):
     # while this is set — the profile just becomes invisible. The real
     # cascading delete happens when the window expires.
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Opt-in, set at soft-delete time (issue #49, DEC-030): when true, the
+    # profile's `data/avs/<profile_id>/` subfolder is removed once the
+    # profile actually purges (`purge_expired_profiles`), not at soft-delete
+    # time — a restore before then must find the files untouched. Defaults
+    # false because AVS PDFs are the user's own source documents, not
+    # something the app generated; deleting a profile shouldn't silently
+    # delete them too.
+    purge_avs_files_on_expiry: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     # Relationships
     conditions: Mapped[list["Condition"]] = relationship(

@@ -64,7 +64,8 @@ export default function ProfileDetail() {
 
   // Delete profile mutation
   const deleteMutation = useMutation({
-    mutationFn: () => profiles.delete(profileId!),
+    mutationFn: (purgeAvsFilesOnExpiry?: boolean) =>
+      profiles.delete(profileId!, purgeAvsFilesOnExpiry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       navigate('/');
@@ -210,12 +211,13 @@ export default function ProfileDetail() {
       <DeleteConfirmModal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => deleteMutation.mutate()}
+        onConfirm={(purgeAvsFilesOnExpiry) => deleteMutation.mutate(purgeAvsFilesOnExpiry)}
         title="Delete Health Profile"
         itemName={profile.name}
         itemType="profile"
         isDeleting={deleteMutation.isPending}
         recoveryDays={SOFT_DELETE_RETENTION_DAYS}
+        showAvsPurgeOption
       />
     </div>
   );

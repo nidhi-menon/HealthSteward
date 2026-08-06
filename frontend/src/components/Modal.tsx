@@ -62,7 +62,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
 interface DeleteConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (purgeAvsFilesOnExpiry?: boolean) => void;
   title: string;
   itemName: string;
   itemType?: string;
@@ -72,6 +72,13 @@ interface DeleteConfirmModalProps {
   // type-to-confirm bar stays either way — recoverable isn't the same as
   // cheap, and the point is to stop the wrong profile being deleted at all.
   recoveryDays?: number;
+  // Shows the opt-in "also delete this profile's AVS files" checkbox
+  // (issue #49, DEC-030). Unchecked by default — AVS PDFs are the user's own
+  // source documents, not something the app generated, so deleting a
+  // profile shouldn't silently delete them too. Only meaningful alongside
+  // recoveryDays: the files aren't touched until the recovery window
+  // actually expires, not at this soft-delete step.
+  showAvsPurgeOption?: boolean;
 }
 
 export function DeleteConfirmModal({
@@ -83,13 +90,16 @@ export function DeleteConfirmModal({
   itemType = 'item',
   isDeleting = false,
   recoveryDays,
+  showAvsPurgeOption = false,
 }: DeleteConfirmModalProps) {
   const [confirmText, setConfirmText] = useState('');
+  const [purgeAvsFiles, setPurgeAvsFiles] = useState(false);
 
   // Reset confirm text when modal closes
   useEffect(() => {
     if (!isOpen) {
       setConfirmText('');
+      setPurgeAvsFiles(false);
     }
   }, [isOpen]);
 
@@ -98,7 +108,7 @@ export function DeleteConfirmModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isConfirmEnabled) {
-      onConfirm();
+      onConfirm(showAvsPurgeOption ? purgeAvsFiles : undefined);
     }
   };
 
@@ -136,6 +146,21 @@ export function DeleteConfirmModal({
             </div>
           </div>
         </div>
+
+        {showAvsPurgeOption && (
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={purgeAvsFiles}
+              onChange={(e) => setPurgeAvsFiles(e.target.checked)}
+              className="mt-0.5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+            />
+            <span>
+              Also delete this profile's AVS files from disk{recoveryDays ? ` when the ${recoveryDays}-day recovery window expires` : ''}.
+              Unchecked by default — your original documents are kept even after the profile is gone.
+            </span>
+          </label>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
