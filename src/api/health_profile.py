@@ -7,13 +7,16 @@ once that window has expired. Every read path here filters `deleted_at IS
 NULL`, so a soft-deleted profile is invisible to the rest of the app.
 """
 
+import shutil
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import get_settings
 from src.data.database import get_db
 from src.data.models import HealthProfile
 from src.models.schemas import (
@@ -64,8 +67,10 @@ async def purge_expired_profiles(db: AsyncSession) -> int:
     still invisible throughout, so this affects when data is destroyed, not
     when it stops being reachable.
 
-    This is where issue #49's opt-in "also delete AVS files on disk" would
-    hook in — by this point the user has had their full recovery window.
+    Issue #49's opt-in "also delete AVS files on disk" hooks in here — by this
+    point the user has had their full recovery window. Only profiles with
+    `purge_avs_files_on_expiry` set have their `data/avs/<profile_id>/`
+    subfolder removed; the DB rows are cascade-deleted either way.
 
     Returns the number of profiles hard-deleted.
     """
@@ -78,7 +83,13 @@ async def purge_expired_profiles(db: AsyncSession) -> int:
     )
     expired = list(result.scalars().all())
 
+    settings = get_settings()
     for profile in expired:
+        if profile.purge_avs_files_on_expiry:
+            profile_avs_dir = Path(settings.avs_scan_path) / profile.id
+            if profile_avs_dir.is_dir():
+                shutil.rmtree(profile_avs_dir)
+                logger.info(f"Removed AVS files for purged profile {profile.id}")
         # Cascades through every related table, as a hard delete always has.
         await db.delete(profile)
 
@@ -192,6 +203,7 @@ async def update_profile(
 @router.delete("/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_profile(
     profile_id: str,
+    purge_avs_files_on_expiry: bool = False,
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Soft-delete a health profile.
@@ -200,10 +212,18 @@ async def delete_profile(
     is altered — conditions, medications, documents and the rest are left
     exactly as they are, just unreachable — so restoring is a single field
     write rather than an undo log.
+
+    `purge_avs_files_on_expiry` (issue #49, DEC-030) is an opt-in captured at
+    soft-delete time, unchecked by default: whether to also remove the
+    profile's `data/avs/<profile_id>/` files once the 30-day recovery window
+    actually expires (`purge_expired_profiles`). Setting it here does not
+    delete anything yet — a profile restored before expiry keeps its files
+    regardless of this flag.
     """
     profile = await get_live_profile_or_404(profile_id, db)
 
     profile.deleted_at = datetime.utcnow()
+    profile.purge_avs_files_on_expiry = purge_avs_files_on_expiry
     await db.flush()
 
 

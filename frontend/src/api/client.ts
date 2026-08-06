@@ -69,8 +69,14 @@ export const profiles = {
     }),
   // Soft-deletes (issue #50) — the profile stays recoverable via restore()
   // for the backend's retention window, then is permanently removed.
-  delete: (id: string) =>
-    request<void>(`/profiles/${id}`, { method: 'DELETE' }),
+  // `purgeAvsFilesOnExpiry` (issue #49, DEC-030) is an opt-in captured now
+  // but only acted on once the recovery window actually expires — it does
+  // not delete anything at soft-delete time.
+  delete: (id: string, purgeAvsFilesOnExpiry?: boolean) =>
+    request<void>(
+      `/profiles/${id}${purgeAvsFilesOnExpiry ? '?purge_avs_files_on_expiry=true' : ''}`,
+      { method: 'DELETE' }
+    ),
   listDeleted: () => request<DeletedHealthProfile[]>('/profiles/deleted'),
   restore: (id: string) =>
     request<HealthProfile>(`/profiles/${id}/restore`, { method: 'POST' }),
