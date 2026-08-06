@@ -130,6 +130,44 @@ async def test_export_of_unknown_profile_is_404(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_export_of_a_soft_deleted_profile_is_404(
+    client: AsyncClient, sample_profile_data, sample_condition_data
+):
+    """Issue #123. Export was the one profile route still doing its own
+    unfiltered lookup after DEC-027 landed, so a soft-deleted profile inside
+    its 30-day window stayed fully exportable by anyone holding the URL while
+    every other route 404'd. "Deleted means unreachable" now holds without
+    exception; grabbing a copy before the purge is a separate, discoverable
+    feature (#130), not a URL-only backdoor.
+    """
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    await client.post(f"/api/profiles/{profile_id}/conditions/", json=sample_condition_data)
+
+    assert (await client.get(f"/api/profiles/{profile_id}/export")).status_code == 200
+
+    await client.delete(f"/api/profiles/{profile_id}")
+
+    assert (await client.get(f"/api/profiles/{profile_id}/export")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_export_works_again_after_restore(
+    client: AsyncClient, sample_profile_data, sample_condition_data
+):
+    """The block is keyed on `deleted_at`, not on anything sticky — a restored
+    profile is exportable again, with its data intact."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    await client.post(f"/api/profiles/{profile_id}/conditions/", json=sample_condition_data)
+    await client.delete(f"/api/profiles/{profile_id}")
+    await client.post(f"/api/profiles/{profile_id}/restore")
+
+    response = await client.get(f"/api/profiles/{profile_id}/export")
+
+    assert response.status_code == 200
+    assert len(response.json()["conditions"]) == 1
+
+
+@pytest.mark.asyncio
 async def test_export_includes_a_hand_edited_visit_prep(
     client: AsyncClient, db_session, sample_profile_data, sample_doctor_data,
     sample_appointment_data,

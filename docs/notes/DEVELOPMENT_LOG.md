@@ -1665,4 +1665,26 @@ Related: issue #49, issue #50, DEC-027, DEC-030.
 
 ---
 
+## 50. Profile Export Now 404s for a Soft-Deleted Profile (#123, DEC-027 amendment)
+
+**Date:** 2026-08-06
+
+**Context:** Raised as concern #6 on PR #121 and again after that PR's rebase; #121 merged without it being answered, so the behavior on `main` was whatever the code happened to do rather than a decision — which is why it was filed as its own issue instead of fixed in passing. `export_profile` (`src/api/profile_export.py`) predates DEC-027 and kept its own plain `select(HealthProfile).where(HealthProfile.id == profile_id)` with no `deleted_at` filter. Since #120/DEC-027 landed, every other profile route resolves through `get_live_profile_or_404` or the child routers' wrapper around it, both of which 404 for a soft-deleted profile. Export was the one route that didn't: a soft-deleted profile inside its 30-day recovery window was still fully exportable by anyone holding the URL, and `tests/test_profile_export.py` didn't touch soft-delete at all, so nothing pinned it either way.
+
+**What changed:** one lookup. `export_profile` now calls `get_live_profile_or_404` like everything else, with a comment recording that the exemption was considered and rejected rather than overlooked.
+
+**The decision, and why it went this way.** The repo owner's call on #123 was **block**, against the recommendation the previous run posted there (which argued to allow it deliberately, on the grounds that export is a read-only escape hatch and the lopsided failure mode is losing your only copy at day 31). The deciding argument for blocking: "deleted means unreachable, everywhere" is the existing pattern, and an exception for the one route that already didn't follow it is what created this gap. The "grab a copy before the purge" use case is real but wants a discoverable affordance on the "Recently deleted" view rather than a URL-only backdoor that in practice rescues nobody — filed as **#130** rather than left as a sentence here.
+
+**No DEC entry**, per the issue's own scope note: this settles a boundary DEC-027 and DEC-028 left ambiguous between them rather than making a new choice, so it's an amendment appended to DEC-027's status.
+
+**No frontend change.** The Export button lives on `ProfileDetail` (`frontend/src/pages/ProfileDetail.tsx`), which is unreachable for a deleted profile, and `downloadProfileExport` already surfaces the server's `detail` on a non-2xx. There is no UI path that can now hit the new 404.
+
+**Tests:** `tests/test_profile_export.py` gains `test_export_of_a_soft_deleted_profile_is_404` (exports 200 while live, 404 after delete — asserting both halves so the test can't pass because export was broken generally) and `test_export_works_again_after_restore` (the block is keyed on `deleted_at`, not on anything sticky, and the data comes back intact). Full suite: 291 passed (up from 289).
+
+**Files changed:** `src/api/profile_export.py`, `tests/test_profile_export.py`, `docs/notes/DECISIONS.md`.
+
+Related: issue #123, issue #130, PR #121, DEC-027, DEC-028.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

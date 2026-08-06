@@ -930,6 +930,8 @@ Scoped to profile-level deletion only, per the issue. Individual conditions/medi
 
 **Status:** Implemented. Follow-up gap tracked in [#119](https://github.com/nidhi-menon/HealthSteward/issues/119).
 
+*Amended 2026-08-06 ([issue #123](https://github.com/nidhi-menon/HealthSteward/issues/123)):* **profile export is not exempt from the filter.** `export_profile` (DEC-028) was written before this entry landed and kept its own unfiltered `select(HealthProfile).where(id == profile_id)`, which made it the one profile route still serving a soft-deleted profile — fully exportable by anyone holding the URL while every other route 404'd. It now resolves through `get_live_profile_or_404` like everything else, so "deleted means unreachable" holds without exception. The repo owner's call on #123, choosing consistency over the "grab a copy before the purge" use case: that use case is real but wants a discoverable affordance on the "Recently deleted" view ([#130](https://github.com/nidhi-menon/HealthSteward/issues/130)), not a URL-only backdoor. Recorded here rather than as its own DEC entry because it settles a boundary this entry and DEC-028 left ambiguous between them, rather than making a new choice.
+
 ---
 
 ### DEC-028: Profile Export Format — Full-Fidelity JSON Dump, Metadata-Only for Documents
@@ -1022,4 +1024,4 @@ A one-time migration script, `scripts/migrate_avs_per_profile.py`, moves each ex
 
 ---
 
-*Last updated: 2026-08-05*
+*Last updated: 2026-08-06*
