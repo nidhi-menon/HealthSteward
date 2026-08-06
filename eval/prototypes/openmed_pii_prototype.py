@@ -180,9 +180,27 @@ def _peak_rss_mb() -> float:
     return raw / 1024 if sys.platform != "darwin" else raw / (1024 * 1024)
 
 
+def _text_only(anonymize_text: Callable) -> Callable[[str], str]:
+    """Adapt `Anonymizer.anonymize_text` to a plain `str -> str` redactor.
+
+    DEC-029 (#16) changed `anonymize_text` to return `(text, list[RedactionEvent])`
+    so callers can audit what got redacted. This harness only scores the
+    resulting text, not the event log, so it unwraps the tuple here rather than
+    changing every call site below.
+    """
+
+    def redact(text: Optional[str]) -> Optional[str]:
+        if text is None:
+            return text
+        result = anonymize_text(text)
+        return result[0] if isinstance(result, tuple) else result
+
+    return redact
+
+
 def build_regex_redactor() -> tuple[Callable[[str], str], str]:
     anonymizer = Anonymizer(use_ner=False)
-    return anonymizer.anonymize_text, "Anonymizer(use_ner=False) — regex patterns only"
+    return _text_only(anonymizer.anonymize_text), "Anonymizer(use_ner=False) — regex patterns only"
 
 
 def build_regex_ner_redactor() -> tuple[Optional[Callable[[str], str]], str]:
@@ -205,7 +223,7 @@ def build_regex_ner_redactor() -> tuple[Optional[Callable[[str], str]], str]:
     if not anonymizer.use_ner or anonymizer.nlp is None:
         return None, "spaCy installed but en_core_web_sm model not downloaded"
 
-    return anonymizer.anonymize_text, "Anonymizer(use_ner=True) — regex + spaCy en_core_web_sm PERSON"
+    return _text_only(anonymizer.anonymize_text), "Anonymizer(use_ner=True) — regex + spaCy en_core_web_sm PERSON"
 
 
 def _redact_spans(text: str, spans: list[tuple[int, int]]) -> str:
