@@ -21,6 +21,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import HTTPException, status
+
 from src.api.health_profile import get_live_profile_or_404
 from src.config import get_settings
 from src.data.database import get_db
@@ -30,6 +32,7 @@ from src.data.models import (
     Doctor,
     Document,
     FollowUp,
+    HealthProfile,
     LabOrder,
     Medication,
     NudgeState,
@@ -80,6 +83,81 @@ def _serialize(row: Any) -> dict[str, Any]:
     }
 
 
+async def _build_export_document(
+    profile: HealthProfile,
+    db: AsyncSession,
+    *,
+    exported_from_deleted: bool,
+) -> dict[str, Any]:
+    """Assemble the export JSON document for an already-resolved profile.
+
+    Shared by the live-export and deleted-export routes so the two only
+    differ in how the profile is looked up, not in what gets exported.
+    `exported_from_deleted` is stamped alongside `export_format_version` so
+    someone reading a backup years later can tell whether it was grabbed from
+    a profile on its way to being purged.
+    """
+    settings = get_settings()
+
+    document: dict[str, Any] = {
+        "export_format_version": EXPORT_FORMAT_VERSION,
+        "exported_from_deleted": exported_from_deleted,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "app_version": settings.app_version,
+        "documents_note": (
+            "Document records are metadata and parsed contents only — the "
+            "uploaded PDF files themselves are not included in this export."
+        ),
+        "profile": _serialize(profile),
+    }
+
+    for key, model in _EXPORTED_TABLES:
+        result = await db.execute(
+            select(model).where(model.profile_id == profile.id)
+        )
+        document[key] = [_serialize(row) for row in result.scalars().all()]
+
+    # VisitPrep hangs off appointments, not the profile, so it needs the
+    # appointment ids rather than a profile_id filter. Included because a prep
+    # may have been hand-edited by the patient (issue #14) — that's authored
+    # content, not regenerable output.
+    appointment_ids = [row["id"] for row in document["appointments"]]
+    if appointment_ids:
+        prep_result = await db.execute(
+            select(VisitPrep).where(VisitPrep.appointment_id.in_(appointment_ids))
+        )
+        document["visit_preps"] = [_serialize(row) for row in prep_result.scalars().all()]
+    else:
+        document["visit_preps"] = []
+
+    return document
+
+
+async def get_deleted_profile_or_404(profile_id: str, db: AsyncSession) -> HealthProfile:
+    """Fetch a profile that *is* soft-deleted, or raise 404.
+
+    The mirror image of `get_live_profile_or_404`: filters on
+    `deleted_at IS NOT NULL` instead of `IS NULL`, so a live profile (or one
+    that never existed) 404s here just as a deleted profile 404s on the live
+    routes. Keeps "rescue export a deleted profile" a fully separate lookup
+    from "export a live profile" rather than a relaxed filter on the same one
+    (issue #130, following #123's decision to keep those two paths distinct).
+    """
+    result = await db.execute(
+        select(HealthProfile).where(
+            HealthProfile.id == profile_id,
+            HealthProfile.deleted_at.is_not(None),
+        )
+    )
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No deleted profile with id {profile_id} found",
+        )
+    return profile
+
+
 @router.get("/{profile_id}/export")
 async def export_profile(
     profile_id: str,
@@ -99,51 +177,56 @@ async def export_profile(
     this export, called out in `documents_note` inside the file itself so
     someone reading a backup years later doesn't have to infer it.
     """
-    settings = get_settings()
-
-    # Soft-deleted profiles are not exportable (issue #123). Export resolves
-    # through the same `get_live_profile_or_404` every other profile route
-    # uses, so "deleted means unreachable" holds everywhere without exception —
-    # export was the one route still doing its own unfiltered lookup, which
-    # left a soft-deleted profile fully exportable by anyone holding the URL.
-    # Grabbing a copy before the 30-day purge is a real use case, but it wants
-    # a discoverable affordance on the "Recently deleted" view (#130), not a
-    # URL-only backdoor.
+    # Soft-deleted profiles are not exportable through this route (issue
+    # #123). Export resolves through the same `get_live_profile_or_404` every
+    # other profile route uses, so "deleted means unreachable" holds
+    # everywhere without exception — export was the one route still doing its
+    # own unfiltered lookup, which left a soft-deleted profile fully
+    # exportable by anyone holding the URL. Grabbing a copy before the 30-day
+    # purge is a real use case, but it goes through the separate
+    # `/deleted/{profile_id}/export` route below (#130), not a URL-only
+    # backdoor on this one.
     profile = await get_live_profile_or_404(profile_id, db)
 
-    document: dict[str, Any] = {
-        "export_format_version": EXPORT_FORMAT_VERSION,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
-        "app_version": settings.app_version,
-        "documents_note": (
-            "Document records are metadata and parsed contents only — the "
-            "uploaded PDF files themselves are not included in this export."
-        ),
-        "profile": _serialize(profile),
-    }
-
-    for key, model in _EXPORTED_TABLES:
-        result = await db.execute(
-            select(model).where(model.profile_id == profile_id)
-        )
-        document[key] = [_serialize(row) for row in result.scalars().all()]
-
-    # VisitPrep hangs off appointments, not the profile, so it needs the
-    # appointment ids rather than a profile_id filter. Included because a prep
-    # may have been hand-edited by the patient (issue #14) — that's authored
-    # content, not regenerable output.
-    appointment_ids = [row["id"] for row in document["appointments"]]
-    if appointment_ids:
-        prep_result = await db.execute(
-            select(VisitPrep).where(VisitPrep.appointment_id.in_(appointment_ids))
-        )
-        document["visit_preps"] = [_serialize(row) for row in prep_result.scalars().all()]
-    else:
-        document["visit_preps"] = []
+    document = await _build_export_document(profile, db, exported_from_deleted=False)
 
     # JSONResponse rather than returning the dict directly, so the
     # Content-Disposition header can be attached. jsonable_encoder handles the
     # date/datetime values the ORM rows carry.
+    filename = _export_filename(profile.name, profile_id)
+    return JSONResponse(
+        content=jsonable_encoder(document),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# Declared before /{profile_id}/export — same reasoning as `/deleted` in
+# health_profile.py: FastAPI matches in declaration order, and the reverse
+# would make "deleted" look like a profile id there. Not actually ambiguous
+# with the pattern above (this router is mounted separately per-route path),
+# but kept consistent with that file's convention.
+@router.get("/deleted/{profile_id}/export")
+async def export_deleted_profile(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Export a soft-deleted profile still inside its recovery window.
+
+    The rescue path for "grab a copy before the 30-day purge" (issue #130):
+    a distinct route from `/{profile_id}/export` rather than a relaxed filter
+    on it, so the live-export route's "deleted means unreachable" guarantee
+    (#123) stays absolute and untouched, while this one exists solely to
+    serve deleted profiles. 404s for a live profile or one that doesn't exist
+    at all — this route has exactly one job.
+
+    The resulting document carries `exported_from_deleted: true` so a backup
+    read later is unambiguous about having come from a profile on its way to
+    being purged.
+    """
+    profile = await get_deleted_profile_or_404(profile_id, db)
+
+    document = await _build_export_document(profile, db, exported_from_deleted=True)
+
     filename = _export_filename(profile.name, profile_id)
     return JSONResponse(
         content=jsonable_encoder(document),
