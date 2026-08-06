@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.health_profile import get_live_profile_or_404
 from src.data.database import get_db
-from src.data.models import Appointment, Doctor, HealthProfile
+from src.data.models import Appointment, Doctor
 from src.models.schemas import (
     AppointmentCreate,
     AppointmentResponse,
@@ -20,21 +21,11 @@ router = APIRouter(prefix="/api/profiles/{profile_id}/appointments", tags=["Appo
 async def verify_profile_exists(profile_id: str, db: AsyncSession) -> None:
     """Verify that the profile exists and hasn't been soft-deleted.
 
-    A soft-deleted profile (issue #50, DEC-027) has to 404 here too, not just
-    on the profile routes — otherwise its data would stay readable and
-    writable through a URL the user still had open after deleting it.
+    Thin wrapper around the shared `get_live_profile_or_404` (issue #119) so
+    every child router keeps this name/signature at call sites while sharing
+    one definition of "profile exists" (issue #50, DEC-027).
     """
-    result = await db.execute(
-        select(HealthProfile).where(
-            HealthProfile.id == profile_id,
-            HealthProfile.deleted_at.is_(None),
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile with id {profile_id} not found",
-        )
+    await get_live_profile_or_404(profile_id, db)
 
 
 async def verify_doctor_exists(doctor_id: str, profile_id: str, db: AsyncSession) -> None:
