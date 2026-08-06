@@ -1810,4 +1810,26 @@ Related: issue #130, issue #123, PR #131, DEC-027.
 
 ---
 
+## 55. FHIR Bundle Import — Scoped, Not Yet Implemented (DEC-031, #101)
+
+**Date:** 2026-08-06
+
+**Context:** #101 asked for a way to import records from Apple Health / FHIR bundles, since manual entry is currently the only on-ramp for a new user's data besides AVS PDF parsing. FHIR is a large standard (100+ resource types) with several genuinely different acquisition paths (file upload, an Apple HealthKit companion app, live provider OAuth) — this entry is the scoping/decision work, not implementation. No code changed.
+
+**What was decided (DEC-031):** ship a backend-only, file-upload-triggered FHIR import path first, covering exactly `Condition` and `MedicationStatement` — the two resource types with the cleanest 1:1 mapping onto existing tables. Reuses the AVS parse→preview→apply flow rather than a new review UX. Key field-mapping calls: `Condition.icd_10` gets a companion `coding_system` column rather than assuming ICD-10 (FHIR commonly supplies SNOMED CT); `Medication.purpose`/`side_effects` stay `NULL` on FHIR-sourced rows, documented as a gap rather than silently dropped; a new provenance field distinguishes FHIR-imported rows from AVS/manual ones.
+
+**Reconciliation explicitly deferred, not solved.** Issue #97 (cross-source conflict reconciliation) is itself unscoped, and the underlying silent-overwrite problem already exists between manual entry and AVS parsing today (#46). FHIR import doesn't introduce a new category of problem, it makes an existing open one more frequent. Rather than block on #97, this slice ships one narrow, deterministic mitigation: a fuzzy name-match against the profile's existing rows, surfaced as a "possible duplicate" flag in the preview UI — no auto-merge.
+
+**Why not build everything at once:** each additional FHIR resource type is a real mapping decision, not boilerplate — `Vitals` needs aggregation logic to fold multiple per-visit `Observation` resources into one row; `LabOrder` needs a decision about FHIR's order-vs-result split that doesn't map cleanly onto its snooze/complete lifecycle; `Doctor` needs joining three separate resources (`Practitioner`, `PractitionerRole`, `Organization`). Guessing at all of them upfront risked getting several wrong at once instead of learning from the first two.
+
+**Why file-upload first, not Apple Health or live OAuth:** Apple's HealthKit has a genuinely built-in bridge to FHIR for clinical records (`HKClinicalRecord.fhirResource` — no third-party conversion library needed, unlike `HealthKitOnFHIR`-style SPM packages), but it still requires a companion iOS app (HealthKit entitlements are unavoidable) with its own cost (Apple Developer Program, $99/yr) and release process — a separately-schedulable engineering surface, not a backend-scoping decision. Live SMART-on-FHIR OAuth is materially larger still: per-EHR-vendor registration, token/sync maintenance, a new persistent external-connection trust boundary DEC-006 hasn't had to reason about before (existing external calls are outbound-only to the LLM backend). Both were deferred to their own issues rather than gating a shippable first slice.
+
+**Honest UX caveat, discussed but not resolved here:** the file-upload path alone doesn't fix the real onboarding friction #101 was aimed at — most patients don't know what a FHIR bundle is, and most portals don't offer an obvious one-click export for a non-technical user. This slice is infrastructure/validation (proves the mapping and duplicate-detection approach cheaply) more than a marketed onboarding win; its practical value is unlocked once #137 (the Apple Health companion app) removes the "where do I even get the file" problem.
+
+**Files changed:** `docs/notes/DECISIONS.md` (DEC-031), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #101, DEC-031, issue #135 (implementation, file-upload Condition+Medication), issue #136 (additional resource types), issue #137 (Apple Health companion app), issue #138 (live SMART-on-FHIR OAuth, deferred), issue #97 (reconciliation, deferred), issue #46 (related precedent), DEC-006, DEC-023.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
