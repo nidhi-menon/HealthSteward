@@ -1645,4 +1645,24 @@ Related: issue #16, DEC-006, DEC-029.
 
 ---
 
+## 49. Partition `data/avs/` Per Profile, Opt-In File Deletion at Purge Time (#49, DEC-030)
+
+**Date:** 2026-08-05
+
+**Context:** `data/avs/` was one flat folder scanned for every profile: `scan_documents` listed every PDF unconditionally, filtering only the response's *status* by matching against a profile's `Document` rows — not the underlying scan itself. In practice a PDF already applied to one profile still showed as "New" under a different profile's Documents tab, with nothing stopping it from being parsed and applied a second time to the wrong person. And `delete_profile` cascade-deleted `Document` rows without ever touching the file on disk, so a deleted profile's PDF reappeared as "new" in the shared folder afterward. Real risk for the caregiver persona this app targets — a parent tracking multiple kids, someone managing multiple aging parents — where several people's AVS PDFs land in the same folder.
+
+**What was built:**
+- `scan_documents` and `parse-file` (`src/api/documents.py`) now scope to `data/avs/<profile_id>/` instead of the flat root — cross-profile visibility is now structurally impossible, not just filtered out of one response.
+- `HealthProfile.purge_avs_files_on_expiry` (new boolean column, default `false`, migration `50e07994bbfe` chained off `c8f2b41d7e93`): an opt-in captured at soft-delete time via a checkbox in `DeleteConfirmModal` (`frontend/src/components/Modal.tsx`, wired up in `frontend/src/pages/ProfileDetail.tsx`), unchecked by default since AVS PDFs are the user's own source documents, not something the app generated.
+- `delete_profile` (`src/api/health_profile.py`) now takes a `purge_avs_files_on_expiry` query param and stores it on the profile — it does **not** touch any files itself. The actual `shutil.rmtree` of the profile's subfolder happens inside `purge_expired_profiles`, only for profiles that are both past the 30-day recovery window (DEC-027) *and* have the flag set. A profile restored before expiry keeps its files regardless of the flag — `restore_profile` just clears `deleted_at`, and a live profile is never in `purge_expired_profiles`'s query.
+- `scripts/migrate_avs_per_profile.py`: one-time, idempotent migration for existing installs. Matches each top-level file to a `Document` row by the same `(original_filename, file_size_bytes)` key `scan_documents`/`parse_file` already use and moves it to `data/avs/<profile_id>/`; files with no matching `Document` row move to `data/avs/_unassigned/` instead of guessing an owner. Run with `python -m scripts.migrate_avs_per_profile`. Safe to re-run: only top-level files count as unmigrated, and a destination-name collision is skipped with a logged warning rather than overwritten.
+
+**Tests:** new `tests/test_avs_partitioning.py` — scan isolation (Profile B never sees Profile A's files, and scanning creates the requesting profile's own subfolder); migration correctly partitions claimed vs. unclaimed files and is idempotent across two runs; opt-in deletion fires only when the flag is set *and* the profile actually purges, never at soft-delete time; and a profile restored before expiry keeps its files intact even though it was soft-deleted with the flag set. Full suite: 282 passed (up from 276).
+
+**Files changed:** `src/api/documents.py`, `src/api/health_profile.py`, `src/data/models.py`, `alembic/versions/50e07994bbfe_add_purge_avs_files_on_expiry_to_health_.py`, `scripts/migrate_avs_per_profile.py`, `frontend/src/components/Modal.tsx`, `frontend/src/pages/ProfileDetail.tsx`, `frontend/src/api/client.ts`, `tests/test_avs_partitioning.py`.
+
+Related: issue #49, issue #50, DEC-027, DEC-030.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
