@@ -1740,4 +1740,34 @@ Related: issue #123, issue #130, PR #121, DEC-027, DEC-028.
 
 ---
 
+## 52. Negative Test Coverage for the spaCy NER Path (#125, item 1)
+
+**Date:** 2026-08-06
+
+**Context:** Surfaced by the #122 benchmark harness (PR #124): running the anonymizer in its DEC-006 configuration — regex + spaCy `en_core_web_sm` PERSON detection — turns `"Lisinopril 10 mg daily"` into `"[REDACTED] 10 mg daily"`. spaCy tags the drug name as a `PERSON` and `anonymize_text` redacts every `PERSON` unconditionally, destroying the most clinically load-bearing token in the sentence before the LLM generating visit prep ever sees it.
+
+The reason this stayed invisible is the part worth recording. DEC-025's reasoning rests explicitly on negative test cases asserting clinical content survives redaction — "every widened pattern is paired with negative test cases asserting clinical content survives." That was true of the regex patterns and thoroughly tested. But **every class in `tests/test_anonymization.py` constructed `Anonymizer(use_ner=False)`**, so the `if self.use_ner and self.nlp:` branch had no coverage at all, positive or negative. The suite was green with spaCy installed and with it absent, because nothing exercised the difference.
+
+**What was built** — item (1) of #125 only, per the scoping decision on the issue: land the coverage now, defer the `PERSON` false-positive mitigation (allowlist / corroboration / larger model / accept-and-document) until spaCy is actually being adopted, since it changes behavior on the DEC-006 trust boundary and wants a real DEC entry.
+
+- `TestNERPath` in `tests/test_anonymization.py` — 25 tests, all against `Anonymizer(use_ner=True)`:
+  - **Positive:** multi-token names in free text (`Jane Doe`, `Sarah Johnson`, `Robert Martinez`) are redacted — no `PII_PATTERNS` entry matches a bare name, so this is what the branch is for.
+  - **Negative:** the same clinical-content corpus `TestHardenedPIIPatterns::test_clinical_content_not_redacted` covers, re-run with NER on. Exactly one case moves, which is why the list is duplicated rather than assumed to carry over.
+  - **Known-bad, pinned as `xfail`:** drug-name over-redaction (`Lisinopril 10 mg daily`, `Started Rosuvastatin last month.`) and the single-token-surname leak (`Call Dr. Smith at 555-123-4567` keeps `Smith` while the phone number is caught by regex).
+  - **DEC-029 events on this branch:** a `PERSON` event carries type and span but never the matched name; ids are stable across runs; and NER spans are offsets into the *post-regex* text, not the original — pinned because a `PERSON` span and a `phone` span in the same `extra_data["redaction_events"]` list index two different strings, which is a real trap for anyone reading that log.
+- **`test_ner_branch_is_actually_active`** guards the guard: if the fixture ever silently degraded to regex-only, every negative case would pass for the wrong reason and the class would be decorative — which is the exact failure mode being closed. The skip predicate probes `Anonymizer(use_ner=True).nlp is not None` rather than trusting `SPACY_AVAILABLE`, because `Anonymizer.nlp` silently flips `use_ner` back to `False` when the model isn't downloaded.
+- The whole class **skips cleanly** when spaCy or `en_core_web_sm` is absent — which is the case on a fresh clone and in CI, since spaCy is in neither manifest (#126). A missing optional dependency shouldn't be a red build.
+
+**Sizing the defect, which #125 asked for.** One case is an existence proof, not a rate. Sweeping 205 common generic and brand drug names through `en_core_web_sm` across five sentence templates: **69% were tagged `PERSON` in at least one context, 8% in every context.** Context dominates — `"Started {} last month."` triggers 64% while the bare name alone triggers 13% — and 17 names (including `Rosuvastatin`, `Azithromycin`, `Levetiracetam`, `Morphine`, `Synthroid`, `Prozac`, `Coumadin`) are flagged in every template. `"Started Rosuvastatin last month."` is the worst observed shape: the span swallows the preceding verb, yielding `"[REDACTED] last month."` Full numbers posted on #125; the sweep script was deliberately throwaway and is not committed, since it exists to produce one number for a decision, not to be maintained.
+
+**Deliberately not changed:** `src/utils/anonymization.py`. These tests pin what the NER path does today, not what it should do. When item (2) of #125 lands, the `xfail`s here are the list of things to revisit.
+
+**Tests:** full suite **311 passed, 3 xfailed** with spaCy and `en_core_web_sm` installed (up from 289); **289 passed, 25 skipped** without them — the fresh-clone and CI configuration, and identical to the pre-change count, so nothing existing moved. All three configurations verified, including the intermediate case of spaCy installed but the model missing.
+
+**Files changed:** `tests/test_anonymization.py`.
+
+Related: issue #125, issue #122, issue #126, PR #124, DEC-006, DEC-025, DEC-029.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
