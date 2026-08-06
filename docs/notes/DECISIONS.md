@@ -265,7 +265,7 @@ Compare with profile → User confirms → Update profile + archive PDF
 
 **Decision:** APPROVED
 
-**Status:** In progress
+**Status:** In progress. **Amendment (2026-08-06, #126):** the "Regex patterns + spaCy NER for names" line above describes the intended design, not what a fresh clone actually runs — `spacy` was never added to `requirements.txt`/`environment.yml`, so `SPACY_AVAILABLE` is `False` by default and the effective shipped behavior for free-text fields is **regex-only**. This gap was found via PR #124's benchmark (regex: 63/67 PII caught, 24/24 clinical text intact; regex+ner: 66/67 caught, 23/24 intact) and sized further on #125: `en_core_web_sm` tags common drug names as `PERSON` in **69% of tested contexts (8% in every context)**, e.g. `"Started Rosuvastatin last month."` → `"[REDACTED] last month."` — destroying the most clinically load-bearing token in the sentence. Adding spaCy to the manifests to match this entry's original wording would buy +3/67 name catches at that cost, turning a defect that is currently latent (nobody runs the NER path today) into one live on every install. **Decision: regex-only is the effective default and documented reality; spaCy NER remains optional/aspirational** until #125's item (2) — a false-positive mitigation for the `PERSON` over-redaction — is resolved. Revisit adopting spaCy only after item (2) lands.
 
 ---
 
