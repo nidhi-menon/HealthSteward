@@ -1770,4 +1770,20 @@ Related: issue #125, issue #122, issue #126, PR #124, DEC-006, DEC-025, DEC-029.
 
 ---
 
+## 53. DEC-006 Amended: Regex-Only Is the Documented Default, spaCy NER Stays Aspirational (#126)
+
+**Date:** 2026-08-06
+
+**Context:** DEC-006 has described the free-text anonymization approach as "regex patterns + spaCy NER for names" since it was written, but `spacy` was never added to `requirements.txt`/`environment.yml`. `SPACY_AVAILABLE` is `False` on every fresh clone, so `regex+ner` — the configuration DEC-006 documents — has never actually run in a shipped install; the effective default has always been regex-only. PR #124's benchmark measured the gap directly (regex: 63/67 PII caught, 24/24 clinical text intact, 15 MB; regex+ner: 66/67 caught, 23/24 intact, 159 MB), and #125's follow-up sizing made the cost of closing that gap concrete: sweeping 205 common drug names through `en_core_web_sm`, **69% were tagged `PERSON` in at least one sentence context, 8% in every context** — e.g. `"Started Rosuvastatin last month."` becomes `"[REDACTED] last month."`, destroying the single most clinically load-bearing token in the sentence.
+
+**The decision:** adopting spaCy to match DEC-006's original wording would buy +3/67 additional name catches, and would convert a defect that is currently *latent* (nobody's data passes through the NER branch today) into one *live* on every install, at a ~69% false-positive rate on drug names in note-shaped sentences. That trade isn't close. DEC-006 is amended to state regex-only as the effective, documented default; spaCy NER remains optional/aspirational, to be revisited only once #125's item (2) — a false-positive mitigation for the `PERSON`-over-redaction — is resolved. No dependency was added; no code changed.
+
+**Why doc-only, not a new DEC entry:** per #126's own scope note, this settles which of DEC-006's two described behaviors is real rather than making a new architectural choice, so it's an amendment to DEC-006's Status line rather than a new entry — same shape as DEC-027's #123 amendment.
+
+**Files changed:** `docs/notes/DECISIONS.md` (DEC-006 amendment).
+
+Related: issue #126, issue #125, PR #124, PR #132, DEC-006, DEC-009.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
