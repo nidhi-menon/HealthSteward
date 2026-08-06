@@ -112,6 +112,36 @@ export async function downloadProfileExport(profileId: string): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Download a soft-deleted profile's JSON backup (issue #130).
+ *
+ * The "grab a copy before the 30-day purge" rescue path from the "Recently
+ * deleted" list — hits the separate `/deleted/{id}/export` route rather than
+ * the live-profile export endpoint, which still 404s for a deleted profile
+ * (issue #123). Same download-file UX as `downloadProfileExport`.
+ */
+export async function downloadDeletedProfileExport(profileId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/profiles/deleted/${profileId}/export`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Export failed: ${response.status}`);
+  }
+
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `healthsteward-${profileId}.json`;
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 // Conditions
 export const conditions = {
   list: (profileId: string) =>

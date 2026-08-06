@@ -1786,4 +1786,28 @@ Related: issue #126, issue #125, PR #124, PR #132, DEC-006, DEC-009.
 
 ---
 
+## 54. Export Action on the "Recently Deleted" View (#130)
+
+**Date:** 2026-08-06
+
+**Context:** #123's decision (entry 51) blocked export of a soft-deleted profile through the existing route and deferred the "grab a copy before the 30-day purge" use case to its own issue rather than reopening a URL-only backdoor. #130 implements that deferred affordance.
+
+**What changed:** a second, separate backend route, `GET /api/profiles/deleted/{profile_id}/export`, added to `src/api/profile_export.py` alongside a new `get_deleted_profile_or_404` helper — the mirror image of `get_live_profile_or_404` in `src/api/health_profile.py`, filtering on `deleted_at IS NOT NULL` instead of `IS NULL`. The existing `/{profile_id}/export` route is untouched: it still resolves through `get_live_profile_or_404` and still 404s for a deleted profile. The two routes now share a `_build_export_document` helper (factored out of the body of `export_profile`) so "what gets exported" stays identical between the live and rescue paths while "which profile is reachable" stays a completely separate lookup per path, per #123's decision to keep those two things distinct rather than relax a filter.
+
+**Provenance flag:** the export document now carries `exported_from_deleted: bool` alongside `export_format_version`, `true` from the new route and explicitly `false` from the existing one (rather than omitting the key on a live export) — every other field in the document is always-present with a value, not optionally absent, so an explicit `false` matches the rest of the payload's shape and means an importer/reader never has to treat a missing key as "false."
+
+**Frontend:** `frontend/src/pages/ProfileList.tsx`'s "Recently deleted" row gains an Export button next to Restore, wired to a new `downloadDeletedProfileExport` in `frontend/src/api/client.ts` — same download-file-via-blob UX as the existing `downloadProfileExport`, pointed at the new route.
+
+**Out of scope, deliberately:** whether re-deleting a restored profile should preserve the original `deleted_at` (not reset the 30-day clock) is #130's own scope note as a separate, later issue. Not touched here.
+
+**Tests:** `tests/test_profile_export.py` gains `test_export_of_a_live_profile_carries_exported_from_deleted_false`, `test_deleted_export_404s_for_a_live_profile`, `test_deleted_export_404s_for_an_unknown_profile`, `test_deleted_export_succeeds_for_a_soft_deleted_profile`, `test_live_export_route_still_404s_for_a_soft_deleted_profile` (regression guard on #123's fix), and `test_restore_flips_which_export_route_works` (mirror-image check across both routes before/after restore). Full suite: 299 passed, 25 skipped (up from 291 passed at entry 51's time).
+
+**No DEC entry**, per the issue's own scope note: this implements the affordance DEC-027's status note (via #123) already pointed at, rather than making a new architectural choice.
+
+**Files changed:** `src/api/profile_export.py`, `tests/test_profile_export.py`, `frontend/src/api/client.ts`, `frontend/src/pages/ProfileList.tsx`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #130, issue #123, PR #131, DEC-027.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

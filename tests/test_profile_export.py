@@ -236,6 +236,101 @@ async def test_export_carries_document_metadata_and_says_files_are_excluded(
     assert "not included" in export["documents_note"]
 
 
+@pytest.mark.asyncio
+async def test_export_of_a_live_profile_carries_exported_from_deleted_false(
+    client: AsyncClient, sample_profile_data
+):
+    """A normal live-profile export should be unambiguous about its
+    provenance too, not just leave the flag out."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+
+    export = (await client.get(f"/api/profiles/{profile_id}/export")).json()
+
+    assert export["exported_from_deleted"] is False
+
+
+@pytest.mark.asyncio
+async def test_deleted_export_404s_for_a_live_profile(
+    client: AsyncClient, sample_profile_data
+):
+    """Issue #130. The rescue route exists solely to serve deleted profiles —
+    a live profile isn't reachable through it."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+
+    response = await client.get(f"/api/profiles/deleted/{profile_id}/export")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_deleted_export_404s_for_an_unknown_profile(client: AsyncClient):
+    response = await client.get("/api/profiles/deleted/does-not-exist/export")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_deleted_export_succeeds_for_a_soft_deleted_profile(
+    client: AsyncClient, sample_profile_data, sample_condition_data
+):
+    """Issue #130. A soft-deleted profile inside its 30-day recovery window
+    can be rescued via the new route, and the export is marked with its
+    provenance."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    await client.post(f"/api/profiles/{profile_id}/conditions/", json=sample_condition_data)
+    await client.delete(f"/api/profiles/{profile_id}")
+
+    response = await client.get(f"/api/profiles/deleted/{profile_id}/export")
+
+    assert response.status_code == 200
+    export = response.json()
+    assert export["exported_from_deleted"] is True
+    assert export["export_format_version"] == EXPORT_FORMAT_VERSION
+    assert export["profile"]["id"] == profile_id
+    assert len(export["conditions"]) == 1
+
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith("attachment; filename=")
+
+
+@pytest.mark.asyncio
+async def test_live_export_route_still_404s_for_a_soft_deleted_profile(
+    client: AsyncClient, sample_profile_data
+):
+    """Regression guard for issue #123's fix: adding the rescue route must not
+    loosen the existing route's guarantee that a deleted profile is
+    unreachable through it."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    await client.delete(f"/api/profiles/{profile_id}")
+
+    response = await client.get(f"/api/profiles/{profile_id}/export")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_restore_flips_which_export_route_works(
+    client: AsyncClient, sample_profile_data
+):
+    """Mirror image of the two routes' guarantees: restoring a profile makes
+    the live route work again and makes the deleted route 404 for it, since
+    it is no longer a deleted profile."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    await client.delete(f"/api/profiles/{profile_id}")
+
+    assert (await client.get(f"/api/profiles/{profile_id}/export")).status_code == 404
+    assert (
+        await client.get(f"/api/profiles/deleted/{profile_id}/export")
+    ).status_code == 200
+
+    await client.post(f"/api/profiles/{profile_id}/restore")
+
+    assert (await client.get(f"/api/profiles/{profile_id}/export")).status_code == 200
+    assert (
+        await client.get(f"/api/profiles/deleted/{profile_id}/export")
+    ).status_code == 404
+
+
 def test_export_filename_falls_back_to_the_profile_id():
     """A name with nothing filename-safe in it would otherwise produce
     "healthsteward--2026-08-04.json"."""
