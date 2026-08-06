@@ -8,7 +8,30 @@ from src.utils.anonymization import (
     Anonymizer,
     AnonymizedProfile,
     PII_PATTERNS,
+    SPACY_AVAILABLE,
     anonymize_text,
+)
+
+
+def _ner_usable() -> bool:
+    """True only if the NER branch will actually execute.
+
+    `SPACY_AVAILABLE` alone isn't enough: `Anonymizer.nlp` silently flips
+    `use_ner` back to False when `en_core_web_sm` isn't downloaded, so spaCy
+    can be installed and the regex-only path still be what runs. Issue #125 is
+    precisely about that branch being invisible, so the guard checks the thing
+    it claims to check rather than a proxy for it.
+    """
+    if not SPACY_AVAILABLE:
+        return False
+    probe = Anonymizer(use_ner=True)
+    return probe.nlp is not None
+
+
+NER_UNAVAILABLE = not _ner_usable()
+requires_ner = pytest.mark.skipif(
+    NER_UNAVAILABLE,
+    reason="spaCy and/or en_core_web_sm not installed — NER branch cannot run",
 )
 
 
@@ -300,6 +323,174 @@ class TestHardenedPIIPatterns:
         # Medicine kept
         assert "Metformin 500mg twice daily" in result
         assert "fatigue" in result
+
+
+@requires_ner
+class TestNERPath:
+    """Coverage for the spaCy NER branch of `anonymize_text` (issue #125).
+
+    Every other class in this file constructs `Anonymizer(use_ner=False)`, so
+    until this class existed the `if self.use_ner and self.nlp:` branch had no
+    coverage at all — positive or negative. The suite was green both with and
+    without spaCy installed, because nothing exercised the difference. That's
+    how the drug-name over-redaction in `test_medication_names_over_redacted`
+    stayed invisible: DEC-025's reasoning rests on negative cases asserting
+    clinical content survives redaction, and those cases only ever ran against
+    the regex-only anonymizer.
+
+    **These tests pin what the NER path does today, not what it should do.**
+    The known-bad cases are `xfail`, not fixed assertions — deciding how to
+    handle `PERSON` false positives (allowlist / corroboration / larger model /
+    accept-and-document) changes behavior on the DEC-006 trust boundary and is
+    item (2) of #125, deliberately deferred. When that lands, the `xfail`s here
+    are the list of things to revisit.
+
+    The whole class skips when spaCy or `en_core_web_sm` is absent — which is
+    the case on a fresh clone and in CI, since spaCy is in neither
+    `requirements.txt` nor `environment.yml`. A missing optional dependency
+    should not be a red build.
+    """
+
+    @pytest.fixture
+    def anonymizer(self):
+        return Anonymizer(use_ner=True)
+
+    def _redacted(self, anonymizer, text):
+        result, _ = anonymizer.anonymize_text(text)
+        return result
+
+    def test_ner_branch_is_actually_active(self, anonymizer):
+        """Guard the guard.
+
+        If this fixture ever silently degraded to regex-only, every negative
+        case below would pass for the wrong reason and the class would be
+        decorative — exactly the failure mode #125 exists to close. `Jane Doe`
+        matches no regex in `PII_PATTERNS`, so it can only be caught by NER.
+        """
+        assert anonymizer.use_ner is True
+        assert anonymizer.nlp is not None
+        assert "Jane Doe" not in self._redacted(anonymizer, "Emergency contact Jane Doe")
+
+    # --- Positive cases: names NER is here to catch ---
+
+    @pytest.mark.parametrize("text,name", [
+        ("Emergency contact Jane Doe at 555-123-4567", "Jane Doe"),
+        ("Referred by Dr. Sarah Johnson last spring", "Sarah Johnson"),
+        ("Spoke with Robert Martinez about the referral", "Robert Martinez"),
+    ])
+    def test_full_names_in_free_text_redacted(self, anonymizer, text, name):
+        """Multi-token names in free text are the reason the NER branch exists —
+        no `PII_PATTERNS` entry matches a bare name."""
+        result = self._redacted(anonymizer, text)
+        assert name not in result
+        assert "[REDACTED]" in result
+
+    @pytest.mark.xfail(
+        reason="issue #125: en_core_web_sm doesn't tag single-token surnames "
+               "after a title as PERSON. Pinned, not fixed.",
+    )
+    def test_single_token_surname_after_title_redacted(self, anonymizer):
+        """`Smith` survives while `Sarah Johnson` doesn't — the weak case for
+        `en_core_web_sm`, measured on the #122 corpus. The phone number in the
+        same sentence is caught by regex, so the leak is easy to miss."""
+        assert "Smith" not in self._redacted(anonymizer, "Call Dr. Smith at 555-123-4567")
+
+    # --- Negative cases: clinical content must survive, NER on ---
+    #
+    # Same corpus as TestHardenedPIIPatterns::test_clinical_content_not_redacted,
+    # re-run against the NER path. Exactly one case moves (see below), which is
+    # the whole point of duplicating the list rather than trusting that the
+    # regex-only result carries over.
+
+    @pytest.mark.parametrize("text", [
+        "Metformin 500mg twice daily",
+        "BP 120/80",
+        "A1C was 7.2",
+        "Vitamin D 32 ng/mL",
+        "Type 2 Diabetes, managed",
+        "Diagnosis code E11.9",
+        "Symptoms for 3 years",
+        "Appointment at 10:30",
+        "Weight 185 lbs",
+        "LDL 130, HDL 55, total 210",
+        "Titrate 25-50 mg",
+        "Fasting glucose 95-110 range",
+        "Take 1/2 tablet in the morning",
+        "Continue Metformin 500mg twice daily.",
+        "Blood pressure well controlled on current regimen",
+    ])
+    def test_clinical_content_not_redacted_with_ner(self, anonymizer, text):
+        """Over-redaction with NER on is a *worse* failure than with it off:
+        it destroys clinically load-bearing tokens rather than dose-shaped
+        numbers. `Lisinopril 10 mg daily` is the case from this same list that
+        does not survive — split out below rather than dropped, so the
+        difference between the two paths is visible in the test names."""
+        assert self._redacted(anonymizer, text) == text
+
+    @pytest.mark.parametrize("text,drug", [
+        ("Lisinopril 10 mg daily", "Lisinopril"),
+        ("Started Rosuvastatin last month.", "Rosuvastatin"),
+    ])
+    @pytest.mark.xfail(
+        reason="issue #125 item (2), deferred: en_core_web_sm tags drug names "
+               "as PERSON and anonymize_text redacts every PERSON "
+               "unconditionally. Pinned as known-bad, not fixed.",
+    )
+    def test_medication_names_over_redacted(self, anonymizer, text, drug):
+        """The finding that opened #125. The drug name is the single most
+        clinically load-bearing token in the sentence and it is destroyed
+        before the LLM generating visit prep ever sees it.
+
+        Not an exotic-name edge case: sweeping 205 common generic and brand
+        drug names through `en_core_web_sm` across five sentence templates,
+        69% were tagged `PERSON` in at least one context and 8% in every
+        context (see the #125 thread for the full numbers). `Started
+        Rosuvastatin last month.` is the worse shape — the span swallows the
+        preceding verb too, yielding `[REDACTED] last month.`
+        """
+        assert drug in self._redacted(anonymizer, text)
+
+    # --- Redaction events (DEC-029) on the NER path ---
+
+    def test_person_redaction_emits_event_with_span_not_value(self, anonymizer):
+        """DEC-029's event log is also unpinned on this branch. A PERSON event
+        must carry type and span only — never the matched name."""
+        text = "Spoke with Robert Martinez about the referral"
+        result, events = anonymizer.anonymize_text(text, field_name="notes")
+
+        person_events = [e for e in events if e.entity_type == "PERSON"]
+        assert len(person_events) == 1
+        event = person_events[0]
+        assert text[event.start:event.end] == "Robert Martinez"
+        assert event.field_name == "notes"
+        assert "Robert" not in str(event.to_dict())
+        assert "Robert Martinez" not in result
+
+    def test_person_event_ids_stable_across_runs(self, anonymizer):
+        """Same guarantee `TestAnonymizer` makes for regex events: ids are a
+        deterministic hash, so two runs over the same field agree."""
+        text = "Emergency contact Jane Doe"
+        _, first = anonymizer.anonymize_text(text, profile_id="p1", field_name="notes")
+        _, second = anonymizer.anonymize_text(text, profile_id="p1", field_name="notes")
+
+        assert [e.entity_id for e in first] == [e.entity_id for e in second]
+        assert [e.entity_type for e in first] == ["PERSON"]
+
+    def test_ner_spans_are_offsets_into_post_regex_text(self, anonymizer):
+        """NER runs on the text *after* regex substitution, so its spans index
+        the partially-redacted string, not the original. Pinned because it's a
+        real trap for anyone reading `extra_data["redaction_events"]` — a
+        PERSON span and a phone span in the same event list are offsets into
+        two different strings."""
+        text = "Call 555-123-4567 and ask for Jane Doe"
+        result, events = anonymizer.anonymize_text(text)
+
+        person = next(e for e in events if e.entity_type == "PERSON")
+        post_regex = PII_PATTERNS["phone"].sub("[REDACTED]", text)
+        assert post_regex[person.start:person.end] == "Jane Doe"
+        # ...and not an offset into the original.
+        assert text[person.start:person.end] != "Jane Doe"
+        assert "Jane Doe" not in result
 
 
 class TestAnonymizer:
