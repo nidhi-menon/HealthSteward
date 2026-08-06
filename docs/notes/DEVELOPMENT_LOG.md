@@ -1600,4 +1600,27 @@ Related: issue #93, issue #92 (encryption at rest), issue #99 (human-readable sh
 
 ---
 
+## 47. Log What Got Redacted, Per Visit-Prep Request (#16, DEC-029)
+
+**Date:** 2026-08-05
+
+**Context:** `Anonymizer.anonymize_text()` scanned free text for PII and substituted `[REDACTED]`, but threw away what it matched. There was no way to check, after the fact, whether the regex/NER net actually caught everything for a given visit-prep call — a Reddit comment on the pluggable-backend post flagged exactly this: "redaction recall is the whole ballgame ... worth logging what got redacted so you can audit misses." A follow-up discussion on the issue clarified the aggregation should be per visit-prep-request (not per-document — AVS PDFs never get anonymized in the first place, since nothing derived from them leaves the machine at that stage) and that each match should carry a stable per-entity id rather than just a count, so a future write-back-capable agentic tool could be audited against exactly which entities a run could see.
+
+**What was built:**
+- `RedactionEvent` (`src/utils/anonymization.py`): `entity_id` (deterministic `sha256(profile_id|field_name|entity_type|occurrence_index)`, truncated — never a random UUID, never derived from the matched text), `entity_type`, `start`/`end` span, `field_name`, optional `document_id`. `to_dict()` emits `"document_link": "none"` when there's no document lineage rather than omitting the key.
+- `anonymize_text()` now returns `(anonymized_text, list[RedactionEvent])`, with matches recorded before each regex substitution and before NER's replacement pass, in the same declaration order the redaction itself already followed.
+- `anonymize_profile()`, `anonymize_doctor()`, `anonymize_appointment()` all thread `profile_id`/`field_name`/`document_id` through and return `(result, events)`.
+- Call sites updated: `VisitPrepTools` (`src/agents/tools.py`) now accumulates `self.redaction_events` across every tool-result anonymization; Stage 4 of context selection (`src/utils/context_selection.py`) collects events into a new `ContextSelectionResult.redaction_events` field; `VisitPrepAgent.prepare_visit` (`src/agents/visit_prep.py`) aggregates all of the above into `self.last_redaction_events` for the whole request — profile/appointment anonymization, Stage 4 selection, and agentic-loop tool results, including the non-convergence path before falling back to single-shot.
+- `BaseAgent._log_conversation` (`src/agents/base.py`) gained a `redaction_events` parameter, written to the assistant `ConversationLog` row as `extra_data["redaction_events"]` — no schema migration, since `extra_data` was already a flexible JSON column.
+- Fixed a pre-existing duplication while touching this code: `_build_anonymized_context` was re-calling `anonymize_text` on `condition.notes` even though `anonymize_profile` had already anonymized it (the result just wasn't reused downstream). Left alone, that would have double-logged every condition-notes redaction event; now it reuses `anonymize_profile`'s output via `zip(conditions_raw, profile.conditions)`.
+- New tests: `tests/test_anonymization.py` (event shape never leaks the raw match; entity ids stable across repeated calls and distinct across field names; `document_id` tagging vs. honest `"document_link": "none"`), `tests/test_agent_tools.py` (tool-result redaction events aggregate onto `VisitPrepTools`), `tests/test_visit_prep.py` (end-to-end: events land in `ConversationLog.extra_data`, ids are stable across two separate `prepare_visit()` calls). Suite 276 → 279.
+
+**Not in scope, deliberately:** `Condition`/`Medication`/`Appointment` have no `document_id` column and none was added — the issue's own scoping note is that most PII-bearing free text (visit notes, additional concerns) is user-typed and was never document-sourced, so a migration wouldn't fully solve per-document traceability anyway. `Vitals`/`LabOrder`/`Referral`/`FollowUp` do have `document_id`, and `RedactionEvent` supports tagging it, but none of those models' text fields currently flow through `anonymize_text` in the pipeline (`_build_anonymized_context` inserts their values unanonymized today — a pre-existing gap, unrelated to #16). The `document_id`-tagging capability is exercised directly against the `Anonymizer` in tests rather than through the pipeline for that reason.
+
+**Files changed:** `src/utils/anonymization.py`, `src/agents/tools.py`, `src/agents/visit_prep.py`, `src/agents/base.py`, `src/utils/context_selection.py`, `tests/test_anonymization.py`, `tests/test_agent_tools.py`, `tests/test_visit_prep.py`, `tests/test_context_selection.py` (mock return-shape fix).
+
+Related: issue #16, DEC-006, DEC-029.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

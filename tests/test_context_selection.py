@@ -304,7 +304,7 @@ class TestContextSelectorAsync:
     def mock_anonymizer(self):
         """Create a mock anonymizer."""
         anonymizer = MagicMock()
-        anonymizer.anonymize_appointment = MagicMock(return_value=MagicMock())
+        anonymizer.anonymize_appointment = MagicMock(return_value=(MagicMock(), []))
         return anonymizer
 
     @pytest.fixture

@@ -63,7 +63,8 @@ class TestHardenedPIIPatterns:
         return Anonymizer(use_ner=False)
 
     def _redacted(self, anonymizer, text):
-        return anonymizer.anonymize_text(text)
+        result, _ = anonymizer.anonymize_text(text)
+        return result
 
     # --- International phone numbers ---
 
@@ -289,7 +290,7 @@ class TestHardenedPIIPatterns:
             "MRN: 12345678. Call the office at +44 20 7946 0958 or write to "
             "742 Evergreen Terrace Apt 4B. DOB 15/06/1985."
         )
-        result = anonymizer.anonymize_text(text)
+        result, _ = anonymizer.anonymize_text(text)
 
         # PII gone
         assert "12345678" not in result
@@ -356,12 +357,13 @@ class TestAnonymizer:
         doctor.clinic = "City Medical Center"
         doctor.notes = "Prefers phone follow-ups. Call 555-000-1111 to reach the office."
 
-        result = anonymizer.anonymize_doctor(doctor)
+        result, events = anonymizer.anonymize_doctor(doctor)
 
         assert result.notes is not None
         assert "555-000-1111" not in result.notes
         assert "[REDACTED]" in result.notes
         assert "phone follow-ups" in result.notes
+        assert any(e.entity_type == "phone" for e in events)
 
     def test_anonymize_doctor_with_no_notes(self, anonymizer):
         """None notes should stay None, not become an empty/placeholder string."""
@@ -371,9 +373,10 @@ class TestAnonymizer:
         doctor.clinic = "City Medical Center"
         doctor.notes = None
 
-        result = anonymizer.anonymize_doctor(doctor)
+        result, events = anonymizer.anonymize_doctor(doctor)
 
         assert result.notes is None
+        assert events == []
 
     def test_anonymize_doctor_reference_prescribing(self, anonymizer):
         """Test prescribing doctor anonymization."""
@@ -387,45 +390,132 @@ class TestAnonymizer:
     def test_anonymize_text_phone_numbers(self, anonymizer):
         """Test phone number redaction."""
         text = "Call Dr. Smith at 555-123-4567 or (800) 555-0100"
-        result = anonymizer.anonymize_text(text)
+        result, events = anonymizer.anonymize_text(text)
 
         assert "555-123-4567" not in result
         assert "(800) 555-0100" not in result
         assert "[REDACTED]" in result
+        assert len(events) == 2
+        assert all(e.entity_type == "phone" for e in events)
 
     def test_anonymize_text_emails(self, anonymizer):
         """Test email redaction."""
         text = "Contact the office at frontdesk@clinic.com"
-        result = anonymizer.anonymize_text(text)
+        result, events = anonymizer.anonymize_text(text)
 
         assert "frontdesk@clinic.com" not in result
         assert "[REDACTED]" in result
+        assert len(events) == 1
+        assert events[0].entity_type == "email"
 
     def test_anonymize_text_ssn(self, anonymizer):
         """Test SSN redaction."""
         text = "Patient SSN: 123-45-6789"
-        result = anonymizer.anonymize_text(text)
+        result, events = anonymizer.anonymize_text(text)
 
         assert "123-45-6789" not in result
         assert "[REDACTED]" in result
+        assert len(events) == 1
+        assert events[0].entity_type == "ssn"
 
     def test_anonymize_text_preserves_medical_content(self, anonymizer):
         """Test that medical information is preserved."""
         text = "Patient has Type 2 Diabetes and takes Metformin 500mg twice daily"
-        result = anonymizer.anonymize_text(text)
+        result, events = anonymizer.anonymize_text(text)
 
         # Medical info should be preserved
         assert "Type 2 Diabetes" in result
         assert "Metformin" in result
         assert "500mg" in result
+        assert events == []
 
     def test_anonymize_text_none(self, anonymizer):
         """Test handling of None input."""
-        assert anonymizer.anonymize_text(None) is None
+        result, events = anonymizer.anonymize_text(None)
+        assert result is None
+        assert events == []
 
     def test_anonymize_text_empty(self, anonymizer):
         """Test handling of empty string."""
-        assert anonymizer.anonymize_text("") == ""
+        result, events = anonymizer.anonymize_text("")
+        assert result == ""
+        assert events == []
+
+    def test_anonymize_text_event_never_contains_raw_value(self, anonymizer):
+        """The redaction event must carry type + span only — never the
+        matched substring itself (issue #16, DEC-006)."""
+        text = "SSN: 123-45-6789"
+        result, events = anonymizer.anonymize_text(text)
+
+        assert len(events) == 1
+        event = events[0]
+        matched_span = text[event.start:event.end]
+        assert "123-45-6789" in matched_span  # span is meaningful...
+        for attr_name in ("entity_type", "field_name"):
+            value = getattr(event, attr_name)
+            assert "123-45-6789" not in str(value)
+        # The event object itself has no field holding the raw match
+        assert not hasattr(event, "value")
+        assert not hasattr(event, "matched_text")
+        assert not hasattr(event, "raw_value")
+
+    def test_anonymize_text_entity_id_stable_across_runs(self, anonymizer):
+        """Same profile_id/field_name/text must yield the same entity id on
+        repeated calls (issue #16) — the id is a deterministic hash, not a
+        random UUID."""
+        text = "Call 555-123-4567 or email a@b.com"
+        _, events1 = anonymizer.anonymize_text(
+            text, profile_id="profile-1", field_name="appointment:abc:purpose"
+        )
+        _, events2 = anonymizer.anonymize_text(
+            text, profile_id="profile-1", field_name="appointment:abc:purpose"
+        )
+
+        assert [e.entity_id for e in events1] == [e.entity_id for e in events2]
+        # Distinct entities within the same call get distinct ids
+        assert len({e.entity_id for e in events1}) == len(events1)
+
+    def test_anonymize_text_entity_id_differs_by_field_name(self, anonymizer):
+        """The same text redacted under a different field_name must not
+        collide — ids are scoped per field, not just per profile."""
+        text = "Call 555-123-4567"
+        _, events1 = anonymizer.anonymize_text(
+            text, profile_id="profile-1", field_name="condition:c1:notes"
+        )
+        _, events2 = anonymizer.anonymize_text(
+            text, profile_id="profile-1", field_name="condition:c2:notes"
+        )
+
+        assert events1[0].entity_id != events2[0].entity_id
+
+    def test_anonymize_text_document_id_tagged_when_provided(self, anonymizer):
+        """A document_id passed through is carried onto every event from that
+        call (opportunistic per-document traceability, issue #16)."""
+        text = "Weight 185 lbs, MRN: 12345678"
+        _, events = anonymizer.anonymize_text(
+            text, profile_id="profile-1", field_name="vitals:v1:notes",
+            document_id="doc-1",
+        )
+
+        assert len(events) == 1
+        assert events[0].document_id == "doc-1"
+        assert events[0].to_dict()["document_id"] == "doc-1"
+        assert "document_link" not in events[0].to_dict()
+
+    def test_anonymize_text_no_document_link_logged_honestly(self, anonymizer):
+        """Fields with no document lineage (e.g. user-typed notes) log
+        `document_link: "none"` rather than omitting the key or fabricating
+        a document_id (issue #16)."""
+        text = "MRN: 12345678"
+        _, events = anonymizer.anonymize_text(
+            text, profile_id="profile-1", field_name="additional_concerns",
+        )
+
+        assert len(events) == 1
+        assert events[0].document_id is None
+        d = events[0].to_dict()
+        assert d["document_link"] == "none"
+        assert "document_id" not in d
 
 
 class TestAnonymizerProfile:
@@ -468,7 +558,7 @@ class TestAnonymizerProfile:
 
     def test_anonymize_profile_removes_name(self, anonymizer, mock_profile):
         """Test that patient name is not included in anonymized profile."""
-        result = anonymizer.anonymize_profile(mock_profile)
+        result, _ = anonymizer.anonymize_profile(mock_profile)
 
         # The AnonymizedProfile doesn't have a name field at all
         assert not hasattr(result, 'name')
@@ -476,7 +566,7 @@ class TestAnonymizerProfile:
 
     def test_anonymize_profile_age_conversion(self, anonymizer, mock_profile):
         """Test that DOB is converted to age."""
-        result = anonymizer.anonymize_profile(mock_profile)
+        result, _ = anonymizer.anonymize_profile(mock_profile)
 
         assert result.age_description is not None
         assert "years old" in result.age_description
@@ -485,7 +575,7 @@ class TestAnonymizerProfile:
 
     def test_anonymize_profile_preserves_medical_info(self, anonymizer, mock_profile):
         """Test that conditions and medications are preserved."""
-        result = anonymizer.anonymize_profile(mock_profile)
+        result, _ = anonymizer.anonymize_profile(mock_profile)
 
         assert len(result.conditions) == 1
         assert result.conditions[0]['name'] == "Type 2 Diabetes"
@@ -497,7 +587,7 @@ class TestAnonymizerProfile:
 
     def test_anonymize_profile_anonymizes_prescribing_doctor(self, anonymizer, mock_profile):
         """Test that prescribing doctor is anonymized."""
-        result = anonymizer.anonymize_profile(mock_profile)
+        result, _ = anonymizer.anonymize_profile(mock_profile)
 
         med = result.medications[0]
         assert med['prescribed_by'] == "Prescribing physician"
@@ -505,11 +595,20 @@ class TestAnonymizerProfile:
 
     def test_anonymize_profile_anonymizes_notes(self, anonymizer, mock_profile):
         """Test that phone numbers in notes are redacted."""
-        result = anonymizer.anonymize_profile(mock_profile)
+        result, events = anonymizer.anonymize_profile(mock_profile)
 
         condition_notes = result.conditions[0]['notes']
         assert "555-000-1111" not in condition_notes
         assert "[REDACTED]" in condition_notes
+
+    def test_anonymize_profile_condition_events_have_no_document_link(self, anonymizer, mock_profile):
+        """Condition has no document_id column (src/data/models.py) — events
+        must log "no document link" honestly rather than fabricate one."""
+        _, events = anonymizer.anonymize_profile(mock_profile)
+
+        assert len(events) == 1
+        assert events[0].document_id is None
+        assert events[0].to_dict()["document_link"] == "none"
 
 
 class TestAnonymizeAppointment:
@@ -529,19 +628,26 @@ class TestAnonymizeAppointment:
         doctor.notes = None
 
         appointment = MagicMock()
+        appointment.id = "appt-1"
+        appointment.profile_id = "profile-1"
         appointment.doctor = doctor
         appointment.scheduled_date = date(2024, 3, 1)
         appointment.purpose = "Follow-up"
         appointment.prep_notes = "Ask about fatigue, call 555-123-4567 if urgent"
         appointment.visit_notes = "Discussed dosage increase"
 
-        result = anonymizer.anonymize_appointment(appointment)
+        result, events = anonymizer.anonymize_appointment(appointment)
 
         assert result.prep_notes is not None
         assert "Ask about fatigue" in result.prep_notes
         assert "555-123-4567" not in result.prep_notes
         assert "[REDACTED]" in result.prep_notes
         assert result.visit_notes == "Discussed dosage increase"
+
+        # Appointment has no document_id column — events log "no document link"
+        assert len(events) == 1
+        assert events[0].document_id is None
+        assert events[0].to_dict()["document_link"] == "none"
 
 
 class TestModuleLevelFunctions:
@@ -550,7 +656,9 @@ class TestModuleLevelFunctions:
     def test_anonymize_text_function(self):
         """Test the module-level anonymize_text function."""
         text = "Call 555-123-4567"
-        result = anonymize_text(text)
+        result, events = anonymize_text(text)
 
         assert "555-123-4567" not in result
         assert "[REDACTED]" in result
+        assert len(events) == 1
+        assert events[0].entity_type == "phone"
