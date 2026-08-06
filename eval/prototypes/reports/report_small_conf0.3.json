@@ -1,0 +1,311 @@
+{
+  "issue": 122,
+  "prototype_only": true,
+  "platform": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.11.7",
+    "post_import_rss_mb": 243.5,
+    "note": "Latency and RSS are machine-specific. DEC-009's binding constraint is an 8GB M3; numbers from other hardware are directional only. peak_rss_mb_after is a process-wide high-water mark shared across systems in one run \u2014 compare rss_delta_mb, or run one system at a time."
+  },
+  "corpus": {
+    "positive_cases": 67,
+    "negative_cases": 24,
+    "categories": [
+      "address",
+      "address_unit",
+      "clinic_name",
+      "condition",
+      "date",
+      "dosage",
+      "duration",
+      "email",
+      "insurance_id",
+      "labs",
+      "medication",
+      "mixed_note",
+      "mrn_labeled",
+      "mrn_unlabeled",
+      "person_name",
+      "phone",
+      "phone_intl",
+      "plan",
+      "po_box",
+      "scheduling",
+      "ssn",
+      "vitals",
+      "zip"
+    ],
+    "source": "tests/test_anonymization.py (transcribed in eval/prototypes/openmed_pii_cases.py)"
+  },
+  "systems": [
+    {
+      "name": "openmed",
+      "available": true,
+      "unavailable_reason": null,
+      "detail": "openmed 2.0.0 via extract_pii(model_name='OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1', confidence_threshold=0.3)",
+      "load_seconds": 2.7323359169531614,
+      "mean_ms_per_text": 780.0927833033958,
+      "p95_ms_per_text": 927.3429580498487,
+      "peak_rss_mb_after": 454.796875,
+      "rss_delta_mb": 211.296875,
+      "positive_pass": 63,
+      "negative_pass": 17,
+      "categories": {
+        "phone": {
+          "positive_total": 7,
+          "positive_pass": 7,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "email": {
+          "positive_total": 3,
+          "positive_pass": 3,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "ssn": {
+          "positive_total": 3,
+          "positive_pass": 2,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "phone_intl": {
+          "positive_total": 5,
+          "positive_pass": 5,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "po_box": {
+          "positive_total": 4,
+          "positive_pass": 4,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "address": {
+          "positive_total": 14,
+          "positive_pass": 14,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "address_unit": {
+          "positive_total": 5,
+          "positive_pass": 5,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "zip": {
+          "positive_total": 2,
+          "positive_pass": 2,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "date": {
+          "positive_total": 7,
+          "positive_pass": 7,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "mrn_labeled": {
+          "positive_total": 5,
+          "positive_pass": 5,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "insurance_id": {
+          "positive_total": 4,
+          "positive_pass": 2,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "mrn_unlabeled": {
+          "positive_total": 3,
+          "positive_pass": 2,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "person_name": {
+          "positive_total": 4,
+          "positive_pass": 4,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "mixed_note": {
+          "positive_total": 1,
+          "positive_pass": 1,
+          "negative_total": 0,
+          "negative_pass": 0
+        },
+        "medication": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 3,
+          "negative_pass": 3
+        },
+        "vitals": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 4,
+          "negative_pass": 2
+        },
+        "labs": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 5,
+          "negative_pass": 5
+        },
+        "condition": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 2,
+          "negative_pass": 2
+        },
+        "duration": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 1,
+          "negative_pass": 1
+        },
+        "scheduling": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 2,
+          "negative_pass": 0
+        },
+        "dosage": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 4,
+          "negative_pass": 3
+        },
+        "plan": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 1,
+          "negative_pass": 1
+        },
+        "clinic_name": {
+          "positive_total": 0,
+          "positive_pass": 0,
+          "negative_total": 2,
+          "negative_pass": 0
+        }
+      },
+      "leaks": [
+        {
+          "text": "123.45.6789",
+          "category": "ssn",
+          "passed": false,
+          "survived": [
+            "123.45.6789"
+          ],
+          "output": "123.45.6789",
+          "detected_labels": []
+        },
+        {
+          "text": "Policy #: ABC-12345678",
+          "category": "insurance_id",
+          "passed": false,
+          "survived": [
+            "ABC-12345678"
+          ],
+          "output": "Policy #: ABC-12345678",
+          "detected_labels": []
+        },
+        {
+          "text": "Group Number: 0012345",
+          "category": "insurance_id",
+          "passed": false,
+          "survived": [
+            "0012345"
+          ],
+          "output": "Group Number: 0012345",
+          "detected_labels": []
+        },
+        {
+          "text": "Chart 12345678 shows no changes",
+          "category": "mrn_unlabeled",
+          "passed": false,
+          "survived": [
+            "12345678"
+          ],
+          "output": "Chart 12345678 shows no changes",
+          "detected_labels": []
+        }
+      ],
+      "over_redactions": [
+        {
+          "text": "Appointment at 10:30",
+          "category": "scheduling",
+          "passed": false,
+          "survived": [],
+          "output": "Appointment at [REDACTED]",
+          "detected_labels": [
+            "time"
+          ]
+        },
+        {
+          "text": "Weight 185 lbs",
+          "category": "vitals",
+          "passed": false,
+          "survived": [],
+          "output": "Weight [REDACTED] lbs",
+          "detected_labels": [
+            "age"
+          ]
+        },
+        {
+          "text": "Step count averaged 12500 per day",
+          "category": "vitals",
+          "passed": false,
+          "survived": [],
+          "output": "Step count averaged [REDACTED] per day",
+          "detected_labels": [
+            "postcode"
+          ]
+        },
+        {
+          "text": "Follow up in January 2026",
+          "category": "scheduling",
+          "passed": false,
+          "survived": [],
+          "output": "Follow up in [REDACTED]",
+          "detected_labels": [
+            "date"
+          ]
+        },
+        {
+          "text": "Infusion rate 5551234 mL",
+          "category": "dosage",
+          "passed": false,
+          "survived": [],
+          "output": "Infusion rate [REDACTED] mL",
+          "detected_labels": [
+            "pin"
+          ]
+        },
+        {
+          "text": "Seen at City Medical Center",
+          "category": "clinic_name",
+          "passed": false,
+          "survived": [],
+          "output": "Seen at [REDACTED] [REDACTED] Center",
+          "detected_labels": [
+            "city",
+            "company_name"
+          ]
+        },
+        {
+          "text": "Follow-up scheduled at Metro Health",
+          "category": "clinic_name",
+          "passed": false,
+          "survived": [],
+          "output": "Follow-up scheduled at [REDACTED]",
+          "detected_labels": [
+            "company_name"
+          ]
+        }
+      ]
+    }
+  ]
+}

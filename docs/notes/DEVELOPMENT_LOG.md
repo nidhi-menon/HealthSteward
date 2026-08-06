@@ -1665,7 +1665,82 @@ Related: issue #49, issue #50, DEC-027, DEC-030.
 
 ---
 
-## 51. Negative Test Coverage for the spaCy NER Path (#125, item 1)
+## 50. OpenMed PII Benchmark — Evaluated and Not Adopted (#122)
+
+**Date:** 2026-08-05
+
+**Context:** DEC-025 hardened the hand-rolled regex list rather than adopting a PII-detection library, and parked library adoption on #92. #122 asked for a prototype benchmark of OpenMed (Apache-2.0, local-first, 18 HIPAA Safe Harbor categories) against the current approach — explicitly an evaluation, not a production swap: no changes to `src/utils/anonymization.py`, and no `openmed` in `requirements.txt`/`environment.yml`.
+
+**What was built:**
+- `eval/prototypes/openmed_pii_cases.py` — 67 positive and 24 negative cases transcribed from `tests/test_anonymization.py`, each citing the test it came from, tagged by PII category. (Moved from `eval/openmed_pii_cases.py` into its own `eval/prototypes/` subdirectory during PR #124 review, since it doesn't share `eval/`'s existing `run.py`/`scorers.py`/`fixtures.py` conventions.)
+- `eval/prototypes/openmed_pii_prototype.py` — scores systems (`regex`, `regex+ner`, `openmed`) on that corpus by one rule, reports per-category rather than as one accuracy number, and measures load time, per-text latency, and peak RSS. Supports `--confidence` and `--model` for sweeping OpenMed's threshold and testing different model sizes. `--json` writes a machine-readable report stamped with the platform it ran on.
+- `tests/test_openmed_pii_corpus.py` — pins the corpus's known case counts (67/24) so an edit to `test_anonymization.py`'s PII cases that isn't mirrored in the transcribed corpus fails loudly instead of drifting silently.
+- `eval/prototypes/OPENMED_FINDINGS.md` — full write-up: methodology, all six configurations tested, caveats, reproduction steps.
+- Nothing in `src/` imports these files and `tests/` (other than the corpus-count guard) does not collect them; full suite at 272.
+
+**The initial PR (#124) shipped with the OpenMed half unmeasured** — this sandbox's egress policy blocks `huggingface.co`, so the reviewer re-ran the missing half locally on the actual target hardware (8GB M3, the machine DEC-009 identifies as the binding constraint). That run hit its own snag: `openmed[hf]` pulls in `transformers==5.14.1`, which breaks OpenMed's pipeline construction (`AutoConfig.from_pretrained() got multiple values for keyword argument 'local_files_only'`, an OpenMed/transformers version incompatibility, not a harness bug) — downgrading to `transformers<4.45` fixed it.
+
+**Full results, six configurations:**
+
+| system | PII caught | clinical text intact | mean/text | peak RSS |
+|--------|-----------|---------------------|-----------|----------|
+| `regex` (fresh clone: spaCy in neither manifest) | 63/67 (94%) | 24/24 (100%) | 0.007 ms | 15 MB |
+| `regex+ner` (DEC-006 as described) | 66/67 (99%) | 23/24 (96%) | 1.9 ms | ~304 MB |
+| `openmed` small-44M, conf 0.3 | 63/67 (94%) | 17/24 (71%) | 780 ms | ~513 MB |
+| `openmed` small-44M, conf 0.5 (default) | 62/67 (93%) | 17/24 (71%) | 785 ms | ~513 MB |
+| `openmed` small-44M, conf 0.7 | 55/67 (82%) | 18/24 (75%) | 872 ms | ~513 MB |
+| `openmed` large-434M, conf 0.5 | 56/67 (84%) | 21/24 (88%) | 2993 ms | ~1481 MB |
+
+**Verdict: no OpenMed configuration beats the current approach on both recall and precision at once, and every configuration is 400×–1500× slower than what's running today.** The large model trades recall for precision relative to the small one rather than dominating it — bigger wasn't strictly better. Full breakdown, including which specific cases leaked or over-redacted per configuration, is in `OPENMED_FINDINGS.md`.
+
+**Findings worth more than the aggregate:**
+
+1. **The NER half over-redacts clinical content.** `"Lisinopril 10 mg daily"` → `"[REDACTED] 10 mg daily"` — spaCy tags the drug name as a PERSON. DEC-025's reasoning leans hard on negative cases asserting clinical content survives, but every one of those tests constructs `Anonymizer(use_ner=False)`, so the NER path had no negative coverage at all and this was invisible. Filed as #125 rather than fixed here, since #122 is explicitly scoped to not touch production anonymization.
+2. **`Dr. Smith` still leaks in `"Call Dr. Smith at 555-123-4567"`** even with NER on — spaCy doesn't tag it as PERSON in that construction, though it does in `"Referred by Dr. Sarah Johnson last spring"`. Single-token surnames after a title are the weak case.
+3. **OpenMed's label taxonomy doesn't match this project's policy**, confirmed rather than just predicted: clinic names, appointment times, weights, and dosage numbers all got over-redacted under labels (`city`, `time`, `age`, `postcode`, `pin`) this project's `NegativeCase` corpus treats as clinical content to keep. Any future integration would need real label filtering, not wholesale acceptance of OpenMed's output.
+4. **DEC-006 vs. actual behavior gap surfaced separately** — spaCy isn't in either dependency manifest, so `regex` (94% recall) is what a fresh clone actually runs, not `regex+ner` (99%) which DEC-006 describes. Filed as [#126](https://github.com/nidhi-menon/HealthSteward/issues/126).
+
+**Design notes:**
+
+1. **Scoring is asymmetric on purpose.** A leak (PII survives) and an over-redaction (clinical text altered) are both failures but not the same failure — a detector that redacts everything has a perfect leak rate and is useless. Positives pass when no `must_remove` substring survives; negatives pass only on byte-identical output.
+2. **`extract_pii`, not `deidentify`.** `deidentify` does its own masking with per-label placeholders (`[NAME]`, `[EMAIL]`); rewriting OpenMed's spans with the same `[REDACTED]` the current anonymizer uses is what makes the exact-equality check on negatives meaningful.
+3. **The probe call is eager.** The first `extract_pii` is what downloads weights, so it runs at build time — that's the only way an unreachable model host surfaces as an unavailable system rather than as 91 silent misses.
+4. **`regex+ner` is scored separately from `regex`, and skipped loudly if spaCy is absent.** spaCy is in neither manifest, so the regex-only row is what a fresh clone actually runs; reporting those numbers under the DEC-006 label would overstate the real baseline.
+5. **Peak RSS is process-cumulative** (`ru_maxrss` is a high-water mark), so the report prints the post-import floor and says to compare deltas or isolate with `--systems`.
+
+**Caveats on the numbers themselves** (see `OPENMED_FINDINGS.md` for the full list): per-category sample sizes are small enough that one case swings a rate 25-33%; the corpus was transcribed from tests written to validate the *regex* approach, so it's denser with exact-format edge cases regex is defined to catch and lighter on the free-text PII NER-style models target; only English models and three confidence points were tested. None of these caveats affect the latency/memory conclusions, which are decisive regardless.
+
+**No DEC entry** — per #122's own scope note, this is an evaluation, not a production change: `src/utils/anonymization.py` is untouched and `openmed` is absent from both dependency manifests. Issue #122 closed as evaluated-and-not-adopted.
+
+**Files changed:** `eval/prototypes/openmed_pii_cases.py`, `eval/prototypes/openmed_pii_prototype.py`, `eval/prototypes/OPENMED_FINDINGS.md`, `tests/test_openmed_pii_corpus.py`.
+
+Related: issue #122 (closed), issue #125 (NER over-redaction), issue #126 (DEC-006 vs. actual behavior gap), PR #124, issue #73, issue #92, DEC-006, DEC-025, DEC-009.
+
+---
+
+## 51. Profile Export Now 404s for a Soft-Deleted Profile (#123, DEC-027 amendment)
+
+**Date:** 2026-08-06
+
+**Context:** Raised as concern #6 on PR #121 and again after that PR's rebase; #121 merged without it being answered, so the behavior on `main` was whatever the code happened to do rather than a decision — which is why it was filed as its own issue instead of fixed in passing. `export_profile` (`src/api/profile_export.py`) predates DEC-027 and kept its own plain `select(HealthProfile).where(HealthProfile.id == profile_id)` with no `deleted_at` filter. Since #120/DEC-027 landed, every other profile route resolves through `get_live_profile_or_404` or the child routers' wrapper around it, both of which 404 for a soft-deleted profile. Export was the one route that didn't: a soft-deleted profile inside its 30-day recovery window was still fully exportable by anyone holding the URL, and `tests/test_profile_export.py` didn't touch soft-delete at all, so nothing pinned it either way.
+
+**What changed:** one lookup. `export_profile` now calls `get_live_profile_or_404` like everything else, with a comment recording that the exemption was considered and rejected rather than overlooked.
+
+**The decision, and why it went this way.** The repo owner's call on #123 was **block**, against the recommendation the previous run posted there (which argued to allow it deliberately, on the grounds that export is a read-only escape hatch and the lopsided failure mode is losing your only copy at day 31). The deciding argument for blocking: "deleted means unreachable, everywhere" is the existing pattern, and an exception for the one route that already didn't follow it is what created this gap. The "grab a copy before the purge" use case is real but wants a discoverable affordance on the "Recently deleted" view rather than a URL-only backdoor that in practice rescues nobody — filed as **#130** rather than left as a sentence here.
+
+**No DEC entry**, per the issue's own scope note: this settles a boundary DEC-027 and DEC-028 left ambiguous between them rather than making a new choice, so it's an amendment appended to DEC-027's status.
+
+**No frontend change.** The Export button lives on `ProfileDetail` (`frontend/src/pages/ProfileDetail.tsx`), which is unreachable for a deleted profile, and `downloadProfileExport` already surfaces the server's `detail` on a non-2xx. There is no UI path that can now hit the new 404.
+
+**Tests:** `tests/test_profile_export.py` gains `test_export_of_a_soft_deleted_profile_is_404` (exports 200 while live, 404 after delete — asserting both halves so the test can't pass because export was broken generally) and `test_export_works_again_after_restore` (the block is keyed on `deleted_at`, not on anything sticky, and the data comes back intact). Full suite: 291 passed (up from 289).
+
+**Files changed:** `src/api/profile_export.py`, `tests/test_profile_export.py`, `docs/notes/DECISIONS.md`.
+
+Related: issue #123, issue #130, PR #121, DEC-027, DEC-028.
+
+---
+
+## 52. Negative Test Coverage for the spaCy NER Path (#125, item 1)
 
 **Date:** 2026-08-06
 
