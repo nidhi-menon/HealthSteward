@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { profiles } from '../api/client';
+import { profiles, downloadDeletedProfileExport } from '../api/client';
 import { formatDateString } from '../utils/date';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -14,6 +14,7 @@ export default function ProfileList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [formData, setFormData] = useState<HealthProfileCreate>({ name: '' });
+  const [exportingId, setExportingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: profileList, isLoading } = useQuery({
@@ -48,6 +49,15 @@ export default function ProfileList() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate(formData);
+  };
+
+  const handleExportDeleted = async (profileId: string) => {
+    setExportingId(profileId);
+    try {
+      await downloadDeletedProfileExport(profileId);
+    } finally {
+      setExportingId(null);
+    }
   };
 
   if (isLoading) {
@@ -136,13 +146,22 @@ export default function ProfileList() {
                           : `${profile.days_remaining} day${profile.days_remaining === 1 ? '' : 's'} left`}
                       </p>
                     </div>
-                    <Button
-                      variant="secondary"
-                      onClick={() => restoreMutation.mutate(profile.id)}
-                      disabled={restoreMutation.isPending}
-                    >
-                      Restore
-                    </Button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleExportDeleted(profile.id)}
+                        disabled={exportingId === profile.id}
+                      >
+                        {exportingId === profile.id ? 'Exporting...' : 'Export'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => restoreMutation.mutate(profile.id)}
+                        disabled={restoreMutation.isPending}
+                      >
+                        Restore
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
