@@ -21,7 +21,7 @@ from src.agents.tools import UnknownToolError, VisitPrepTools, get_tools_for_pro
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
 from src.services import settings_service
-from src.utils.anonymization import Anonymizer, AnonymizedAppointment, AnonymizedProfile
+from src.utils.anonymization import Anonymizer, AnonymizedAppointment, AnonymizedProfile, RedactionEvent
 from src.utils.context_selection import ContextSelectionResult, ContextSelector
 
 
@@ -246,6 +246,11 @@ Before finalizing your response, count your questions. You must have between 8 a
         # method's docstring. None/empty until a run has actually happened.
         self.last_context_selection: Optional[ContextSelectionResult] = None
         self.last_tool_calls: list[dict[str, Any]] = []
+        # Redaction events (issue #16) aggregated across this whole
+        # prepare_visit() call — profile/appointment anonymization, Stage 4
+        # context selection, and any tool-result anonymization from the
+        # agentic loop. Reset at the top of each prepare_visit() run.
+        self.last_redaction_events: list[RedactionEvent] = []
 
     async def _get_past_appointments(self, profile_id: str, current_appointment_id: str) -> list[Appointment]:
         """Get past completed appointments for context."""
@@ -360,6 +365,11 @@ Before finalizing your response, count your questions. You must have between 8 a
         )
         self.last_context_selection = context_result
         self.last_tool_calls: list[dict[str, Any]] = []
+        # Reset per-request redaction aggregation (issue #16); seeded with
+        # Stage 4's context-selection events, extended below as later steps
+        # anonymize the current profile/appointment/concerns and any
+        # agentic-loop tool results.
+        self.last_redaction_events = list(context_result.redaction_events)
 
         logger.info(
             f"Context selection: {context_result.total_visits_considered} total, "
@@ -373,8 +383,10 @@ Before finalizing your response, count your questions. You must have between 8 a
         clinical_data = await self._get_clinical_data(appointment.profile_id)
 
         # Step 4: Anonymize current profile and appointment
-        anonymized_profile = self.anonymizer.anonymize_profile(appointment.profile)
-        anonymized_appointment = self.anonymizer.anonymize_appointment(appointment)
+        anonymized_profile, profile_events = self.anonymizer.anonymize_profile(appointment.profile)
+        anonymized_appointment, appointment_events = self.anonymizer.anonymize_appointment(appointment)
+        self.last_redaction_events.extend(profile_events)
+        self.last_redaction_events.extend(appointment_events)
 
         # Step 5: Resolve medication → doctor specialty for tagging
         med_specialty_map = self._build_med_specialty_map(appointment.profile)
@@ -383,6 +395,12 @@ Before finalizing your response, count your questions. You must have between 8 a
         target_specialty = None
         if appointment.doctor:
             target_specialty = appointment.doctor.specialty or _infer_specialty_from_clinic(appointment.doctor.clinic)
+        anonymized_concerns, concerns_events = self.anonymizer.anonymize_text(
+            additional_concerns,
+            profile_id=appointment.profile_id,
+            field_name="additional_concerns",
+        )
+        self.last_redaction_events.extend(concerns_events)
         context = self._build_anonymized_context(
             profile=anonymized_profile,
             appointment=anonymized_appointment,
@@ -390,7 +408,7 @@ Before finalizing your response, count your questions. You must have between 8 a
             clinical_data=clinical_data,
             med_specialty_map=med_specialty_map,
             conditions_raw=list(getattr(appointment.profile, 'conditions', [])),
-            additional_concerns=self.anonymizer.anonymize_text(additional_concerns),
+            additional_concerns=anonymized_concerns,
         )
 
         system_prompt = self._get_system_prompt(target_specialty)
@@ -510,6 +528,7 @@ Before finalizing your response, count your questions. You must have between 8 a
             result = await backend.call(conversation, system, tools=tools, temperature=temperature)
 
             if not result.tool_calls:
+                self.last_redaction_events.extend(tool_executor.redaction_events)
                 await self._log_conversation(
                     messages=messages,
                     response=result.text or "",
@@ -520,6 +539,7 @@ Before finalizing your response, count your questions. You must have between 8 a
                     tool_calls=tool_call_log or None,
                     prompt_version=prompt_version,
                     run_diagnostics={"agentic_path": True, "fallback_reason": None},
+                    redaction_events=self.last_redaction_events,
                 )
                 return result.text or ""
 
@@ -533,6 +553,10 @@ Before finalizing your response, count your questions. You must have between 8 a
                     "result": tool_result,
                 })
 
+        # Even on non-convergence, any tool-result anonymization that did
+        # happen is real and belongs in the per-request total (issue #16) —
+        # the single-shot fallback that follows doesn't repeat these calls.
+        self.last_redaction_events.extend(tool_executor.redaction_events)
         raise AgenticLoopNotConvergedError(
             f"Agentic loop did not converge within {self.settings.agent_max_turns} turns"
         )
@@ -572,6 +596,7 @@ Before finalizing your response, count your questions. You must have between 8 a
             model=self._model_name_for_provider(),
             prompt_version=prompt_version,
             run_diagnostics={"agentic_path": False, "fallback_reason": fallback_reason},
+            redaction_events=self.last_redaction_events,
         )
 
         return response
@@ -610,6 +635,7 @@ Before finalizing your response, count your questions. You must have between 8 a
             model=self._model_name_for_provider(),
             prompt_version=system_prompt_version,
             run_diagnostics=diagnostics,
+            redaction_events=self.last_redaction_events or None,
         )
 
     def _build_med_specialty_map(self, profile) -> dict[str, str]:
@@ -682,7 +708,11 @@ Before finalizing your response, count your questions. You must have between 8 a
         # Medical conditions with ICD-10 and specialty tags
         if conditions_raw:
             lines.extend(["", "## Medical Conditions"])
-            for cond in conditions_raw:
+            # profile.conditions was built from this same list, in the same
+            # order (see anonymize_profile) — zip rather than re-anonymizing
+            # cond.notes here, which would double the redaction events for
+            # issue #16's per-request aggregation.
+            for cond, anon_cond in zip(conditions_raw, profile.conditions):
                 icd = getattr(cond, 'icd_10', None)
                 name = cond.name
                 status = cond.status or "active"
@@ -703,7 +733,7 @@ Before finalizing your response, count your questions. You must have between 8 a
 
                 lines.append(" ".join(parts))
 
-                notes = self.anonymizer.anonymize_text(getattr(cond, 'notes', None))
+                notes = anon_cond.get('notes')
                 if notes:
                     lines.append(f"  Notes: {notes}")
 

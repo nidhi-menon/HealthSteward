@@ -96,6 +96,40 @@ async def test_lookup_past_visits(db_session, profile_with_medication):
 
 
 @pytest.mark.asyncio
+async def test_lookup_past_visits_aggregates_redaction_events(db_session):
+    """Issue #16: anonymizing a tool result must aggregate RedactionEvents
+    onto the executor, available to the caller after the call completes."""
+    profile = HealthProfile(name="Test Patient", date_of_birth=date(1990, 1, 1))
+    db_session.add(profile)
+    await db_session.flush()
+
+    doctor = Doctor(profile_id=profile.id, name="Dr. Smith", specialty="Endocrinology")
+    db_session.add(doctor)
+    await db_session.flush()
+
+    appointment = Appointment(
+        profile_id=profile.id,
+        doctor_id=doctor.id,
+        scheduled_date=datetime(2024, 1, 15, 10, 0, 0),
+        purpose="Checkup, call 555-123-4567 to reschedule",
+        status="completed",
+    )
+    db_session.add(appointment)
+    await db_session.commit()
+
+    tools = VisitPrepTools(db_session, Anonymizer(use_ner=False), profile.id)
+    assert tools.redaction_events == []
+
+    result = await tools.execute("lookup_past_visits", {})
+
+    assert "555-123-4567" not in result
+    assert len(tools.redaction_events) >= 1
+    assert any(e.entity_type == "phone" for e in tools.redaction_events)
+    # Appointment has no document_id column
+    assert all(e.document_id is None for e in tools.redaction_events)
+
+
+@pytest.mark.asyncio
 async def test_lookup_past_visits_specialty_filter_no_match(db_session, profile_with_medication):
     tools = VisitPrepTools(db_session, Anonymizer(use_ner=False), profile_with_medication.id)
     result = await tools.execute("lookup_past_visits", {"specialty": "Cardiology"})
