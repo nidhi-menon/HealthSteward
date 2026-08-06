@@ -7,6 +7,7 @@ from sqlalchemy import select, or_, nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.api.health_profile import get_live_profile_or_404
 from src.data.database import get_db
 from pydantic import BaseModel
 
@@ -49,6 +50,7 @@ async def list_follow_ups(
     include_resolved: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
+    await get_live_profile_or_404(profile_id, db)
     query = select(FollowUp).where(FollowUp.profile_id == profile_id)
     if include_resolved:
         query = query.where(FollowUp.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(FollowUp.completed_at.desc())).limit(20)
@@ -70,6 +72,7 @@ async def update_follow_up(
     body: dict,
     db: AsyncSession = Depends(get_db),
 ):
+    await get_live_profile_or_404(profile_id, db)
     result = await db.execute(
         select(FollowUp).where(FollowUp.id == follow_up_id, FollowUp.profile_id == profile_id)
     )
@@ -98,6 +101,7 @@ async def list_lab_orders(
     include_resolved: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
+    await get_live_profile_or_404(profile_id, db)
     query = select(LabOrder).where(LabOrder.profile_id == profile_id)
     if include_resolved:
         query = query.where(LabOrder.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(LabOrder.completed_at.desc())).limit(20)
@@ -119,6 +123,7 @@ async def update_lab_order(
     body: dict,
     db: AsyncSession = Depends(get_db),
 ):
+    await get_live_profile_or_404(profile_id, db)
     result = await db.execute(
         select(LabOrder).where(LabOrder.id == lab_order_id, LabOrder.profile_id == profile_id)
     )
@@ -147,6 +152,7 @@ async def list_referrals(
     include_resolved: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
+    await get_live_profile_or_404(profile_id, db)
     query = select(Referral).where(Referral.profile_id == profile_id)
     if include_resolved:
         query = query.where(Referral.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(Referral.completed_at.desc())).limit(20)
@@ -168,6 +174,7 @@ async def update_referral(
     body: dict,
     db: AsyncSession = Depends(get_db),
 ):
+    await get_live_profile_or_404(profile_id, db)
     result = await db.execute(
         select(Referral).where(Referral.id == referral_id, Referral.profile_id == profile_id)
     )
@@ -196,6 +203,7 @@ async def upsert_nudge_state(
     db: AsyncSession = Depends(get_db),
 ):
     """Upsert a snooze record for a computed nudge (appointment-based, vitals alerts)."""
+    await get_live_profile_or_404(profile_id, db)
     result = await db.execute(
         select(NudgeState).where(
             NudgeState.profile_id == profile_id,
@@ -241,6 +249,7 @@ async def past_due_appointments(
     db: AsyncSession = Depends(get_db),
 ):
     """Return scheduled appointments whose date has passed and haven't been marked complete."""
+    await get_live_profile_or_404(profile_id, db)
     now = datetime.now(timezone.utc)
     appt_result = await db.execute(
         select(Appointment).where(
@@ -263,6 +272,7 @@ async def upcoming_appointments_without_prep(
     db: AsyncSession = Depends(get_db),
 ):
     """Return upcoming scheduled appointments that have no visit prep generated."""
+    await get_live_profile_or_404(profile_id, db)
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(days=days_ahead)
 
@@ -399,6 +409,7 @@ async def vitals_alerts(
     db: AsyncSession = Depends(get_db),
 ):
     """Return alerts for meaningful trends in vitals across visits."""
+    await get_live_profile_or_404(profile_id, db)
     snoozed = await _snoozed_item_ids(db, profile_id, "vitals_alert")
     all_alerts = await _compute_all_vitals_alerts(db, profile_id)
     return [a for a in all_alerts if a.metric not in snoozed]
@@ -412,6 +423,7 @@ async def completed_appointments_without_avs(
     db: AsyncSession = Depends(get_db),
 ):
     """Return completed appointments that have no parsed document near their visit date."""
+    await get_live_profile_or_404(profile_id, db)
     appt_result = await db.execute(
         select(Appointment).where(
             Appointment.profile_id == profile_id,
@@ -507,6 +519,7 @@ async def list_snoozed_items(
     db: AsyncSession = Depends(get_db),
 ):
     """Return every currently-snoozed item across all nudge types and models."""
+    await get_live_profile_or_404(profile_id, db)
     now = datetime.utcnow()
     items: list[SnoozedItem] = []
 
@@ -585,6 +598,7 @@ async def unsnooze_nudge(
     missing row as "not snoozed", so this is enough to make the item
     reappear in its normal (unsnoozed) list on the next fetch.
     """
+    await get_live_profile_or_404(profile_id, db)
     result = await db.execute(
         select(NudgeState).where(
             NudgeState.profile_id == profile_id,

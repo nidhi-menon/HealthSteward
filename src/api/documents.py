@@ -14,6 +14,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.health_profile import get_live_profile_or_404
 from src.config import get_settings
 from src.data.database import get_db
 from src.data.models import (
@@ -51,6 +52,7 @@ async def scan_documents(
     db: AsyncSession = Depends(get_db),
 ):
     """Scan the AVS directory and return all PDF files with their processing status."""
+    await get_live_profile_or_404(profile_id, db)
     settings = get_settings()
     scan_dir = Path(settings.avs_scan_path)
     scan_dir.mkdir(parents=True, exist_ok=True)
@@ -94,6 +96,7 @@ async def get_document(
     db: AsyncSession = Depends(get_db),
 ):
     """Get document metadata."""
+    await get_live_profile_or_404(profile_id, db)
     doc = await db.get(Document, document_id)
     if not doc or doc.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -107,6 +110,7 @@ async def get_parsed_items(
     db: AsyncSession = Depends(get_db),
 ):
     """Get parsed items from a document. Triggers parsing if pending."""
+    await get_live_profile_or_404(profile_id, db)
     doc = await db.get(Document, document_id)
     if not doc or doc.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -175,6 +179,7 @@ async def parse_file(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a Document record for a scanned file and trigger parsing."""
+    await get_live_profile_or_404(profile_id, db)
     settings = get_settings()
     file_path = Path(settings.avs_scan_path) / filename
 
@@ -227,6 +232,7 @@ async def apply_items(
     db: AsyncSession = Depends(get_db),
 ):
     """Apply user-selected parsed items to the profile with date-based comparison."""
+    await get_live_profile_or_404(profile_id, db)
     doc = await db.get(Document, document_id)
     if not doc or doc.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="Document not found.")
