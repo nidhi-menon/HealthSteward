@@ -1600,4 +1600,26 @@ Related: issue #93, issue #92 (encryption at rest), issue #99 (human-readable sh
 
 ---
 
+## 47. Action-Item and Document Routes Now Verify the Profile Exists (#119)
+
+**Date:** 2026-08-05
+
+**Context:** #50/DEC-027 made a soft-deleted profile invisible everywhere it's looked up — the profile routes and the four child routers (conditions, medications, doctors, appointments) all 404 for a deleted profile via a per-router `verify_profile_exists`. `src/api/action_items.py` (follow-ups, lab orders, referrals, nudges, computed alerts) and `src/api/documents.py` never verified the profile at all, so a soft-deleted profile's action items and documents stayed readable — and, on the mutating routes, writable — through a URL kept open across the deletion.
+
+**What changed:**
+- `action_items.py` and `documents.py` now call `get_live_profile_or_404` (already defined in `src/api/health_profile.py`) at the top of every route handler, before touching any per-router table.
+- The four existing `verify_profile_exists` copies in `conditions.py`, `medications.py`, `doctors.py`, `appointments.py` are collapsed into a one-line wrapper around the same shared helper — same behavior and call-site signature, one definition instead of four.
+
+**Behavior change:** reusing `get_live_profile_or_404` means an unknown `profile_id` on an action-items or documents route now returns `404` instead of the previous `200 []` (reads) or proceeding silently (writes). This was flagged as an open question on the issue; the user's call was to make it consistent with the other four routers rather than 404-only-on-soft-delete, on the reasoning that leaving unknown ids returning `[]` would be an inconsistency that reads as a bug to the next person touching this code. No client in this codebase relies on the old empty-list shape.
+
+**Tests:** extended `tests/test_soft_delete_profiles.py` with `test_action_item_routes_404_for_a_soft_deleted_profile`, `test_action_item_routes_404_for_an_unknown_profile`, `test_document_routes_404_for_a_soft_deleted_profile`, and `test_document_routes_404_for_an_unknown_profile`, covering both read and mutating paths on each router. Full suite: 276 passed (up from 270).
+
+No DEC entry — this implements DEC-027's stated boundary consistently rather than making a new architectural choice; the 200-vs-404 question was resolved via a quick prompt with the user rather than warranting its own record.
+
+**Files changed:** `src/api/action_items.py`, `src/api/documents.py`, `src/api/conditions.py`, `src/api/medications.py`, `src/api/doctors.py`, `src/api/appointments.py`, `tests/test_soft_delete_profiles.py`.
+
+Related: issue #119, issue #50, DEC-027.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

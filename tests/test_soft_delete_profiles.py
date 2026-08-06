@@ -102,6 +102,98 @@ async def test_child_routes_404_for_a_soft_deleted_profile(
     ).status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_action_item_routes_404_for_a_soft_deleted_profile(
+    client: AsyncClient, sample_profile_data
+):
+    """Issue #119: action-item routes never verified the profile, so a
+    soft-deleted profile's follow-ups/lab-orders/referrals/nudges stayed
+    reachable through a URL kept open after deletion."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    await client.delete(f"/api/profiles/{profile_id}")
+
+    assert (await client.get(f"/api/profiles/{profile_id}/follow-ups")).status_code == 404
+    assert (await client.get(f"/api/profiles/{profile_id}/lab-orders")).status_code == 404
+    assert (await client.get(f"/api/profiles/{profile_id}/referrals")).status_code == 404
+    assert (await client.get(f"/api/profiles/{profile_id}/past-due-appointments")).status_code == 404
+    assert (
+        await client.get(f"/api/profiles/{profile_id}/upcoming-without-prep")
+    ).status_code == 404
+    assert (await client.get(f"/api/profiles/{profile_id}/vitals-alerts")).status_code == 404
+    assert (
+        await client.get(f"/api/profiles/{profile_id}/completed-without-avs")
+    ).status_code == 404
+    assert (await client.get(f"/api/profiles/{profile_id}/snoozed-items")).status_code == 404
+    assert (
+        await client.post(
+            f"/api/profiles/{profile_id}/nudge-states",
+            json={
+                "nudge_type": "past_due",
+                "item_id": "some-item",
+                "snoozed_until": "2099-01-01T00:00:00",
+            },
+        )
+    ).status_code == 404
+    assert (
+        await client.delete(f"/api/profiles/{profile_id}/nudge-states/past_due/some-item")
+    ).status_code == 404
+    assert (
+        await client.patch(
+            f"/api/profiles/{profile_id}/follow-ups/some-id", json={"status": "completed"}
+        )
+    ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_action_item_routes_404_for_an_unknown_profile(client: AsyncClient):
+    """Reusing `get_live_profile_or_404` (issue #119) also turns an unknown
+    profile id into a 404 here, matching the other child routers — previously
+    this silently returned `200 []`."""
+    assert (await client.get("/api/profiles/does-not-exist/follow-ups")).status_code == 404
+    assert (await client.get("/api/profiles/does-not-exist/documents/scan")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_document_routes_404_for_a_soft_deleted_profile(
+    client: AsyncClient, sample_profile_data
+):
+    """Issue #119: document routes never verified the profile either, so a
+    soft-deleted profile's documents stayed scannable/readable/writable."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    await client.delete(f"/api/profiles/{profile_id}")
+
+    assert (await client.get(f"/api/profiles/{profile_id}/documents/scan")).status_code == 404
+    assert (
+        await client.get(f"/api/profiles/{profile_id}/documents/some-doc-id")
+    ).status_code == 404
+    assert (
+        await client.get(f"/api/profiles/{profile_id}/documents/some-doc-id/parsed")
+    ).status_code == 404
+    assert (
+        await client.post(
+            f"/api/profiles/{profile_id}/documents/parse-file",
+            params={"filename": "does-not-exist.pdf"},
+        )
+    ).status_code == 404
+    assert (
+        await client.post(
+            f"/api/profiles/{profile_id}/documents/some-doc-id/apply",
+            json={
+                "diagnoses": [], "medication_starts": [], "medication_stops": [],
+                "medication_updates": [], "vitals": None, "lab_orders": [],
+                "referrals": [], "follow_ups": [], "appointments": [],
+            },
+        )
+    ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_document_routes_404_for_an_unknown_profile(client: AsyncClient):
+    assert (
+        await client.get("/api/profiles/does-not-exist/documents/some-doc-id")
+    ).status_code == 404
+
+
 # ============================================================================
 # Recently deleted view + restore
 # ============================================================================
