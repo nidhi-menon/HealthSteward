@@ -15,12 +15,13 @@ user manages themselves, with no cloud destination.
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.health_profile import get_live_profile_or_404
 from src.config import get_settings
 from src.data.database import get_db
 from src.data.models import (
@@ -29,7 +30,6 @@ from src.data.models import (
     Doctor,
     Document,
     FollowUp,
-    HealthProfile,
     LabOrder,
     Medication,
     NudgeState,
@@ -101,15 +101,15 @@ async def export_profile(
     """
     settings = get_settings()
 
-    profile_result = await db.execute(
-        select(HealthProfile).where(HealthProfile.id == profile_id)
-    )
-    profile = profile_result.scalar_one_or_none()
-    if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile with id {profile_id} not found",
-        )
+    # Soft-deleted profiles are not exportable (issue #123). Export resolves
+    # through the same `get_live_profile_or_404` every other profile route
+    # uses, so "deleted means unreachable" holds everywhere without exception —
+    # export was the one route still doing its own unfiltered lookup, which
+    # left a soft-deleted profile fully exportable by anyone holding the URL.
+    # Grabbing a copy before the 30-day purge is a real use case, but it wants
+    # a discoverable affordance on the "Recently deleted" view (#130), not a
+    # URL-only backdoor.
+    profile = await get_live_profile_or_404(profile_id, db)
 
     document: dict[str, Any] = {
         "export_format_version": EXPORT_FORMAT_VERSION,
