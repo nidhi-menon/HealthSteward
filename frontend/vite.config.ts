@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -13,5 +14,13 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  // Frontend tests (issue #27). Vitest reuses this config, so there is no
+  // second build pipeline and no transform config to keep in sync.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    css: false,
   },
 })
