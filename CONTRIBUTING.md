@@ -36,7 +36,8 @@ See the [README Quick Start](README.md#quick-start) for backend/frontend setup a
 ## Testing
 
 - **Backend:** `pytest` — a new endpoint, tool, or agent behavior needs a test in `tests/`. Look at `tests/test_visit_prep.py` or `tests/test_agent_tools.py` for the existing patterns (fixtures in `conftest.py`, mocked LLM calls).
-- **Frontend:** there is currently no test suite (tracked as a known gap — see open issues). If you're adding frontend logic non-trivial enough to want tests, flag it in your PR description rather than skipping silently.
+- **Frontend:** `cd frontend && npm test` (Vitest + React Testing Library, `npm run test:watch` while working). Behaviour-focused, not snapshots — assert what a user sees and what the component asks the API to do, not the markup. Stub the API at the `src/api/client.ts` boundary with `vi.mock`, render through `src/test/render.tsx` (it supplies the React Query and Router providers the components assume), and build fixtures with the helpers in `src/test/fixtures.ts`. Anything date-relative should pin the clock with `vi.setSystemTime` rather than depend on when the suite runs.
+- Coverage is partial — `ActionItemsSection`, `ParsedItemsReview` and `PostAvsActionPanel` are covered; the pages are not. Tests gate nothing automatically (there is no CI yet), so run them yourself before opening a PR. If you're adding frontend logic non-trivial enough to want tests and you skip them, flag it in your PR description rather than skipping silently.
 
 ## Database changes
 
