@@ -1,4 +1,4 @@
-.PHONY: help setup conda-create conda-activate docker-build docker-up docker-down docker-logs test format lint clean
+.PHONY: help setup conda-create conda-activate docker-build docker-up docker-down docker-logs test test-frontend test-all format lint clean
 
 help:
 	@echo "HealthSteward - Development Commands"
@@ -17,7 +17,9 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make run            - Run app locally"
-	@echo "  make test           - Run tests"
+	@echo "  make test           - Run backend tests"
+	@echo "  make test-frontend  - Run frontend tests"
+	@echo "  make test-all       - Run backend + frontend tests"
 	@echo "  make format         - Format code with black"
 	@echo "  make lint           - Lint code with ruff"
 	@echo "  make notebook       - Start Jupyter Lab"
@@ -78,6 +80,12 @@ run:
 test:
 	@echo "Running tests..."
 	pytest tests/ -v
+
+test-frontend:
+	@echo "Running frontend tests..."
+	cd frontend && npm test
+
+test-all: test test-frontend
 
 format:
 	@echo "Formatting code..."

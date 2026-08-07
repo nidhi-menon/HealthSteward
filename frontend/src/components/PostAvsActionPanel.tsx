@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { actionItems as actionItemsApi } from '../api/client';
-import type { ActionItems, FollowUp, LabOrder, Referral, Appointment } from '../types';
+import type { ActionItems, FollowUp, Appointment } from '../types';
 
 interface Props {
   profileId: string;
