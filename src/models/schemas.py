@@ -501,6 +501,24 @@ class ApplyPlanResponse(BaseModel):
     skipped: dict[str, int] = {}
 
 
+class ChecklistItemResponse(BaseModel):
+    """One "what to bring" item for an upcoming visit (issue #110)."""
+
+    id: str
+    label: str
+    why: str
+    category: str
+    # Which rules produced this item, so a surprising entry can be traced.
+    sources: list[str] = []
+
+
+class VisitChecklistResponse(BaseModel):
+    """The full pre-visit checklist, computed per request from existing data."""
+
+    appointment_id: str
+    items: list[ChecklistItemResponse] = []
+
+
 # ============================================================================
 # New Model Response Schemas
 # ============================================================================

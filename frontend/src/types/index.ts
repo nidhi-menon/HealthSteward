@@ -171,6 +171,22 @@ export interface Document {
   updated_at: string;
 }
 
+// Pre-visit "what to bring" checklist (issue #110)
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  why: string;
+  category: string;
+  // Which rules produced this item — useful when an entry looks surprising.
+  sources: string[];
+}
+
+export interface VisitChecklist {
+  appointment_id: string;
+  items: ChecklistItem[];
+}
+
 // Parsed Items (from AVS PDF parsing)
 export interface ParsedVitals {
   weight: string | null;
