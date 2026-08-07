@@ -5,6 +5,7 @@ import { profiles, appointments, doctors, visitPrep } from '../api/client';
 import { Card, CardHeader, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { Textarea } from '../components/Input';
+import { VisitChecklistCard } from '../components/VisitChecklistCard';
 import type { VisitPrepUpdate } from '../types';
 
 export default function VisitPrep() {
@@ -190,6 +191,11 @@ export default function VisitPrep() {
           </div>
         </CardContent>
       </Card>
+
+      {/* What to bring (issue #110) — pre-visit only; it has no use afterwards */}
+      {!isCompleted && appointmentId && (
+        <VisitChecklistCard profileId={profileId!} appointmentId={appointmentId} />
+      )}
 
       {/* Pre-visit Notes */}
       {appointment.prep_notes && (

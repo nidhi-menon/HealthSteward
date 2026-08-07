@@ -171,6 +171,22 @@ export interface Document {
   updated_at: string;
 }
 
+// Pre-visit "what to bring" checklist (issue #110)
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  why: string;
+  category: string;
+  // Which rules produced this item — useful when an entry looks surprising.
+  sources: string[];
+}
+
+export interface VisitChecklist {
+  appointment_id: string;
+  items: ChecklistItem[];
+}
+
 // Parsed Items (from AVS PDF parsing)
 export interface ParsedVitals {
   weight: string | null;
@@ -314,6 +330,38 @@ export interface ApplyItemsRequest {
   referrals: ParsedReferral[];
   follow_ups: ParsedFollowUp[];
   appointments: ParsedAppointment[];
+  // Fingerprint of the plan the user reviewed. The backend refuses the apply
+  // if the profile changed since then (issue #46).
+  expected_plan_fingerprint?: string | null;
+}
+
+// Pre-apply diff preview (issue #46)
+
+export type PlanAction = 'create' | 'update' | 'skip';
+
+export interface PlanFieldChange {
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  // False when the incoming value matches what is already stored — still
+  // written, but not worth showing as an edit.
+  changed: boolean;
+}
+
+export interface ApplyPlanEntry {
+  entity_type: string;
+  action: PlanAction;
+  label: string;
+  entity_id: string | null;
+  reason: string | null;
+  changes: PlanFieldChange[];
+}
+
+export interface ApplyPlan {
+  plan_fingerprint: string;
+  entries: ApplyPlanEntry[];
+  counts: Record<string, number>;
+  skipped: Record<string, number>;
 }
 
 // App Settings (DEC-016)
