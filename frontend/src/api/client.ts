@@ -15,6 +15,7 @@ import type {
   ScannedFile,
   ParsedItemsResponse,
   ApplyItemsRequest,
+  ApplyPlan,
   FollowUp,
   LabOrder,
   Referral,
@@ -28,6 +29,20 @@ import type {
 } from '../types';
 
 const API_BASE = '/api';
+
+/**
+ * Thrown when an apply is refused because the profile changed since the user
+ * reviewed the diff. Carries the freshly derived plan so they can re-review.
+ */
+export class StalePlanError extends Error {
+  readonly plan: ApplyPlan;
+
+  constructor(message: string, plan: ApplyPlan) {
+    super(message || 'This profile changed since you reviewed these items.');
+    this.name = 'StalePlanError';
+    this.plan = plan;
+  }
+}
 
 async function request<T>(
   endpoint: string,
@@ -241,14 +256,43 @@ export const documents = {
     ),
   getParsed: (profileId: string, id: string) =>
     request<ParsedItemsResponse>(`/profiles/${profileId}/documents/${id}/parsed`),
-  applyItems: (profileId: string, id: string, items: ApplyItemsRequest) =>
-    request<{ status: string; counts: Record<string, number>; action_items: ActionItems }>(
-      `/profiles/${profileId}/documents/${id}/apply`,
-      {
-        method: 'POST',
-        body: JSON.stringify(items),
-      },
-    ),
+  // Dry run of applyItems: what would change, without changing it (issue #46).
+  previewApply: (profileId: string, id: string, items: ApplyItemsRequest) =>
+    request<ApplyPlan>(`/profiles/${profileId}/documents/${id}/apply/preview`, {
+      method: 'POST',
+      body: JSON.stringify(items),
+    }),
+  applyItems: async (profileId: string, id: string, items: ApplyItemsRequest) => {
+    const response = await fetch(`${API_BASE}/profiles/${profileId}/documents/${id}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(items),
+    });
+
+    // 409 means the profile moved under the user between preview and confirm.
+    // It carries the re-derived plan so the UI can show what changed instead
+    // of making them start over.
+    if (response.status === 409) {
+      const body = await response.json().catch(() => ({}));
+      const detail = body?.detail;
+      if (detail?.reason === 'stale_plan') {
+        throw new StalePlanError(detail.message, detail.plan);
+      }
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(
+        typeof error.detail === 'string' ? error.detail : `Request failed: ${response.status}`,
+      );
+    }
+
+    return response.json() as Promise<{
+      status: string;
+      counts: Record<string, number>;
+      action_items: ActionItems;
+    }>;
+  },
 };
 
 // Action Items
