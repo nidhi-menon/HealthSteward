@@ -1832,4 +1832,36 @@ Related: issue #101, DEC-031, issue #135 (implementation, file-upload Condition+
 
 ---
 
+## 56. Frontend Test Harness and First Suite (#27)
+
+**Date:** 2026-08-07
+
+**Context:** the backend has 299 passing tests; `frontend/package.json` had no `test` script and there were no `*.test.tsx` files anywhere under `frontend/src/`. Not from a specific bug — it surfaced during a repo-hygiene pass — but the untested logic includes the parts most likely to break silently: `ActionItemsSection`'s date-relative nudge computation, snooze-duration handling, and `ParsedItemsReview`'s selective-apply flow, which decides what actually gets written to a profile.
+
+**Stack: Vitest + React Testing Library + jsdom**, as the issue itself suggested. Vitest reuses the existing `vite.config.ts`, so there's no second build pipeline and no Babel/Jest transform config to keep in sync with the real one. `npm test` / `npm run test:watch` in `frontend/`, plus `make test-frontend` and `make test-all` next to the existing pytest target.
+
+**CI gating — the issue's third open question — answers itself: there is no CI.** `.github/` contains only `ISSUE_TEMPLATE/` and `pull_request_template.md`; there is no `workflows/` directory. So frontend tests run locally and gate nothing. Adding a CI workflow was deliberately *not* bundled in here — it affects the backend suite too and deserves its own decision rather than arriving as a side effect of a test-harness PR.
+
+**No snapshot tests, no coverage thresholds.** RTL's own guidance is behaviour-over-snapshot, and snapshots over Tailwind-heavy markup produce large diffs that get rubber-stamped rather than read. A coverage threshold across a suite covering three of nine components either sits uselessly low or blocks work; better once coverage means something.
+
+**Shared harness:** `src/test/setup.ts` (jest-dom matchers; restores real timers after every test so a frozen clock can't leak into the next one), `src/test/render.tsx` (wraps in the React Query and Router providers the components assume — rendering them bare throws before any assertion runs; retries off and per-render cache so nothing leaks), and `src/test/fixtures.ts` (builders rather than fixed objects, so each test states only the fields it is actually about).
+
+**Initial suite — 33 tests across the three components the issue named**, all behaviour-focused, with the API stubbed at the `src/api/client.ts` boundary:
+
+- `ActionItemsSection` (14) — the badge count, day countdowns including the singular/plural boundary, and the follow-up urgency ladder computed as elapsed fraction of the stated timeframe (quiet / approaching at ≥0.75 / overdue at ≥1.0 / silent when the timeframe isn't parseable as a duration). Snoozing: that a pill sends the right *absolute* date for its duration, that the undo banner appears, that undo clears `snoozed_until` rather than resetting it, that the banner expires, and that a second snooze replaces the banner instead of stacking. Clock pinned with `vi.setSystemTime` throughout.
+- `PostAvsActionPanel` (11) — hidden when everything is resolved, resolved items filtered out, the ≤180-day urgency flag and its negative cases, and the lab-before-appointment warning including that past appointments are ignored when picking "next".
+- `ParsedItemsReview` (8) — that `medication_changes` split by action into starts/stops/updates, that every accepted category reaches the request, that removing an item excludes it and empties the apply button, that a corrected misparse is what gets sent, that vitals are only included when recorded, that notes are shown but never applied, and that nothing applies until the confirmation is accepted.
+
+**One harness lesson worth recording**, because it cost real time and will bite the next person: `vi.clearAllMocks()` clears recorded calls but **not** implementations, so a `mockResolvedValue` set in one test survives into the next. That silently rendered an extra section in later tests and broke lookups that were unique in isolation. The suites re-arm every stub explicitly in `beforeEach` rather than relying on a global reset.
+
+**Drive-by:** `frontend/src/components/PostAvsActionPanel.tsx` had two unused type imports that failed `tsc -b`, so the frontend build was already red on `main`. Fixed here because a test suite that can't compile is worthless.
+
+**No DEC entry:** picking the test runner the issue itself named isn't an architectural choice. Flagged as such on the issue.
+
+**Files changed:** `frontend/package.json`, `frontend/vite.config.ts`, `frontend/src/test/setup.ts`, `frontend/src/test/render.tsx`, `frontend/src/test/fixtures.ts`, `frontend/src/components/ActionItemsSection.test.tsx`, `frontend/src/components/ParsedItemsReview.test.tsx`, `frontend/src/components/PostAvsActionPanel.test.tsx`, `frontend/src/components/PostAvsActionPanel.tsx`, `CONTRIBUTING.md`, `Makefile`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #27, issue #44 (the snooze/undo behaviour now under test), CONTRIBUTING.md testing section.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
