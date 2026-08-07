@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import os
 import re
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
@@ -30,7 +33,10 @@ from src.data.models import (
 )
 from src.models.schemas import (
     ApplyItemsRequest,
+    ApplyPlanEntry,
+    ApplyPlanResponse,
     DocumentResponse,
+    PlanFieldChange,
     ParsedAppointment,
     ParsedDiagnosis,
     ParsedFollowUp,
@@ -230,6 +236,27 @@ async def parse_file(
     return {"document_id": doc.id, "status": "pending"}
 
 
+@router.post("/{document_id}/apply/preview", response_model=ApplyPlanResponse)
+async def preview_apply_items(
+    profile_id: str,
+    document_id: str,
+    items: ApplyItemsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Show what applying these items would change, without committing anything.
+
+    Issue #46: applying a parse used to overwrite fields in place with no way to
+    see — let alone undo — what it replaced. This is the review step: the same
+    plan the apply will execute, rendered as a per-field `old -> new` diff.
+
+    Read-only. Takes the same body as `/apply`, so the preview reflects the
+    user's actual selective-apply choices rather than a hypothetical full apply.
+    """
+    doc = await _get_parsed_document_or_404(profile_id, document_id, db)
+    plan = await _build_apply_plan(db, profile_id, doc, items)
+    return _plan_to_response(plan)
+
+
 @router.post("/{document_id}/apply", status_code=200)
 async def apply_items(
     profile_id: str,
@@ -237,281 +264,40 @@ async def apply_items(
     items: ApplyItemsRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Apply user-selected parsed items to the profile with date-based comparison."""
-    await get_live_profile_or_404(profile_id, db)
-    doc = await db.get(Document, document_id)
-    if not doc or doc.profile_id != profile_id:
-        raise HTTPException(status_code=404, detail="Document not found.")
-    if doc.parse_status != "completed":
-        raise HTTPException(status_code=400, detail="Document must be parsed first.")
+    """Apply user-selected parsed items to the profile with date-based comparison.
 
-    # Parse visit date once for comparison
-    visit_dt = _parse_visit_datetime(doc.visit_date)
+    The decisions themselves live in `_build_apply_plan`; this endpoint only
+    executes them. Sharing that one code path with `/apply/preview` is what
+    keeps the reviewed diff and the committed write from drifting apart.
+    """
+    doc = await _get_parsed_document_or_404(profile_id, document_id, db)
 
-    counts = {
-        "conditions": 0,
-        "medications_started": 0,
-        "medications_stopped": 0,
-        "medications_updated": 0,
-        "vitals": 0,
-        "lab_orders": 0,
-        "referrals": 0,
-        "follow_ups": 0,
-        "appointments": 0,
-    }
-    skipped = {
-        "conditions": 0,
-        "medications_started": 0,
-        "medications_stopped": 0,
-        "medications_updated": 0,
-        "lab_orders": 0,
-        "referrals": 0,
-        "follow_ups": 0,
-        "appointments": 0,
-    }
+    plan = await _build_apply_plan(db, profile_id, doc, items)
+    response = _plan_to_response(plan)
 
-    # Diagnoses -> Condition records (fuzzy dedup by name, date-guarded)
-    for dx in items.diagnoses:
-        # Fuzzy match: check all conditions for this profile
-        result = await db.execute(
-            select(Condition).where(Condition.profile_id == profile_id)
+    # Stale-preview guard: if the profile changed between the user reviewing
+    # the diff and confirming it, the plan they approved is no longer the plan
+    # we would execute. Abort and hand back the re-derived plan for re-review.
+    if items.expected_plan_fingerprint and (
+        items.expected_plan_fingerprint != response.plan_fingerprint
+    ):
+        logger.info(
+            f"Aborted apply for document {doc.id}: plan changed since preview "
+            f"({items.expected_plan_fingerprint} -> {response.plan_fingerprint})"
         )
-        existing_cond = None
-        dx_clean = dx.condition.strip().lower()
-        for cond in result.scalars().all():
-            cond_clean = cond.name.strip().lower()
-            if (cond_clean == dx_clean
-                    or cond_clean in dx_clean
-                    or dx_clean in cond_clean
-                    or (dx.icd_10 and cond.icd_10 and dx.icd_10 == cond.icd_10)):
-                existing_cond = cond
-                break
-        if existing_cond:
-            # Only update if visit is newer than last update
-            if _is_newer(visit_dt, existing_cond.updated_at):
-                if dx.icd_10:
-                    existing_cond.icd_10 = dx.icd_10
-                if dx.severity:
-                    existing_cond.severity = dx.severity
-                if dx.status:
-                    existing_cond.status = dx.status
-                dx_date = _parse_date_string(dx.diagnosed_date)
-                if dx_date:
-                    existing_cond.diagnosed_date = dx_date
-                elif not existing_cond.diagnosed_date and visit_dt:
-                    existing_cond.diagnosed_date = visit_dt.date()
-                counts["conditions"] += 1
-            else:
-                skipped["conditions"] += 1
-        else:
-            cond = Condition(
-                profile_id=profile_id,
-                name=dx.condition,
-                icd_10=dx.icd_10,
-                severity=dx.severity,
-                diagnosed_date=_parse_date_string(dx.diagnosed_date) or (visit_dt.date() if visit_dt else None),
-                status=dx.status or "active",
-            )
-            db.add(cond)
-            counts["conditions"] += 1
-
-    # Medication starts -> new Medication records (dedup by name against all meds)
-    for med in items.medication_starts:
-        clean_name = _clean_med_name(med.name)
-        result = await db.execute(
-            select(Medication).where(
-                Medication.profile_id == profile_id,
-            )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "stale_plan",
+                "message": (
+                    "This profile changed since you reviewed these items. "
+                    "Review the updated changes and confirm again."
+                ),
+                "plan": response.model_dump(),
+            },
         )
-        found = False
-        for existing_med in result.scalars().all():
-            if _fuzzy_med_match(_clean_med_name(existing_med.name), clean_name):
-                found = True
-                # Update dosage/frequency if visit is newer and med is active
-                if existing_med.end_date is None and _is_newer(visit_dt, existing_med.updated_at):
-                    if med.strength and med.strength != existing_med.dosage:
-                        existing_med.dosage = med.strength
-                    if med.instructions and med.instructions != existing_med.frequency:
-                        existing_med.frequency = med.instructions
-                else:
-                    skipped["medications_started"] += 1
-                break
-        if not found:
-            medication = Medication(
-                profile_id=profile_id,
-                name=med.name,
-                dosage=med.strength,
-                frequency=med.instructions,
-                start_date=_parse_date_string(med.date),
-            )
-            db.add(medication)
-            counts["medications_started"] += 1
 
-    # Medication stops -> set end_date on matching Medication (date-guarded)
-    for med in items.medication_stops:
-        clean_name = _clean_med_name(med.name)
-        result = await db.execute(
-            select(Medication).where(
-                Medication.profile_id == profile_id,
-                Medication.end_date.is_(None),
-            )
-        )
-        for existing_med in result.scalars().all():
-            if _fuzzy_med_match(_clean_med_name(existing_med.name), clean_name):
-                if _is_newer(visit_dt, existing_med.updated_at):
-                    existing_med.end_date = _parse_date_string(med.date)
-                    counts["medications_stopped"] += 1
-                else:
-                    skipped["medications_stopped"] += 1
-                break
-
-    # Medication updates -> find existing, update dosage/instructions (date-guarded)
-    for med in items.medication_updates:
-        clean_name = _clean_med_name(med.name)
-        result = await db.execute(
-            select(Medication).where(
-                Medication.profile_id == profile_id,
-                Medication.end_date.is_(None),
-            )
-        )
-        for existing_med in result.scalars().all():
-            if _fuzzy_med_match(_clean_med_name(existing_med.name), clean_name):
-                if _is_newer(visit_dt, existing_med.updated_at):
-                    if med.strength:
-                        existing_med.dosage = med.strength
-                    if med.instructions:
-                        existing_med.frequency = med.instructions
-                    counts["medications_updated"] += 1
-                else:
-                    skipped["medications_updated"] += 1
-                break
-
-    # Vitals -> create/update Vitals record for the document
-    if items.vitals:
-        v = items.vitals
-        if any([v.weight, v.bmi, v.blood_pressure, v.heart_rate, v.temperature]):
-            vitals = Vitals(
-                profile_id=profile_id,
-                document_id=document_id,
-                weight=v.weight,
-                bmi=v.bmi,
-                blood_pressure=v.blood_pressure,
-                heart_rate=v.heart_rate,
-                temperature=v.temperature,
-                measured_date=doc.visit_date,
-            )
-            db.add(vitals)
-            counts["vitals"] = 1
-
-    # Lab orders (dedup by test_name + ordered_date)
-    for lab in items.lab_orders:
-        existing = await db.execute(
-            select(LabOrder).where(
-                LabOrder.profile_id == profile_id,
-                LabOrder.test_name == lab.test,
-                LabOrder.ordered_date == lab.ordered_date,
-            )
-        )
-        if existing.scalar_one_or_none():
-            skipped["lab_orders"] += 1
-        else:
-            order = LabOrder(
-                profile_id=profile_id,
-                document_id=document_id,
-                test_name=lab.test,
-                ordered_date=lab.ordered_date,
-            )
-            db.add(order)
-            counts["lab_orders"] += 1
-
-    # Referrals (dedup by specialty + document)
-    for ref in items.referrals:
-        existing = await db.execute(
-            select(Referral).where(
-                Referral.profile_id == profile_id,
-                Referral.document_id == document_id,
-                Referral.specialty == ref.specialty,
-            )
-        )
-        if existing.scalar_one_or_none():
-            skipped["referrals"] += 1
-        else:
-            referral = Referral(
-                profile_id=profile_id,
-                document_id=document_id,
-                specialty=ref.specialty,
-                provider_name=ref.provider,
-                reason=ref.reason,
-            )
-            db.add(referral)
-            counts["referrals"] += 1
-
-    # Follow-ups (dedup by description)
-    for fu in items.follow_ups:
-        existing = await db.execute(
-            select(FollowUp).where(
-                FollowUp.profile_id == profile_id,
-                FollowUp.description == fu.description,
-            )
-        )
-        if existing.scalar_one_or_none():
-            skipped["follow_ups"] += 1
-        else:
-            follow_up = FollowUp(
-                profile_id=profile_id,
-                document_id=document_id,
-                description=fu.description,
-                timeframe=fu.timeframe,
-                target_date=fu.target_date,
-            )
-            db.add(follow_up)
-            counts["follow_ups"] += 1
-
-    # Create/match doctor from AVS provider info
-    if doc.provider_name:
-        provider_doctor_id = await _find_or_create_doctor(
-            db, profile_id, doc.provider_name, doc.facility_name
-        )
-        if provider_doctor_id:
-            counts.setdefault("doctors", 0)
-
-    # Appointments (find/create doctors, dedup by date)
-    for appt in items.appointments:
-        appt_date = _parse_date_string(appt.date)
-        if not appt_date:
-            skipped["appointments"] += 1
-            continue
-
-        appt_datetime = datetime.combine(appt_date, datetime.min.time())
-
-        # Try to find or create a doctor for this appointment
-        matched_doctor_id = None
-        doctor_name = _extract_doctor_name(appt.description) if appt.description else None
-        if doctor_name:
-            matched_doctor_id = await _find_or_create_doctor(
-                db, profile_id, doctor_name, appt.location
-            )
-
-        # Check for existing appointment on the same date
-        from sqlalchemy import cast, Date
-        existing = await db.execute(
-            select(Appointment).where(
-                Appointment.profile_id == profile_id,
-                cast(Appointment.scheduled_date, Date) == appt_date,
-            )
-        )
-        if existing.scalar_one_or_none():
-            skipped["appointments"] += 1
-        else:
-            appointment = Appointment(
-                profile_id=profile_id,
-                doctor_id=matched_doctor_id,
-                scheduled_date=appt_datetime,
-                purpose=appt.description,
-                status="scheduled",
-            )
-            db.add(appointment)
-            counts["appointments"] += 1
+    counts, skipped = await _execute_apply_plan(db, profile_id, document_id, plan)
 
     await db.flush()
     await db.commit()
@@ -540,6 +326,648 @@ async def apply_items(
             "referrals": [ReferralResponse.model_validate(ref).model_dump() for ref in ref_result.scalars().all()],
         },
     }
+
+
+async def _get_parsed_document_or_404(
+    profile_id: str, document_id: str, db: AsyncSession
+) -> Document:
+    """Resolve a parsed document for this profile, or raise the right error."""
+    await get_live_profile_or_404(profile_id, db)
+    doc = await db.get(Document, document_id)
+    if not doc or doc.profile_id != profile_id:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if doc.parse_status != "completed":
+        raise HTTPException(status_code=400, detail="Document must be parsed first.")
+    return doc
+
+
+@dataclass
+class _PlanEntry:
+    """One decision an apply would make, plus what it takes to carry it out.
+
+    `changes` is for display only — it is the per-field diff the user reviews.
+    The write itself comes from `update_values` (for `update`) or
+    `create_values` (for `create`), so rendering can never move data.
+    """
+
+    entity_type: str
+    action: str  # create | update | skip
+    label: str
+    entity_id: Optional[str] = None
+    reason: Optional[str] = None
+    changes: list[PlanFieldChange] = field(default_factory=list)
+    # Which bucket of the apply response this entry moves, if any. A matched
+    # medication start that only refreshes a dosage moves neither, which is
+    # the behaviour apply has always had.
+    count_key: Optional[str] = None
+    skip_key: Optional[str] = None
+    model: Any = None
+    create_values: Optional[dict] = None
+    update_values: Optional[dict] = None
+    # (name, clinic) for rows whose doctor must be matched or created at
+    # execution time. Never resolved during planning — a preview must not write.
+    doctor_hint: Optional[tuple[str, Optional[str]]] = None
+
+
+_SKIP_RECORD_IS_NEWER = "the existing record is newer than this visit"
+_SKIP_ALREADY_IN_DOCUMENT = "already included earlier in this document"
+
+
+def _display_value(value: Any) -> str | None:
+    """Render a stored or incoming value for the diff view."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value)
+
+
+def _change(field_name: str, old: Any, new: Any) -> PlanFieldChange:
+    old_display = _display_value(old)
+    new_display = _display_value(new)
+    return PlanFieldChange(
+        field=field_name,
+        old_value=old_display,
+        new_value=new_display,
+        changed=old_display != new_display,
+    )
+
+
+def _creation_changes(values: dict, skip: tuple[str, ...] = ("profile_id", "document_id")) -> list[PlanFieldChange]:
+    """Render a create as a diff from nothing, so the UI has one shape to draw."""
+    return [
+        _change(name, None, value)
+        for name, value in values.items()
+        if name not in skip and value is not None
+    ]
+
+
+def _condition_matches(cond: Condition, dx_clean: str, dx_icd: str | None) -> bool:
+    """The fuzzy rule apply has always used to decide a diagnosis is not new."""
+    cond_clean = cond.name.strip().lower()
+    return (
+        _fuzzy_text_match(cond_clean, dx_clean)
+        or bool(dx_icd and cond.icd_10 and dx_icd == cond.icd_10)
+    )
+
+
+async def _plan_doctor(
+    db: AsyncSession, profile_id: str, name: str, clinic: str | None
+) -> _PlanEntry | None:
+    """Read-only counterpart to `_find_or_create_doctor`, for the preview."""
+    if not name or len(name.strip()) < 2:
+        return None
+
+    name_lower = name.strip().lower()
+    result = await db.execute(select(Doctor).where(Doctor.profile_id == profile_id))
+    for existing in result.scalars().all():
+        if _fuzzy_text_match(existing.name.lower(), name_lower):
+            if clinic and not existing.clinic:
+                return _PlanEntry(
+                    entity_type="doctor", action="update", label=existing.name,
+                    entity_id=existing.id, reason="filling in a missing clinic",
+                    changes=[_change("clinic", existing.clinic, clinic)],
+                    doctor_hint=(name, clinic),
+                )
+            return _PlanEntry(
+                entity_type="doctor", action="skip", label=existing.name,
+                entity_id=existing.id, reason="already on file",
+                doctor_hint=(name, clinic),
+            )
+
+    return _PlanEntry(
+        entity_type="doctor", action="create", label=name.strip(),
+        changes=_creation_changes({"name": name.strip(), "clinic": clinic}),
+        doctor_hint=(name, clinic),
+    )
+
+
+async def _build_apply_plan(
+    db: AsyncSession, profile_id: str, doc: Document, items: ApplyItemsRequest
+) -> list[_PlanEntry]:
+    """Decide what applying `items` would do, without doing any of it.
+
+    Read-only by construction: every branch appends to the plan instead of
+    mutating, so `/apply/preview` and `/apply` can share it (issue #46).
+    """
+    visit_dt = _parse_visit_datetime(doc.visit_date)
+    plan: list[_PlanEntry] = []
+
+    conditions = (await db.execute(
+        select(Condition).where(Condition.profile_id == profile_id)
+    )).scalars().all()
+    medications = (await db.execute(
+        select(Medication).where(Medication.profile_id == profile_id)
+    )).scalars().all()
+    active_medications = [m for m in medications if m.end_date is None]
+
+    # What this plan will create, so two items in the same document can't each
+    # create a row for the same thing. Apply used to depend on whether a flush
+    # happened to have run mid-loop; this makes it deterministic.
+    planned_conditions: list[str] = []
+    planned_medications: list[str] = []
+    planned_labs: set[tuple] = set()
+    planned_referrals: set[str] = set()
+    planned_follow_ups: set[str] = set()
+    planned_appointments: set = set()
+
+    # Diagnoses -> Condition records (fuzzy dedup by name, date-guarded)
+    for dx in items.diagnoses:
+        dx_clean = dx.condition.strip().lower()
+        existing_cond = next(
+            (c for c in conditions if _condition_matches(c, dx_clean, dx.icd_10)), None
+        )
+        if existing_cond:
+            if not _is_newer(visit_dt, existing_cond.updated_at):
+                plan.append(_PlanEntry(
+                    entity_type="condition", action="skip", label=dx.condition,
+                    entity_id=existing_cond.id, reason=_SKIP_RECORD_IS_NEWER,
+                    skip_key="conditions",
+                ))
+                continue
+
+            update_values: dict = {}
+            changes: list[PlanFieldChange] = []
+            if dx.icd_10:
+                update_values["icd_10"] = dx.icd_10
+                changes.append(_change("icd_10", existing_cond.icd_10, dx.icd_10))
+            if dx.severity:
+                update_values["severity"] = dx.severity
+                changes.append(_change("severity", existing_cond.severity, dx.severity))
+            if dx.status:
+                update_values["status"] = dx.status
+                changes.append(_change("status", existing_cond.status, dx.status))
+            dx_date = _parse_date_string(dx.diagnosed_date)
+            if dx_date:
+                update_values["diagnosed_date"] = dx_date
+                changes.append(
+                    _change("diagnosed_date", existing_cond.diagnosed_date, dx_date)
+                )
+            elif not existing_cond.diagnosed_date and visit_dt:
+                update_values["diagnosed_date"] = visit_dt.date()
+                changes.append(_change("diagnosed_date", None, visit_dt.date()))
+
+            plan.append(_PlanEntry(
+                entity_type="condition", action="update", label=existing_cond.name,
+                entity_id=existing_cond.id, reason="updates a condition already on file",
+                changes=changes, count_key="conditions", model=Condition,
+                update_values=update_values,
+            ))
+        elif any(_fuzzy_text_match(p, dx_clean) for p in planned_conditions):
+            plan.append(_PlanEntry(
+                entity_type="condition", action="skip", label=dx.condition,
+                reason=_SKIP_ALREADY_IN_DOCUMENT, skip_key="conditions",
+            ))
+        else:
+            values = {
+                "profile_id": profile_id,
+                "name": dx.condition,
+                "icd_10": dx.icd_10,
+                "severity": dx.severity,
+                "diagnosed_date": (
+                    _parse_date_string(dx.diagnosed_date)
+                    or (visit_dt.date() if visit_dt else None)
+                ),
+                "status": dx.status or "active",
+            }
+            planned_conditions.append(dx_clean)
+            plan.append(_PlanEntry(
+                entity_type="condition", action="create", label=dx.condition,
+                reason="new condition", changes=_creation_changes(values),
+                count_key="conditions", model=Condition, create_values=values,
+            ))
+
+    # Medication starts -> new Medication records (dedup by name against all meds)
+    for med in items.medication_starts:
+        clean_name = _clean_med_name(med.name)
+        existing_med = next(
+            (m for m in medications
+             if _fuzzy_med_match(_clean_med_name(m.name), clean_name)),
+            None,
+        )
+        if existing_med:
+            if existing_med.end_date is not None:
+                plan.append(_PlanEntry(
+                    entity_type="medication", action="skip", label=med.name,
+                    entity_id=existing_med.id,
+                    reason="already on file as a stopped medication",
+                    skip_key="medications_started",
+                ))
+                continue
+            if not _is_newer(visit_dt, existing_med.updated_at):
+                plan.append(_PlanEntry(
+                    entity_type="medication", action="skip", label=med.name,
+                    entity_id=existing_med.id, reason=_SKIP_RECORD_IS_NEWER,
+                    skip_key="medications_started",
+                ))
+                continue
+
+            update_values = {}
+            changes = []
+            if med.strength and med.strength != existing_med.dosage:
+                update_values["dosage"] = med.strength
+                changes.append(_change("dosage", existing_med.dosage, med.strength))
+            if med.instructions and med.instructions != existing_med.frequency:
+                update_values["frequency"] = med.instructions
+                changes.append(
+                    _change("frequency", existing_med.frequency, med.instructions)
+                )
+
+            if not update_values:
+                plan.append(_PlanEntry(
+                    entity_type="medication", action="skip", label=med.name,
+                    entity_id=existing_med.id,
+                    reason="already recorded with these details",
+                ))
+                continue
+
+            # Deliberately uncounted: refreshing an already-known medication is
+            # not a new start, and apply has never counted it as one.
+            plan.append(_PlanEntry(
+                entity_type="medication", action="update", label=existing_med.name,
+                entity_id=existing_med.id,
+                reason="already on file — refreshing dosage/instructions",
+                changes=changes, model=Medication, update_values=update_values,
+            ))
+        elif any(_fuzzy_med_match(p, clean_name) for p in planned_medications):
+            plan.append(_PlanEntry(
+                entity_type="medication", action="skip", label=med.name,
+                reason=_SKIP_ALREADY_IN_DOCUMENT, skip_key="medications_started",
+            ))
+        else:
+            values = {
+                "profile_id": profile_id,
+                "name": med.name,
+                "dosage": med.strength,
+                "frequency": med.instructions,
+                "start_date": _parse_date_string(med.date),
+            }
+            planned_medications.append(clean_name)
+            plan.append(_PlanEntry(
+                entity_type="medication", action="create", label=med.name,
+                reason="new medication", changes=_creation_changes(values),
+                count_key="medications_started", model=Medication, create_values=values,
+            ))
+
+    # Medication stops -> set end_date on matching Medication (date-guarded)
+    for med in items.medication_stops:
+        clean_name = _clean_med_name(med.name)
+        existing_med = next(
+            (m for m in active_medications
+             if _fuzzy_med_match(_clean_med_name(m.name), clean_name)),
+            None,
+        )
+        if not existing_med:
+            plan.append(_PlanEntry(
+                entity_type="medication", action="skip", label=med.name,
+                reason="no active medication matches this name",
+            ))
+        elif _is_newer(visit_dt, existing_med.updated_at):
+            end_date = _parse_date_string(med.date)
+            plan.append(_PlanEntry(
+                entity_type="medication", action="update", label=existing_med.name,
+                entity_id=existing_med.id, reason="marks this medication stopped",
+                changes=[_change("end_date", existing_med.end_date, end_date)],
+                count_key="medications_stopped", model=Medication,
+                update_values={"end_date": end_date},
+            ))
+        else:
+            plan.append(_PlanEntry(
+                entity_type="medication", action="skip", label=med.name,
+                entity_id=existing_med.id, reason=_SKIP_RECORD_IS_NEWER,
+                skip_key="medications_stopped",
+            ))
+
+    # Medication updates -> find existing, update dosage/instructions (date-guarded)
+    for med in items.medication_updates:
+        clean_name = _clean_med_name(med.name)
+        existing_med = next(
+            (m for m in active_medications
+             if _fuzzy_med_match(_clean_med_name(m.name), clean_name)),
+            None,
+        )
+        if not existing_med:
+            plan.append(_PlanEntry(
+                entity_type="medication", action="skip", label=med.name,
+                reason="no active medication matches this name",
+            ))
+            continue
+        if not _is_newer(visit_dt, existing_med.updated_at):
+            plan.append(_PlanEntry(
+                entity_type="medication", action="skip", label=med.name,
+                entity_id=existing_med.id, reason=_SKIP_RECORD_IS_NEWER,
+                skip_key="medications_updated",
+            ))
+            continue
+
+        update_values = {}
+        changes = []
+        if med.strength:
+            update_values["dosage"] = med.strength
+            changes.append(_change("dosage", existing_med.dosage, med.strength))
+        if med.instructions:
+            update_values["frequency"] = med.instructions
+            changes.append(
+                _change("frequency", existing_med.frequency, med.instructions)
+            )
+        plan.append(_PlanEntry(
+            entity_type="medication", action="update", label=existing_med.name,
+            entity_id=existing_med.id, reason="changes an existing medication",
+            changes=changes, count_key="medications_updated", model=Medication,
+            update_values=update_values,
+        ))
+
+    # Vitals -> new Vitals record for the document
+    if items.vitals:
+        v = items.vitals
+        if any([v.weight, v.bmi, v.blood_pressure, v.heart_rate, v.temperature]):
+            values = {
+                "profile_id": profile_id,
+                "document_id": doc.id,
+                "weight": v.weight,
+                "bmi": v.bmi,
+                "blood_pressure": v.blood_pressure,
+                "heart_rate": v.heart_rate,
+                "temperature": v.temperature,
+                "measured_date": doc.visit_date,
+            }
+            plan.append(_PlanEntry(
+                entity_type="vitals", action="create",
+                label="Vitals recorded at this visit",
+                reason="new vitals reading", changes=_creation_changes(values),
+                count_key="vitals", model=Vitals, create_values=values,
+            ))
+
+    # Lab orders (dedup by test_name + ordered_date)
+    for lab in items.lab_orders:
+        key = (lab.test, lab.ordered_date)
+        existing = await db.execute(
+            select(LabOrder).where(
+                LabOrder.profile_id == profile_id,
+                LabOrder.test_name == lab.test,
+                LabOrder.ordered_date == lab.ordered_date,
+            )
+        )
+        if existing.scalar_one_or_none():
+            plan.append(_PlanEntry(
+                entity_type="lab_order", action="skip", label=lab.test,
+                reason="already recorded", skip_key="lab_orders",
+            ))
+        elif key in planned_labs:
+            plan.append(_PlanEntry(
+                entity_type="lab_order", action="skip", label=lab.test,
+                reason=_SKIP_ALREADY_IN_DOCUMENT, skip_key="lab_orders",
+            ))
+        else:
+            values = {
+                "profile_id": profile_id,
+                "document_id": doc.id,
+                "test_name": lab.test,
+                "ordered_date": lab.ordered_date,
+            }
+            planned_labs.add(key)
+            plan.append(_PlanEntry(
+                entity_type="lab_order", action="create", label=lab.test,
+                reason="new lab order", changes=_creation_changes(values),
+                count_key="lab_orders", model=LabOrder, create_values=values,
+            ))
+
+    # Referrals (dedup by specialty + document)
+    for ref in items.referrals:
+        existing = await db.execute(
+            select(Referral).where(
+                Referral.profile_id == profile_id,
+                Referral.document_id == doc.id,
+                Referral.specialty == ref.specialty,
+            )
+        )
+        if existing.scalar_one_or_none():
+            plan.append(_PlanEntry(
+                entity_type="referral", action="skip", label=ref.specialty,
+                reason="already recorded", skip_key="referrals",
+            ))
+        elif ref.specialty in planned_referrals:
+            plan.append(_PlanEntry(
+                entity_type="referral", action="skip", label=ref.specialty,
+                reason=_SKIP_ALREADY_IN_DOCUMENT, skip_key="referrals",
+            ))
+        else:
+            values = {
+                "profile_id": profile_id,
+                "document_id": doc.id,
+                "specialty": ref.specialty,
+                "provider_name": ref.provider,
+                "reason": ref.reason,
+            }
+            planned_referrals.add(ref.specialty)
+            plan.append(_PlanEntry(
+                entity_type="referral", action="create", label=ref.specialty,
+                reason="new referral", changes=_creation_changes(values),
+                count_key="referrals", model=Referral, create_values=values,
+            ))
+
+    # Follow-ups (dedup by description)
+    for fu in items.follow_ups:
+        existing = await db.execute(
+            select(FollowUp).where(
+                FollowUp.profile_id == profile_id,
+                FollowUp.description == fu.description,
+            )
+        )
+        if existing.scalar_one_or_none():
+            plan.append(_PlanEntry(
+                entity_type="follow_up", action="skip", label=fu.description,
+                reason="already recorded", skip_key="follow_ups",
+            ))
+        elif fu.description in planned_follow_ups:
+            plan.append(_PlanEntry(
+                entity_type="follow_up", action="skip", label=fu.description,
+                reason=_SKIP_ALREADY_IN_DOCUMENT, skip_key="follow_ups",
+            ))
+        else:
+            values = {
+                "profile_id": profile_id,
+                "document_id": doc.id,
+                "description": fu.description,
+                "timeframe": fu.timeframe,
+                "target_date": fu.target_date,
+            }
+            planned_follow_ups.add(fu.description)
+            plan.append(_PlanEntry(
+                entity_type="follow_up", action="create", label=fu.description,
+                reason="new follow-up", changes=_creation_changes(values),
+                count_key="follow_ups", model=FollowUp, create_values=values,
+            ))
+
+    # Create/match doctor from AVS provider info
+    if doc.provider_name:
+        provider_entry = await _plan_doctor(
+            db, profile_id, doc.provider_name, doc.facility_name
+        )
+        if provider_entry:
+            plan.append(provider_entry)
+
+    # Appointments (find/create doctors, dedup by date)
+    from sqlalchemy import cast, Date
+
+    for appt in items.appointments:
+        appt_date = _parse_date_string(appt.date)
+        label = appt.description or "Appointment"
+        if not appt_date:
+            plan.append(_PlanEntry(
+                entity_type="appointment", action="skip", label=label,
+                reason="no usable date on this appointment", skip_key="appointments",
+            ))
+            continue
+
+        existing = await db.execute(
+            select(Appointment).where(
+                Appointment.profile_id == profile_id,
+                cast(Appointment.scheduled_date, Date) == appt_date,
+            )
+        )
+        if existing.scalar_one_or_none():
+            plan.append(_PlanEntry(
+                entity_type="appointment", action="skip", label=label,
+                reason="an appointment already exists on this date",
+                skip_key="appointments",
+            ))
+        elif appt_date in planned_appointments:
+            plan.append(_PlanEntry(
+                entity_type="appointment", action="skip", label=label,
+                reason=_SKIP_ALREADY_IN_DOCUMENT, skip_key="appointments",
+            ))
+        else:
+            doctor_name = (
+                _extract_doctor_name(appt.description) if appt.description else None
+            )
+            values = {
+                "profile_id": profile_id,
+                "scheduled_date": datetime.combine(appt_date, datetime.min.time()),
+                "purpose": appt.description,
+                "status": "scheduled",
+            }
+            changes = _creation_changes(values)
+            if doctor_name:
+                changes.append(_change("doctor", None, doctor_name))
+            planned_appointments.add(appt_date)
+            plan.append(_PlanEntry(
+                entity_type="appointment", action="create", label=label,
+                reason="new appointment", changes=changes,
+                count_key="appointments", model=Appointment, create_values=values,
+                doctor_hint=(doctor_name, appt.location) if doctor_name else None,
+            ))
+
+    return plan
+
+
+def _plan_totals(plan: list[_PlanEntry]) -> tuple[dict, dict]:
+    """Project a plan onto the counts/skipped buckets the apply response uses.
+
+    Both the preview and the real apply report from here, so the totals a user
+    reviews are the totals they get.
+    """
+    counts = {
+        "conditions": 0,
+        "medications_started": 0,
+        "medications_stopped": 0,
+        "medications_updated": 0,
+        "vitals": 0,
+        "lab_orders": 0,
+        "referrals": 0,
+        "follow_ups": 0,
+        "appointments": 0,
+    }
+    skipped = {
+        "conditions": 0,
+        "medications_started": 0,
+        "medications_stopped": 0,
+        "medications_updated": 0,
+        "lab_orders": 0,
+        "referrals": 0,
+        "follow_ups": 0,
+        "appointments": 0,
+    }
+
+    for entry in plan:
+        if entry.entity_type == "doctor":
+            # Matched or created, the provider always ends up on file.
+            counts.setdefault("doctors", 0)
+        elif entry.action == "skip":
+            if entry.skip_key:
+                skipped[entry.skip_key] += 1
+        elif entry.count_key:
+            counts[entry.count_key] += 1
+
+    return counts, skipped
+
+
+async def _execute_apply_plan(
+    db: AsyncSession, profile_id: str, document_id: str, plan: list[_PlanEntry]
+) -> tuple[dict, dict]:
+    """Carry out a plan. All the decisions were made in `_build_apply_plan`."""
+    for entry in plan:
+        if entry.entity_type == "doctor":
+            name, clinic = entry.doctor_hint
+            await _find_or_create_doctor(db, profile_id, name, clinic)
+            continue
+        if entry.action == "skip":
+            continue
+
+        if entry.action == "update":
+            row = await db.get(entry.model, entry.entity_id)
+            if row is None:
+                logger.warning(
+                    f"Plan targeted a missing {entry.entity_type} {entry.entity_id}; "
+                    f"skipping that write."
+                )
+                continue
+            for field_name, value in (entry.update_values or {}).items():
+                setattr(row, field_name, value)
+        elif entry.action == "create":
+            values = dict(entry.create_values or {})
+            if entry.doctor_hint:
+                name, clinic = entry.doctor_hint
+                values["doctor_id"] = await _find_or_create_doctor(
+                    db, profile_id, name, clinic
+                )
+            db.add(entry.model(**values))
+
+    return _plan_totals(plan)
+
+
+def _plan_fingerprint(entries: list[ApplyPlanEntry]) -> str:
+    """A stable digest of a plan, used to detect that it changed under the user.
+
+    Covers the stored values too, so an edit to a targeted record in another tab
+    invalidates the preview even when the actions themselves are unchanged.
+    """
+    payload = json.dumps(
+        [entry.model_dump() for entry in entries], sort_keys=True, default=str
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+
+def _plan_to_response(plan: list[_PlanEntry]) -> ApplyPlanResponse:
+    """Render the internal plan as the reviewable, serialisable version."""
+    entries = [
+        ApplyPlanEntry(
+            entity_type=entry.entity_type,
+            action=entry.action,
+            label=entry.label,
+            entity_id=entry.entity_id,
+            reason=entry.reason,
+            changes=entry.changes,
+        )
+        for entry in plan
+    ]
+    counts, skipped = _plan_totals(plan)
+    return ApplyPlanResponse(
+        plan_fingerprint=_plan_fingerprint(entries),
+        entries=entries,
+        counts=counts,
+        skipped=skipped,
+    )
 
 
 def _extract_doctor_name(text: str) -> str | None:
@@ -634,9 +1062,14 @@ def _clean_med_name(name: str) -> str:
     return re.sub(r"\s*\(.*?\)", "", name).strip().lower()
 
 
+def _fuzzy_text_match(text_a: str, text_b: str) -> bool:
+    """Bidirectional substring match, the repo's standing rule for name dedup."""
+    return text_a == text_b or text_a in text_b or text_b in text_a
+
+
 def _fuzzy_med_match(name_a: str, name_b: str) -> bool:
     """Bidirectional substring match for medication names."""
-    return name_a == name_b or name_a in name_b or name_b in name_a
+    return _fuzzy_text_match(name_a, name_b)
 
 
 def _build_parsed_response(raw: dict) -> ParsedItemsResponse:
