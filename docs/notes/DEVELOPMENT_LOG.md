@@ -1832,4 +1832,34 @@ Related: issue #101, DEC-031, issue #135 (implementation, file-upload Condition+
 
 ---
 
+## 56. Pre-Apply Diff Preview for Parsed AVS Items (#46)
+
+**Date:** 2026-08-07
+
+**Context:** `apply_items` reconciled parsed AVS data against existing records by fuzzy-matching a name and then overwriting fields in place — `existing_cond.severity = dx.severity`, `existing_med.dosage = med.strength`. The only guard was `_is_newer(visit_dt, record.updated_at)`, which stops an *older* visit clobbering a newer record but does nothing about a genuinely newer visit carrying a mis-parsed value. With no history table anywhere in `src/data/models.py`, a bad parse applied cleanly and the previous value was simply gone. Since parsing runs through a local LLM over OCR'd text (DEC-010), "the parse was wrong" is a routine case, not an exotic one.
+
+**Scope: option 1 (preview) only; option 2 (history/audit trail) deliberately deferred.** The issue offered both. A `changed_from`/`changed_at` pair or a dedicated history table is the same substrate #12 (append-only claim rows), #54 (regenerate history), and #97 (cross-source reconciliation) will each want, and picking its shape unilaterally here means designing it three times or migrating it once. Deferred to be designed once, across those issues. The preview alone converts a blind "Apply" into a reviewed one, which is the bulk of the protection.
+
+**What changed:** the reconciliation decisions were pulled out of the mutation. `_build_apply_plan` is a read-only function returning a list of `_PlanEntry` — `{entity_type, action: create|update|skip, label, entity_id, reason, changes[]}` — where `changes` carries per-field `old_value → new_value` and `reason` records *why* something is skipped (`"the existing record is newer than this visit"`, `"already recorded"`). `apply_items` no longer decides anything; it calls `_build_apply_plan` and then `_execute_apply_plan`, which only writes. A new `POST /{document_id}/apply/preview` returns the same plan without committing.
+
+**Preview/apply drift is the failure mode this design is built against.** Two endpoints that must agree about what will change is exactly the kind of pair that silently diverges. They share `_build_apply_plan`, and the response totals come from `_plan_totals` — one function, used by both — so `counts`/`skipped` cannot disagree by construction. `test_preview_and_apply_agree_on_the_same_input` pins that end to end.
+
+**Stale-preview guard (repo owner's call on the issue):** the preview returns a `plan_fingerprint`, a digest over the plan *including the stored values it read*. Confirm sends it back as `expected_plan_fingerprint`; apply re-derives the plan and returns `409` with the fresh plan attached if the fingerprint moved. Because the digest covers old values, an edit to a targeted record in another tab invalidates the preview even when the actions themselves look identical. The field is optional at the API layer so existing callers keep working; the UI always sends it.
+
+**One intentional behaviour change:** within-document duplicates are now deduped deterministically. Previously two items in the same AVS that matched each other each created their own row — unless a `_find_or_create_doctor` call happened to flush mid-loop, in which case the second was skipped. Plan building tracks what it has already planned to create, so the outcome no longer depends on flush timing. Duplicates now land as `skip` with reason "already included earlier in this document".
+
+**Frontend:** the confirm modal in `ParsedItemsReview.tsx` previously listed the items being sent — which is not the same thing as what would change. It now fetches the plan and renders it grouped into "Will be changed" / "Will be added" / "Will be left alone", with `old → new` per field, following the `changedFields` pattern already in `ProfileDetail.tsx` rather than inventing another. Fields whose incoming value matches what is stored are counted but not listed, so the diff shows only real edits. Skipped-because-newer items are now visible, which they never were before. A refused apply swaps in the re-derived plan behind a "this profile changed while you were reviewing" banner instead of making the user start over.
+
+**Tests:** `tests/test_documents_apply.py` (new, 15 tests). Ten are characterisation tests written against the *pre-refactor* code and confirmed passing before any of it moved — create/overwrite/skip-because-newer for conditions, the four medication paths including the deliberately-uncounted matched-start refresh, dedup skips, vitals, undated appointments, doctor matching. Five cover the preview: field-level diff without writing, skip reasons, preview/apply agreement, the stale-plan 409 and recovery, and backwards compatibility without a fingerprint. Full suite: 314 passed, 25 skipped (up from 299). Frontend `tsc -b && vite build` green.
+
+**Drive-by:** `frontend/src/components/PostAvsActionPanel.tsx` had two unused type imports that failed `tsc -b` on `main`, so the frontend build was already red before this change. Fixed here because the build had to be green to verify the frontend work; it is a two-line change unrelated to #46.
+
+**No DEC entry:** this makes an existing behaviour visible rather than choosing a new architecture. The history table, when it happens, is the DEC-worthy part.
+
+**Files changed:** `src/api/documents.py`, `src/models/schemas.py`, `tests/test_documents_apply.py`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `frontend/src/components/ParsedItemsReview.tsx`, `frontend/src/components/PostAvsActionPanel.tsx`, `frontend/src/pages/ProfileDetail.tsx`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #46, issue #135 (FHIR import reuses this parse→preview→apply flow), issue #97 (reconciliation, deferred), issue #12, issue #54, DEC-010, DEC-031.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

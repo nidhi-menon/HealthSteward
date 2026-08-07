@@ -2,9 +2,12 @@ import { useState, useCallback } from 'react';
 import { Button } from './Button';
 import { Card, CardHeader, CardContent } from './Card';
 import { Modal } from './Modal';
+import { StalePlanError } from '../api/client';
 import type {
   ParsedItemsResponse,
   ApplyItemsRequest,
+  ApplyPlan,
+  ApplyPlanEntry,
   ParsedDiagnosis,
   ParsedMedicationChange,
   ParsedVitals,
@@ -17,13 +20,30 @@ import type {
 interface ParsedItemsReviewProps {
   data: ParsedItemsResponse;
   onApply: (items: ApplyItemsRequest) => void;
+  // Asks the backend what the apply would actually change, so the confirm step
+  // shows real per-field diffs instead of a list of incoming items (issue #46).
+  onPreview: (items: ApplyItemsRequest) => Promise<ApplyPlan>;
   onBack: () => void;
   isApplying: boolean;
+  applyError?: unknown;
 }
+
+const ENTITY_LABELS: Record<string, string> = {
+  condition: 'Condition',
+  medication: 'Medication',
+  vitals: 'Vitals',
+  lab_order: 'Lab order',
+  referral: 'Referral',
+  follow_up: 'Follow-up',
+  appointment: 'Appointment',
+  doctor: 'Doctor',
+};
 
 // ── Main Component ──
 
-export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedItemsReviewProps) {
+export function ParsedItemsReview({
+  data, onApply, onPreview, onBack, isApplying, applyError,
+}: ParsedItemsReviewProps) {
   // Editable copies of all items
   const [diagnoses, setDiagnoses] = useState<ParsedDiagnosis[]>(() => data.diagnoses.map(d => ({ ...d })));
   const [vitals, setVitals] = useState<ParsedVitals>(() => ({ ...data.vitals }));
@@ -44,8 +64,16 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
   // Track edits: "section-index-field" keys
   const [edits, setEdits] = useState<Set<string>>(new Set());
 
-  // Confirmation modal
+  // Confirmation modal, and the plan being confirmed
   const [showConfirm, setShowConfirm] = useState(false);
+  const [plan, setPlan] = useState<ApplyPlan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+
+  // A refused apply hands back a freshly derived plan — show that instead of
+  // the one the user reviewed, so they are confirming against current data.
+  const stalePlan = applyError instanceof StalePlanError ? applyError.plan : null;
+  const displayPlan = stalePlan ?? plan;
 
   const markEdit = useCallback((key: string) => {
     setEdits(prev => new Set(prev).add(key));
@@ -74,9 +102,31 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
     appointments,
   });
 
+  const openConfirm = async () => {
+    setShowConfirm(true);
+    setPlan(null);
+    setPlanError(null);
+    setIsPreviewing(true);
+    try {
+      setPlan(await onPreview(buildApplyRequest()));
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : 'Could not work out what would change.');
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
   const handleConfirmApply = () => {
-    onApply(buildApplyRequest());
-    setShowConfirm(false);
+    if (!displayPlan) return;
+    // Adopt the re-derived plan so a retry confirms what is on screen, not the
+    // plan that was already refused once.
+    if (stalePlan) setPlan(stalePlan);
+    // The modal stays open: a successful apply unmounts this view, and a
+    // refused one needs somewhere to show the re-derived plan.
+    onApply({
+      ...buildApplyRequest(),
+      expected_plan_fingerprint: displayPlan.plan_fingerprint,
+    });
   };
 
   const editCount = edits.size;
@@ -94,6 +144,11 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
     appointments: appointments.length,
   };
   const totalItems = Object.values(itemCounts).reduce((a, b) => a + b, 0);
+
+  const planEntries = displayPlan?.entries ?? [];
+  const updateEntries = planEntries.filter(e => e.action === 'update');
+  const createEntries = planEntries.filter(e => e.action === 'create');
+  const skipEntries = planEntries.filter(e => e.action === 'skip');
 
   return (
     <div className="space-y-6">
@@ -464,8 +519,8 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onBack}>Cancel</Button>
-          <Button onClick={() => setShowConfirm(true)} disabled={isApplying || totalItems === 0}>
-            {isApplying ? 'Applying...' : 'Confirm & Update Profile'}
+          <Button onClick={openConfirm} disabled={isApplying || isPreviewing || totalItems === 0}>
+            {isApplying ? 'Applying...' : isPreviewing ? 'Checking...' : 'Review Changes'}
           </Button>
         </div>
       </div>
@@ -473,70 +528,63 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
       {/* Confirmation modal */}
       <Modal isOpen={showConfirm} onClose={() => setShowConfirm(false)} title="Confirm Profile Update">
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            The following items will be applied to your profile:
-          </p>
+          {stalePlan && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+              <span className="font-medium">This profile changed while you were reviewing.</span>{' '}
+              Nothing was saved. The changes below have been recalculated against your current
+              profile — check them again before confirming.
+            </div>
+          )}
 
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm max-h-64 overflow-y-auto">
-            {itemCounts.diagnoses > 0 && (
-              <ConfirmLine label="Diagnoses" items={diagnoses.map((dx, i) => ({
-                text: [dx.condition, dx.icd_10, dx.severity, dx.status, dx.diagnosed_date].filter(Boolean).join(' | '),
-                edited: isEdited(`dx-${i}-condition`) || isEdited(`dx-${i}-icd10`) || isEdited(`dx-${i}-severity`) || isEdited(`dx-${i}-status`) || isEdited(`dx-${i}-date`),
-              }))} />
-            )}
-            {itemCounts.medStarts > 0 && (
-              <ConfirmLine label="Medications to start" items={editMedStarts.map((m, i) => ({
-                text: `${m.name}${m.strength ? ` ${m.strength}` : ''}`,
-                edited: isEdited(`medstart-${i}-name`) || isEdited(`medstart-${i}-strength`),
-              }))} />
-            )}
-            {itemCounts.medStops > 0 && (
-              <ConfirmLine label="Medications to stop" items={editMedStops.map((m, i) => ({
-                text: m.name,
-                edited: isEdited(`medstop-${i}-name`),
-              }))} />
-            )}
-            {itemCounts.medUpdates > 0 && (
-              <ConfirmLine label="Medications to update" items={editMedUpdates.map((m, i) => ({
-                text: `${m.name}${m.strength ? ` → ${m.strength}` : ''}${m.instructions ? ` (${m.instructions})` : ''}`,
-                edited: isEdited(`medupdate-${i}-name`) || isEdited(`medupdate-${i}-strength`) || isEdited(`medupdate-${i}-instr`),
-              }))} />
-            )}
-            {itemCounts.vitals > 0 && (
-              <div>
-                <span className="font-medium text-gray-700">Vitals:</span>
-                <span className="text-gray-600 ml-1">
-                  {[vitals.weight && `Weight: ${vitals.weight}`, vitals.bmi && `BMI: ${vitals.bmi}`,
-                    vitals.blood_pressure && `BP: ${vitals.blood_pressure}`, vitals.heart_rate && `HR: ${vitals.heart_rate}`,
-                    vitals.temperature && `Temp: ${vitals.temperature}`].filter(Boolean).join(', ')}
-                </span>
+          {isPreviewing && (
+            <p className="text-sm text-gray-500">Working out what would change...</p>
+          )}
+
+          {planError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+              {planError}
+            </div>
+          )}
+
+          {displayPlan && (
+            <>
+              <p className="text-sm text-gray-600">
+                {updateEntries.length > 0
+                  ? 'Some of these replace values already in your profile. Replaced values are not recoverable, so check them before confirming.'
+                  : 'Here is exactly what will change in your profile:'}
+              </p>
+
+              <div className="bg-gray-50 rounded-lg p-4 space-y-4 text-sm max-h-80 overflow-y-auto">
+                {updateEntries.length > 0 && (
+                  <PlanGroup
+                    title="Will be changed"
+                    caption="existing entries whose values get replaced"
+                    entries={updateEntries}
+                    tone="amber"
+                  />
+                )}
+                {createEntries.length > 0 && (
+                  <PlanGroup
+                    title="Will be added"
+                    caption="new entries in your profile"
+                    entries={createEntries}
+                    tone="teal"
+                  />
+                )}
+                {skipEntries.length > 0 && (
+                  <PlanGroup
+                    title="Will be left alone"
+                    caption="nothing in your profile changes for these"
+                    entries={skipEntries}
+                    tone="gray"
+                  />
+                )}
+                {displayPlan.entries.length === 0 && (
+                  <p className="text-gray-500">Nothing in your profile would change.</p>
+                )}
               </div>
-            )}
-            {itemCounts.labOrders > 0 && (
-              <ConfirmLine label="Lab orders" items={labOrders.map((l, i) => ({
-                text: `${l.test}${l.ordered_date ? ` (${l.ordered_date})` : ''}`,
-                edited: isEdited(`lab-${i}-test`) || isEdited(`lab-${i}-date`),
-              }))} />
-            )}
-            {itemCounts.referrals > 0 && (
-              <ConfirmLine label="Referrals" items={referrals.map((r, i) => ({
-                text: `${r.specialty}${r.provider ? ` — ${r.provider}` : ''}`,
-                edited: isEdited(`ref-${i}-specialty`) || isEdited(`ref-${i}-provider`),
-              }))} />
-            )}
-            {itemCounts.followUps > 0 && (
-              <ConfirmLine label="Follow-ups" items={followUps.map((f, i) => ({
-                text: `${f.description}${f.timeframe ? ` (${f.timeframe})` : ''}`,
-                edited: isEdited(`fu-${i}-desc`) || isEdited(`fu-${i}-timeframe`),
-              }))} />
-            )}
-            {itemCounts.appointments > 0 && (
-              <ConfirmLine label="Appointments" items={appointments.map((a, i) => ({
-                text: `${a.description}${a.date ? ` (${a.date})` : ''}`,
-                edited: isEdited(`appt-${i}-desc`) || isEdited(`appt-${i}-date`),
-              }))} />
-            )}
-          </div>
+            </>
+          )}
 
           {notes.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
@@ -549,13 +597,13 @@ export function ParsedItemsReview({ data, onApply, onBack, isApplying }: ParsedI
               <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
               </svg>
-              <span>You made {editCount} edit{editCount !== 1 ? 's' : ''} to the extracted data. Items marked with <span className="inline-block w-2 h-2 bg-amber-400 rounded-full mx-0.5"></span> were modified.</span>
+              <span>You made {editCount} edit{editCount !== 1 ? 's' : ''} to the extracted data before this step.</span>
             </div>
           )}
 
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setShowConfirm(false)}>Go Back</Button>
-            <Button onClick={handleConfirmApply} disabled={isApplying}>
+            <Button onClick={handleConfirmApply} disabled={isApplying || isPreviewing || !displayPlan}>
               {isApplying ? 'Applying...' : 'Yes, Update Profile'}
             </Button>
           </div>
@@ -756,26 +804,79 @@ function EditableMedItem({
   );
 }
 
-// ── Confirmation line item ──
+// ── Pre-apply diff (issue #46) ──
 
-function ConfirmLine({
-  label,
-  items,
+const PLAN_TONES = {
+  amber: 'border-amber-300 bg-amber-50',
+  teal: 'border-brand-teal-bright/40 bg-white',
+  gray: 'border-gray-200 bg-white',
+} as const;
+
+function PlanGroup({
+  title,
+  caption,
+  entries,
+  tone,
 }: {
-  label: string;
-  items: { text: string; edited: boolean }[];
+  title: string;
+  caption: string;
+  entries: ApplyPlanEntry[];
+  tone: keyof typeof PLAN_TONES;
 }) {
   return (
     <div>
-      <span className="font-medium text-gray-700">{label} ({items.length}):</span>
-      <ul className="ml-4 mt-0.5 space-y-0.5">
-        {items.map((item, i) => (
-          <li key={i} className="text-gray-600 flex items-center gap-1.5">
-            {item.edited && <span className="inline-block w-2 h-2 bg-amber-400 rounded-full flex-shrink-0"></span>}
-            <span>{item.text}</span>
+      <p className="font-medium text-gray-700">
+        {title} ({entries.length})
+        <span className="font-normal text-gray-500"> — {caption}</span>
+      </p>
+      <ul className="mt-1 space-y-1.5">
+        {entries.map((entry, i) => (
+          <li key={`${entry.entity_type}-${entry.entity_id ?? i}`}
+              className={`border rounded px-2 py-1.5 ${PLAN_TONES[tone]}`}>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xs uppercase tracking-wide text-gray-400 flex-shrink-0">
+                {ENTITY_LABELS[entry.entity_type] ?? entry.entity_type}
+              </span>
+              <span className="font-medium text-gray-900">{entry.label}</span>
+            </div>
+            {entry.reason && (
+              <p className="text-xs text-gray-500 mt-0.5">{entry.reason}</p>
+            )}
+            <PlanChanges entry={entry} />
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function PlanChanges({ entry }: { entry: ApplyPlanEntry }) {
+  // Fields the AVS repeats back unchanged are noise in a diff — count them,
+  // but only show what actually differs.
+  const changed = entry.changes.filter(c => c.changed);
+  const unchanged = entry.changes.length - changed.length;
+
+  if (entry.changes.length === 0) return null;
+
+  return (
+    <div className="mt-1 space-y-0.5">
+      {changed.map(change => (
+        <div key={change.field} className="text-xs text-gray-600 flex flex-wrap items-baseline gap-1">
+          <span className="text-gray-500">{change.field.replace(/_/g, ' ')}:</span>
+          {entry.action === 'update' && (
+            <>
+              <span className="line-through text-red-700/70">{change.old_value ?? '(empty)'}</span>
+              <span aria-hidden="true">→</span>
+            </>
+          )}
+          <span className="font-medium text-gray-900">{change.new_value ?? '(empty)'}</span>
+        </div>
+      ))}
+      {unchanged > 0 && (
+        <p className="text-xs text-gray-400">
+          {unchanged} field{unchanged !== 1 ? 's' : ''} already match{unchanged === 1 ? 'es' : ''} — unchanged
+        </p>
+      )}
     </div>
   );
 }

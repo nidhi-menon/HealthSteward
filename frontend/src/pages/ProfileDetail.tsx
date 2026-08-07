@@ -854,12 +854,14 @@ function DocumentsTab({ profileId, files, appointments: appointmentList }: { pro
       <ParsedItemsReview
         data={parsedData}
         onApply={(items) => applyMutation.mutate(items)}
+        onPreview={(items) => documents.previewApply(profileId, activeDocId!, items)}
         onBack={() => {
           setView('list');
           setParsedData(null);
           setActiveDocId(null);
         }}
         isApplying={applyMutation.isPending}
+        applyError={applyMutation.error}
       />
     );
   }
