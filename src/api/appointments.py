@@ -6,14 +6,25 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.action_items import COMPLETED_STATUSES
 from src.api.health_profile import get_live_profile_or_404
 from src.data.database import get_db
-from src.data.models import Appointment, Doctor
+from src.data.models import (
+    Appointment,
+    Doctor,
+    LabOrder,
+    Medication,
+    Referral,
+    VisitPrep,
+)
 from src.models.schemas import (
     AppointmentCreate,
     AppointmentResponse,
     AppointmentUpdate,
+    ChecklistItemResponse,
+    VisitChecklistResponse,
 )
+from src.services.visit_checklist import build_checklist
 
 router = APIRouter(prefix="/api/profiles/{profile_id}/appointments", tags=["Appointments"])
 
@@ -41,6 +52,25 @@ async def verify_doctor_exists(doctor_id: str, profile_id: str, db: AsyncSession
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Doctor with id {doctor_id} not found for this profile",
         )
+
+
+async def _get_appointment_or_404(
+    appointment_id: str, profile_id: str, db: AsyncSession
+) -> Appointment:
+    """Fetch one of this profile's appointments, or 404."""
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.profile_id == profile_id,
+        )
+    )
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment with id {appointment_id} not found",
+        )
+    return appointment
 
 
 @router.post("/", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
@@ -101,6 +131,93 @@ async def get_appointment(
             detail=f"Appointment with id {appointment_id} not found",
         )
     return appointment
+
+
+@router.get("/{appointment_id}/checklist", response_model=VisitChecklistResponse)
+async def get_visit_checklist(
+    profile_id: str,
+    appointment_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> VisitChecklistResponse:
+    """What to bring to this visit (issue #110).
+
+    Deterministic rules over data the profile already holds — no LLM call, no
+    new table, nothing stored. Computed per request so it always reflects the
+    profile as it is now (a referral closed this morning drops off the list).
+    """
+    profile = await get_live_profile_or_404(profile_id, db)
+
+    appointment = await _get_appointment_or_404(appointment_id, profile_id, db)
+
+    doctor = (
+        await db.get(Doctor, appointment.doctor_id) if appointment.doctor_id else None
+    )
+
+    # "First visit with this doctor" means no earlier appointment with them has
+    # been completed. Scheduled-but-not-yet-attended ones don't count: you can
+    # book three visits before attending any of them, and the first one you
+    # actually walk into is still a first visit for paperwork purposes.
+    is_first_visit = True
+    if appointment.doctor_id:
+        prior = await db.execute(
+            select(Appointment.id).where(
+                Appointment.profile_id == profile_id,
+                Appointment.doctor_id == appointment.doctor_id,
+                Appointment.id != appointment.id,
+                Appointment.status == "completed",
+            ).limit(1)
+        )
+        is_first_visit = prior.scalar_one_or_none() is None
+
+    medications = await db.execute(
+        select(Medication.id).where(
+            Medication.profile_id == profile_id,
+            Medication.end_date.is_(None),
+        ).limit(1)
+    )
+
+    referrals = await db.execute(
+        select(Referral).where(Referral.profile_id == profile_id)
+    )
+    open_referrals = [
+        r for r in referrals.scalars().all() if r.status not in COMPLETED_STATUSES
+    ]
+
+    lab_orders = await db.execute(
+        select(LabOrder).where(LabOrder.profile_id == profile_id)
+    )
+    open_lab_orders = [
+        lab for lab in lab_orders.scalars().all()
+        if lab.status not in COMPLETED_STATUSES
+    ]
+
+    prep = await db.execute(
+        select(VisitPrep).where(VisitPrep.appointment_id == appointment_id)
+    )
+    prep_record = prep.scalar_one_or_none()
+    has_prep_questions = bool(prep_record and prep_record.generated_questions)
+
+    items = build_checklist(
+        specialty=doctor.specialty if doctor else None,
+        purpose=appointment.purpose,
+        is_first_visit_with_doctor=is_first_visit,
+        has_medications=medications.scalar_one_or_none() is not None,
+        has_allergies=bool(profile.allergies and profile.allergies.strip()),
+        has_prep_questions=has_prep_questions,
+        open_referral_count=len(open_referrals),
+        open_lab_order_count=len(open_lab_orders),
+    )
+
+    return VisitChecklistResponse(
+        appointment_id=appointment_id,
+        items=[
+            ChecklistItemResponse(
+                id=item.id, label=item.label, why=item.why,
+                category=item.category, sources=list(item.sources),
+            )
+            for item in items
+        ],
+    )
 
 
 @router.patch("/{appointment_id}", response_model=AppointmentResponse)

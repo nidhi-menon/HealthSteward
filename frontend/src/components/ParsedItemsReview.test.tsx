@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { ParsedItemsReview } from './ParsedItemsReview';
 import { renderWithProviders } from '../test/render';
-import type { ApplyItemsRequest, ParsedItemsResponse } from '../types';
+import type { ApplyItemsRequest, ApplyPlan, ParsedItemsResponse } from '../types';
 
 function parsedItems(overrides: Partial<ParsedItemsResponse> = {}): ParsedItemsResponse {
   return {
@@ -25,18 +25,31 @@ function parsedItems(overrides: Partial<ParsedItemsResponse> = {}): ParsedItemsR
   };
 }
 
+/** A minimal plan that satisfies the confirm modal without asserting on its diff rendering. */
+function stubPlan(overrides: Partial<ApplyPlan> = {}): ApplyPlan {
+  return {
+    plan_fingerprint: 'fp-1',
+    entries: [],
+    counts: {},
+    skipped: {},
+    ...overrides,
+  };
+}
+
 function renderReview(data: ParsedItemsResponse) {
   const onApply = vi.fn();
   const onBack = vi.fn();
+  const onPreview = vi.fn().mockResolvedValue(stubPlan());
   const result = renderWithProviders(
     <ParsedItemsReview
       data={data}
       onApply={onApply}
+      onPreview={onPreview}
       onBack={onBack}
       isApplying={false}
     />,
   );
-  return { ...result, onApply, onBack };
+  return { ...result, onApply, onBack, onPreview };
 }
 
 /** Walk the confirm modal and return the request the component would send. */
@@ -44,7 +57,7 @@ async function confirmAndCapture(
   user: ReturnType<typeof userEvent.setup>,
   onApply: ReturnType<typeof vi.fn>,
 ): Promise<ApplyItemsRequest> {
-  await user.click(screen.getByRole('button', { name: /Confirm & Update Profile/ }));
+  await user.click(screen.getByRole('button', { name: /Review Changes/ }));
   await user.click(await screen.findByRole('button', { name: /Yes, Update Profile/ }));
   expect(onApply).toHaveBeenCalledTimes(1);
   return onApply.mock.calls[0][0] as ApplyItemsRequest;
@@ -124,13 +137,13 @@ describe('ParsedItemsReview', () => {
         }],
       }));
 
-      expect(screen.getByRole('button', { name: /Confirm & Update Profile/ })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /Review Changes/ })).toBeEnabled();
 
       const row = screen.getByText('Hypertension').closest('div.group');
       await user.click(within(row as HTMLElement).getByTitle('Remove item'));
 
       expect(screen.getByText(/^0 items to apply/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Confirm & Update Profile/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Review Changes/ })).toBeDisabled();
     });
   });
 
@@ -193,7 +206,7 @@ describe('ParsedItemsReview', () => {
       }],
     }));
 
-    await user.click(screen.getByRole('button', { name: /Confirm & Update Profile/ }));
+    await user.click(screen.getByRole('button', { name: /Review Changes/ }));
     expect(onApply).not.toHaveBeenCalled();
 
     await user.click(await screen.findByRole('button', { name: 'Go Back' }));

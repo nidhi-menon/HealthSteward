@@ -460,6 +460,63 @@ class ApplyItemsRequest(BaseModel):
     referrals: list[ParsedReferral] = []
     follow_ups: list[ParsedFollowUp] = []
     appointments: list[ParsedAppointment] = []
+    # Set to the fingerprint returned by `/apply/preview` to make the apply
+    # conditional on the profile not having changed since the user reviewed
+    # the diff (issue #46). Omitted means "apply unconditionally", which keeps
+    # older callers working.
+    expected_plan_fingerprint: Optional[str] = None
+
+
+class PlanFieldChange(BaseModel):
+    """One field an apply would write, with the value it would replace.
+
+    `changed` is false when the incoming value equals the stored one — the
+    field is still written (that is what apply has always done), but the UI
+    can collapse it so the diff shows what actually differs.
+    """
+
+    field: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    changed: bool = True
+
+
+class ApplyPlanEntry(BaseModel):
+    """A single decision the apply would make, for review before committing."""
+
+    entity_type: str  # condition | medication | vitals | lab_order | ...
+    action: str  # create | update | skip
+    label: str
+    entity_id: Optional[str] = None
+    reason: Optional[str] = None
+    changes: list[PlanFieldChange] = []
+
+
+class ApplyPlanResponse(BaseModel):
+    """The full set of decisions an apply would make, plus its projected totals."""
+
+    plan_fingerprint: str
+    entries: list[ApplyPlanEntry] = []
+    counts: dict[str, int] = {}
+    skipped: dict[str, int] = {}
+
+
+class ChecklistItemResponse(BaseModel):
+    """One "what to bring" item for an upcoming visit (issue #110)."""
+
+    id: str
+    label: str
+    why: str
+    category: str
+    # Which rules produced this item, so a surprising entry can be traced.
+    sources: list[str] = []
+
+
+class VisitChecklistResponse(BaseModel):
+    """The full pre-visit checklist, computed per request from existing data."""
+
+    appointment_id: str
+    items: list[ChecklistItemResponse] = []
 
 
 # ============================================================================
