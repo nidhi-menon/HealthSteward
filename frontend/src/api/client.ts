@@ -13,6 +13,7 @@ import type {
   VisitPrep,
   VisitPrepUpdate,
   ScannedFile,
+  VisitChecklist,
   ParsedItemsResponse,
   ApplyItemsRequest,
   FollowUp,
@@ -228,6 +229,9 @@ export const appointments = {
     request<void>(`/profiles/${profileId}/appointments/${id}`, {
       method: 'DELETE',
     }),
+  // Deterministic "what to bring" list, computed per request (issue #110).
+  checklist: (profileId: string, id: string) =>
+    request<VisitChecklist>(`/profiles/${profileId}/appointments/${id}/checklist`),
 };
 
 // Documents
