@@ -1832,4 +1832,36 @@ Related: issue #101, DEC-031, issue #135 (implementation, file-upload Condition+
 
 ---
 
+## 56. Pre-Visit "What to Bring" Checklist (#110)
+
+**Date:** 2026-08-07
+
+**Context:** #110 came out of a product-strategy discussion as a small, concrete friction point: people turn up without their insurance card, the referral paperwork, the imaging disc, or the pharmacy address, and the visit is worse for it. The issue's own scope note called for deterministic rules rather than an LLM — "deterministic is fine and cheaper here" — which holds up: the things people forget are the same things every time, so a rules table gets this right more predictably than a prompt, costs nothing to run, and doesn't touch the LLM boundary (DEC-006), the anonymization path, or any prompt. No `PROMPT_CHANGELOG.md` bump, no eval re-run.
+
+**Fixed rules for v1, not user-editable** — the issue's own open question, confirmed by the repo owner on the issue. User-added items need a table, a migration, and CRUD UI, which turns a Small into a Medium; deferred rather than half-built.
+
+**What changed:** `src/services/visit_checklist.py` (new) holds the rules as data — a specialty table, a purpose-keyword table, a first-visit set, and three baseline items — plus `build_checklist`, a pure function over facts the caller has already loaded. No DB access, no clock, no I/O, so the rules are directly unit-testable and the endpoint stays a thin query-and-render layer. `GET /api/profiles/{profile_id}/appointments/{appointment_id}/checklist` does the queries and returns the result. Computed per request: nothing is stored, there is no new table and no migration, and a referral closed this morning drops off the list by itself.
+
+**Rule inputs, all from data that already exists:** `Doctor.specialty` (substring-matched, since it's free text — "Interventional Cardiology" still has to match the cardiology rule); whether any *completed* appointment with this doctor already exists; keyword matches on `Appointment.purpose`; whether the profile has active medications, allergies, or generated prep questions; and the count of unresolved `Referral`/`LabOrder` rows. That last pair are the most concrete items on the list precisely because they aren't guesses — the profile already knows the paperwork is outstanding.
+
+**"First visit" means no *completed* earlier visit with that doctor, not no earlier row.** You can book three appointments before attending any of them; the first one you actually walk into is still a first visit as far as the front desk is concerned. `COMPLETED_STATUSES` in `src/api/action_items.py` was made public (from `_COMPLETED_STATUSES`) so "still outstanding" means the same thing in the checklist as it does in the action-items list, rather than being defined twice.
+
+**Every item carries a `why`, and the rules that produced it.** The `why` is not decoration — a checklist that explains itself gets followed, and it lets someone judge whether a rule actually applies to them. `sources` records which rules fired (`specialty:orthoped`, `purpose:mri`, `open_referral`), so a surprising entry can be traced instead of taken on faith. Items dedupe by id with sources merged, so a rule firing twice reads as one item with two reasons.
+
+**Known weak spot, tracked not buried:** there is no structured visit-type field, so visit-shape rules keyword-match free text and will miss phrasings they don't know. `test_an_unrecognised_purpose_adds_nothing` asserts the empty result for unrecognised wording, so the gap is visible in the suite rather than implied. Filed as **#144** (add a structured `visit_type` to `Appointment`) at the repo owner's request on the issue, rather than left as prose here.
+
+**Deliberately generic where the data doesn't exist:** there are no insurance fields in the schema, so the item is "bring your insurance card", not "bring your Aetna card". Adding insurance data overlaps #102, a cost/claims feature deliberately not touched.
+
+**Frontend:** `VisitChecklistCard.tsx` (new), rendered on `VisitPrep.tsx` for not-yet-completed visits only — a "what to bring" list has no use after the visit. Grouped by category with a remaining count. Tick-off state lives in `localStorage` keyed by appointment id, not the database: it's a scratchpad for one visit, not health data worth a table and a migration, and localStorage failures (private browsing, quota) are swallowed rather than surfaced as an error, since failing to remember a ticked box shouldn't take the card down. Placement note: #43 reworks `VisitPrep` into a before/after hub, so this card will want re-placing when that lands.
+
+**Tests:** `tests/test_visit_checklist.py` (new, 15 tests), split by what's worth pinning — nine call `build_checklist` directly (empty profile produces an empty list, baseline items, first-visit set, substring specialty matching, purpose keywords, the unrecognised-purpose gap, counted paperwork, dedupe-with-merged-sources, determinism), six exercise the endpoint (specialty and purpose read correctly, scheduled-vs-completed first-visit logic, resolved items excluded, active-vs-stopped medications, no-doctor appointments, 404s). Full suite: 314 passed, 25 skipped (up from 299).
+
+**No DEC entry:** a rules table is not an architectural or technology choice. Flagged as such on the issue and not objected to.
+
+**Files changed:** `src/services/visit_checklist.py`, `src/api/appointments.py`, `src/api/action_items.py`, `src/models/schemas.py`, `tests/test_visit_checklist.py`, `frontend/src/components/VisitChecklistCard.tsx`, `frontend/src/pages/VisitPrep.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `frontend/src/components/PostAvsActionPanel.tsx`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #110, issue #144 (visit_type follow-up), issue #43 (Visit Prep rework — placement), issue #102 (insurance/cost data, not touched), DEC-006, DEC-027.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

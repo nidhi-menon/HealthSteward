@@ -23,13 +23,15 @@ from src.models.schemas import (
 
 router = APIRouter(prefix="/api/profiles/{profile_id}", tags=["action-items"])
 
-# Statuses that mean the item is resolved (exclude from active lists)
-_COMPLETED_STATUSES = {"completed", "booked", "scheduled", "done", "cancelled"}
+# Statuses that mean the item is resolved (exclude from active lists). Public
+# because the visit checklist (issue #110) needs the same definition of "still
+# outstanding" when deciding whether to tell you to bring the paperwork.
+COMPLETED_STATUSES = {"completed", "booked", "scheduled", "done", "cancelled"}
 
 
 def _is_active(item) -> bool:
     """True if item should appear in the action items list."""
-    if item.status in _COMPLETED_STATUSES:
+    if item.status in COMPLETED_STATUSES:
         return False
     now = datetime.now(timezone.utc)
     if item.snoozed_until:
@@ -53,7 +55,7 @@ async def list_follow_ups(
     await get_live_profile_or_404(profile_id, db)
     query = select(FollowUp).where(FollowUp.profile_id == profile_id)
     if include_resolved:
-        query = query.where(FollowUp.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(FollowUp.completed_at.desc())).limit(20)
+        query = query.where(FollowUp.status.in_(list(COMPLETED_STATUSES))).order_by(nullslast(FollowUp.completed_at.desc())).limit(20)
     else:
         if status:
             query = query.where(FollowUp.status == status)
@@ -82,7 +84,7 @@ async def update_follow_up(
 
     if "status" in body:
         item.status = body["status"]
-        if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
+        if body["status"] in COMPLETED_STATUSES and item.completed_at is None:
             item.completed_at = datetime.now(timezone.utc)
     if "snoozed_until" in body:
         item.snoozed_until = datetime.fromisoformat(body["snoozed_until"].replace("Z", "+00:00")) if body["snoozed_until"] else None
@@ -104,7 +106,7 @@ async def list_lab_orders(
     await get_live_profile_or_404(profile_id, db)
     query = select(LabOrder).where(LabOrder.profile_id == profile_id)
     if include_resolved:
-        query = query.where(LabOrder.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(LabOrder.completed_at.desc())).limit(20)
+        query = query.where(LabOrder.status.in_(list(COMPLETED_STATUSES))).order_by(nullslast(LabOrder.completed_at.desc())).limit(20)
     else:
         if status:
             query = query.where(LabOrder.status == status)
@@ -133,7 +135,7 @@ async def update_lab_order(
 
     if "status" in body:
         item.status = body["status"]
-        if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
+        if body["status"] in COMPLETED_STATUSES and item.completed_at is None:
             item.completed_at = datetime.now(timezone.utc)
     if "snoozed_until" in body:
         item.snoozed_until = datetime.fromisoformat(body["snoozed_until"].replace("Z", "+00:00")) if body["snoozed_until"] else None
@@ -155,7 +157,7 @@ async def list_referrals(
     await get_live_profile_or_404(profile_id, db)
     query = select(Referral).where(Referral.profile_id == profile_id)
     if include_resolved:
-        query = query.where(Referral.status.in_(list(_COMPLETED_STATUSES))).order_by(nullslast(Referral.completed_at.desc())).limit(20)
+        query = query.where(Referral.status.in_(list(COMPLETED_STATUSES))).order_by(nullslast(Referral.completed_at.desc())).limit(20)
     else:
         if status:
             query = query.where(Referral.status == status)
@@ -184,7 +186,7 @@ async def update_referral(
 
     if "status" in body:
         item.status = body["status"]
-        if body["status"] in _COMPLETED_STATUSES and item.completed_at is None:
+        if body["status"] in COMPLETED_STATUSES and item.completed_at is None:
             item.completed_at = datetime.now(timezone.utc)
     if "snoozed_until" in body:
         item.snoozed_until = datetime.fromisoformat(body["snoozed_until"].replace("Z", "+00:00")) if body["snoozed_until"] else None
