@@ -12,6 +12,7 @@ import type {
   AppointmentCreate,
   VisitPrep,
   VisitPrepUpdate,
+  VisitPrepVersion,
   ScannedFile,
   VisitChecklist,
   ParsedItemsResponse,
@@ -357,6 +358,10 @@ export const visitPrep = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+  // Issue #54: prior generations, newest first. Empty when a prep has never
+  // been regenerated — not an error.
+  versions: (appointmentId: string) =>
+    request<VisitPrepVersion[]>(`/visits/${appointmentId}/prep/versions`),
 };
 
 // App Settings (DEC-016)

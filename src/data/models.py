@@ -261,6 +261,61 @@ class VisitPrep(Base):
 
     # Relationships
     appointment: Mapped["Appointment"] = relationship(back_populates="visit_prep")
+    versions: Mapped[list["VisitPrepVersion"]] = relationship(
+        back_populates="visit_prep",
+        cascade="all, delete-orphan",
+        order_by="VisitPrepVersion.version_number",
+    )
+
+
+class VisitPrepVersion(Base):
+    """A prior generation of a VisitPrep, snapshotted before it was overwritten.
+
+    Issue #54: regenerating visit prep used to overwrite generated_questions
+    and context_summary in place, permanently destroying whatever the last
+    run produced — including any hand-edits the patient had made to it
+    (issue #14). One click on "Regenerate Questions" was unrecoverable. Rows
+    here are written only by the regenerate path, immediately before it
+    reassigns those fields, so this table is append-only in practice.
+
+    Deliberately a separate table rather than extra rows in `visit_preps`:
+    `VisitPrep.appointment_id` is unique, which is what makes "the current
+    prep for this appointment" a single `scalar_one_or_none()` everywhere it
+    is read. Dropping that constraint to store history in place would change
+    what `GET /api/visits/{id}/prep` means and ripple through every caller.
+    """
+
+    __tablename__ = "visit_prep_versions"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    visit_prep_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("visit_preps.id"), nullable=False, index=True
+    )
+    # 1-based and monotonic per visit_prep_id: version 1 is the *first*
+    # content that got displaced, i.e. the original generation. Assigned as
+    # max(existing) + 1 at snapshot time rather than derived from a count on
+    # read, so the number stays stable and stays meaningful.
+    version_number: Mapped[int] = mapped_column(nullable=False)
+    generated_questions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    context_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    used_fallback: Mapped[bool] = mapped_column(default=False, nullable=False)
+    # When the snapshotted content was itself last written (the displaced
+    # prep's updated_at), as distinct from created_at below, which is when it
+    # was archived. Keeping only one of the two would lose either "when was
+    # this generated" or "how long was it the live version" — and quietly
+    # dropping a timestamp is the same class of loss this table exists to
+    # prevent.
+    content_updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+
+    # Relationships
+    visit_prep: Mapped["VisitPrep"] = relationship(back_populates="versions")
 
 
 class ConversationLog(Base):

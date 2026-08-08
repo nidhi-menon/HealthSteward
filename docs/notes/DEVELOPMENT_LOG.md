@@ -1902,4 +1902,40 @@ Related: issue #27, issue #44 (the snooze/undo behaviour now under test), CONTRI
 
 ---
 
+## 60. Regenerating Visit Prep No Longer Destroys the Previous Output (#54, DEC-034)
+
+**Date:** 2026-08-08
+
+**Context:** `prepare_visit` (`src/api/visits.py:55-59`) reassigned `generated_questions`/`context_summary` on an existing `VisitPrep` in place. One click on "Regenerate Questions" — a prominent button on the prep page — permanently destroyed whatever the previous run produced, including any hand-edits made to it under issue #14. This is not a missing feature; it's silent, unrecoverable destruction of user content, which is why it was picked ahead of everything else on the backlog. Entry 56 (#46) had already deferred "the history table" as a substrate #12, #54 and #97 would each want, specifically to avoid designing it three times.
+
+**Scope: piece 2 only — the durability fix. Piece 1 (a review gate before first persistence) is left to #12.** The issue offers both and asks whether they should wait on #12. They split cleanly: piece 2 needs no product decision and nothing it writes is discarded when #12 lands (an append-only history is a prerequisite for #12's per-claim table, not a competitor to it). Piece 1 *is* a review-UX decision #12 explicitly claims, and building an interim Save/Discard step now means building a review surface twice and deleting one — the throwaway work #12's own write-up warns against. #54 stays open for piece 1.
+
+**A separate `visit_prep_versions` table, not extra rows in `visit_preps`.** `VisitPrep.appointment_id` is `unique=True`, and that constraint turns out to be load-bearing in a way the model definition doesn't advertise: it's what lets three separate modules — `visits.py`, the #110 checklist in `appointments.py`, and `profile_export.py` — treat "the prep for this appointment" as a single `scalar_one_or_none()` with no ordering or filtering. Dropping it to store history in place would change what `GET /api/visits/{id}/prep` *means* and turn each of those call sites into a latent "which row did I get?" bug. A separate table trades that diffuse correctness risk for a contained, purely additive schema change. Verified rather than assumed: the checklist and export paths both read `visit_preps` unchanged and needed no modification.
+
+**Snapshot-then-overwrite.** One helper, `_snapshot_prep_version`, called immediately before the reassignment — and deliberately *after* `agent.prepare_visit()` returns, so a generation that raises leaves the existing prep untouched and archives nothing. `version_number` is 1-based and monotonic per prep, assigned `max(existing) + 1` rather than from a count on read, so a number can't change meaning later if versions ever become individually deletable. Version 1 is the *first content displaced*, i.e. the original generation.
+
+**Three details that each prevent the history from being quietly wrong:**
+
+- **`used_fallback` is snapshotted per version.** Without it, a real generation and issue #47's hardcoded "backend unreachable" placeholder look identical in the history — misleading rather than merely incomplete. Surfaced in the UI too, as a note on the affected version.
+- **Both timestamps are kept.** `content_updated_at` (the displaced prep's `updated_at`) answers "when was this written"; `created_at` answers "when was it replaced". Keeping one would lose the other, and silently dropping a timestamp is the same class of loss this table exists to prevent.
+- **Empty content isn't archived.** A prep with neither questions nor a summary has nothing worth preserving, and a version row for it would put a "Previous versions (1)" affordance in front of the user that opens onto nothing.
+
+**Read-only history, no restore, no pruning.** `GET /api/visits/{appointment_id}/prep/versions` returns newest-first (`[]`, not 404, when there's no history — that's a normal state for a prep, not a missing resource), and `VisitPrep.tsx` gains a collapsed "Previous versions (N)" disclosure that expands to the old questions read-only. Restore would re-raise the same overwrite question one level up (does restoring clobber the current prep, or snapshot it too?), and the harm is already gone once the old content is visible and copyable. Nothing is pruned either: every regenerate keeps a row forever, which at single-user scale is a handful of small JSON blobs per appointment, and a retention rule would silently delete exactly the content this exists to protect. Both calls are the same instinct twice — every ambiguous decision here resolves toward keeping more and doing less to it.
+
+**PATCH does not create a version**, pinned by a test so the boundary is explicit. This issue is about regeneration destroying content silently, not about undoing the patient's own deliberate edits; edit-undo would be its own decision. Note the snapshot still captures the *edited* state when a regenerate displaces it — which is the content that actually had value, and the exact scenario the issue describes.
+
+**One addition beyond the issue: version history is included in profile export**, `EXPORT_FORMAT_VERSION` 1 → 2. Same reasoning as the table itself, and then some — this exists because overwritten prep content was worth not destroying, so an export that dropped it would re-introduce the loss at backup time. The bump is for a purely additive key, made anyway because only the version number distinguishes "no history was kept" from "this export predates history being kept".
+
+**No backfill.** Generations overwritten before this table existed are gone. Synthesising a "version 1" row from current content would fabricate a history that never happened, which is worse than an empty one.
+
+**Tests:** 10 new in `tests/test_visit_prep.py` — first generation archives nothing; regenerate archives exactly the displaced content while the live prep holds the new; three generations leave two versions numbered in displacement order and returned newest-first; a hand-edit survives a regenerate *in the history* (the issue's concrete harm scenario); PATCH creates no version; `used_fallback` snapshots independently of the current row (asserted against a genuinely failing backend, so the archived version reads `false` while the live prep reads `true`); `content_updated_at` matches the prep's own pre-regenerate `updated_at`; 404 for a missing appointment vs. `[]` for empty history; and versions scoped to their own appointment, since a broken join would leak one appointment's prior questions onto another's page. Plus 1 in `tests/test_profile_export.py` for the export, and 5 frontend tests in `frontend/src/pages/VisitPrep.versions.test.tsx` covering the disclosure — hidden with no history, collapsed by default, labelled per version, no restore affordance, and the fallback marker. Backend: 340 passed, 25 skipped (up from 329). Frontend: 38 passed (up from 33); `tsc -b` and `vite build` green.
+
+**Migration checked by hand, not just generated:** applied to a fresh DB, downgraded, and re-applied; confirmed the downgrade leaves `visit_preps` intact. Diffed the migration's emitted DDL against the ORM metadata's — identical. A composite `(visit_prep_id, version_number)` index was written and then removed for that reason: it bought nothing at this scale and existed only in the migration, which is exactly the drift that makes a future autogenerate diff noisy.
+
+**Files changed:** `src/data/models.py`, `src/api/visits.py`, `src/models/schemas.py`, `src/api/profile_export.py`, `alembic/versions/d3f81a6c204b_add_visit_prep_versions.py`, `tests/test_visit_prep.py`, `tests/test_profile_export.py`, `frontend/src/pages/VisitPrep.tsx`, `frontend/src/pages/VisitPrep.versions.test.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `docs/notes/DECISIONS.md` (DEC-034), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #54 (piece 1 still open), DEC-034, issue #12, issue #14, issue #47, issue #97, issue #110, entry 56 (#46).
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
