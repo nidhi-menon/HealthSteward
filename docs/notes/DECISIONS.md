@@ -1098,4 +1098,39 @@ This narrows, but does not eliminate, the no-automatic-loop-closure limitation: 
 
 ---
 
-*Last updated: 2026-08-06*
+### DEC-033: The Eval Question-Count Floor Counts In-Scope Entities Only, and Fixtures Declare Condition Scope Themselves
+
+**Date:** 2026-08-08
+
+**Context:** Issue #75. `expected_min_questions()` (`eval/scorers.py`) scales the format-validity floor by `len(known_entities(case)) * 2`, floored at 3 and capped at 8 — DEC-018's fix for `cold_start` failing a flat 8-question bar with almost nothing to ask about. `cross_specialty_scope` kept failing anyway (6 questions against 8), and the issue asked which of two failure modes it was: a genuinely data-sparse fixture the scaling should cover, or a model under-delivering questions it could legitimately generate.
+
+It is the first, and the reason was hidden by an entity count that looked healthy. `known_entities()` unions conditions + medications + lab orders with no scope filter, so `cross_specialty_scope` counts 4: Type 2 Diabetes Mellitus, Metformin, Mild Plaque Psoriasis, and Clobetasol Cream. `4 * 2 = 8`, so the case gets the *full* flat floor and no scale-down at all. But the last two are dermatology material on an endocrinology visit — precisely what the v3 prompt forbids the model from raising, and the entire reason this fixture exists. The case is as data-sparse *in scope* as `cold_start`; it just didn't look it. The model producing 6 questions is arguably correct behaviour being scored as a failure, the same tension with the anti-hallucination rules DEC-018 already recorded.
+
+That also answers the issue's open question — yes, the count needs to be scope-aware — but only for the floor.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Narrow `known_entities()` itself to in-scope entities | One function, no new concept | Breaks its other caller. `score_groundedness()` needs *all* real entities: drop Clobetasol and a question about it scores as ungrounded — a hallucination — when it's a real entry in the patient's record that `score_scope()` already flags, correctly, as a scope violation. One failure would be counted twice under two names, and the scope checker's own signal would be destroyed |
+| **Add `in_scope_entities()` for the floor; leave `known_entities()` scope-blind for groundedness** | Each scorer asks the question it actually means — "how much is there legitimately to ask about" vs. "did the model invent this" | Two similar-looking functions someone could reach for the wrong one of; mitigated by docstrings on both saying why the other exists |
+| Derive condition scope from `icd_10` against `ICD10_SPECIALTY_MAP` | Reuses data already in the repo; scorer derives scope rather than being told it | That map is the hand-authored surface #72/#74 are mid-consolidation on. Building the eval harness's floor on it couples the harness to known debt and means a consolidation change silently moves eval thresholds |
+| **Add an explicit `in_scope` flag to `ConditionFixture`** | The fixture already exists to encode a scope distinction; stating it is clarifying rather than redundant, and dependency-free | It is the fixture grading itself — a fixture author could mislabel and quietly lower the bar. Bounded: it only ever moves a floor, never a pass/fail verdict, and the pinned per-case floors make any change visible in a diff |
+| Scope medications only, accept conditions are over-counted | No fixture change at all | Gives a floor of 6, which `cross_specialty_scope` still fails at 6 questions — doesn't resolve the case it was filed for |
+
+**Decision:**
+1. Add `in_scope_entities(case)` and have `expected_min_questions()` count it. `known_entities()` is unchanged and stays the input to `score_groundedness()`.
+2. Scope each entity type the way it already encodes scope. **Medications:** compare the prescriber's specialty to the target doctor's via the same `are_specialties_related()` the runtime scope logic uses. A medication with no prescriber, or a prescriber with no specialty, counts as **in** scope — absence of a scope signal is not evidence of being off scope, and defaulting the other way would silently deflate the floor for any fixture that just didn't tag one. **Conditions:** an explicit `ConditionFixture.in_scope: bool = True`, set `False` only on `cross_specialty_scope`'s psoriasis. **Lab orders:** always counted.
+3. Pin every case's resulting floor in `tests/test_eval_harness.py` (`EXPECTED_FLOORS`), with a companion test asserting every fixture case appears in that map, so a new case can't skip the check by omission.
+
+**Consequences worth stating plainly:** `cross_specialty_scope`'s floor drops from 8 to 4, so format validity is close to vacuous for this one case — it mostly stops testing question *volume* there. That is arguably correct, since the interesting signal for this fixture is the scope checker rather than the count, but it is a real reduction in what the case checks and shouldn't be discovered later as a surprise. Separately, two of five cases now scale below the documented flat 8 (three, counting `groundedness_labs_vitals`, which was already at 6 before this change and is unaffected by it) — the exceptions are becoming the pattern, and whether 8 is still the right documented default is a question this DEC leaves open rather than answering.
+
+**Reasoning:** Splitting the two callers rather than mutating the shared one is the whole substance here: "what may this question reference" and "what should this question have covered" look like the same set and are not, and collapsing them costs the harness a distinct scorer. Fixture-declared condition scope over ICD-10 derivation because the harness's job is to be a trustworthy measuring stick — coupling it to a map that is actively being consolidated means eval thresholds move when unrelated work lands, which is exactly the property a measuring stick must not have. The self-grading objection is real but bounded, and pinned floors convert it from invisible to reviewable.
+
+No prompt changed, so no version bump and no `PROMPT_CHANGELOG.md` entry.
+
+**Status:** Implemented (#75).
+
+---
+
+*Last updated: 2026-08-08*
