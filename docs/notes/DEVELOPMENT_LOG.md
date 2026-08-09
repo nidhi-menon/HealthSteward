@@ -1902,4 +1902,26 @@ Related: issue #27, issue #44 (the snooze/undo behaviour now under test), CONTRI
 
 ---
 
+## 63. Print / Save as PDF for Visit Prep (#99, DEC-037)
+
+**Date:** 2026-08-09
+
+**Context:** the app generates questions for a doctor's visit and then has no way to get them to the visit except reading them off a laptop. #99 asked for print/PDF and an email path.
+
+**What shipped: the print half.** A `@media print` block in `frontend/src/index.css` and a "Print / Save as PDF" button on the visit-prep page calling `window.print()`. The browser's own dialog provides Save-as-PDF on every target platform, which means **PDF with no new dependency, no server-side rendering library, and nothing leaving the machine** — see DEC-037 for why that beat both a server-side PDF stack and a client-side PDF library.
+
+**The stylesheet's rule is "print the content, hide the controls".** `.print-hide` for anything interactive or decorative (app nav, buttons, edit affordances, error banners, the generate card); `.print-only` for text that exists solely to identify a sheet off-screen; everything else prints. Curating what counts as "content" per-element was rejected — a Print button that prints something other than what's on screen is surprising, and every such call is one more thing to get wrong as the page grows. Buttons and text inputs are hidden globally in print, so an in-progress edit can't reach paper.
+
+**Two details worth keeping:** the printed sheet carries the patient's name and print date, because on screen the surrounding app says whose record this is and on paper nothing does; and `break-inside: avoid` on list items and headings, because a question split across a page break is the single most annoying thing a printed question sheet can do.
+
+**What did not ship: `mailto:`.** It was the other half of the plan, and it's held on an unresolved product question rather than on effort — many mail clients truncate `mailto:` bodies (commonly ~2000 characters) and `mailto:` cannot attach a file, so a full prep can arrive cut off with no automatic fallback to the PDF. The options (short body + user attaches the PDF / full body with a truncation marker / no email path) trade off differently against what "email prep notes ahead of a visit" actually asked for, so the question is posted on #99 rather than guessed at. App-initiated SMTP stays out entirely: it's a new PHI egress point needing its own DEC entry, and it overlaps DEC-032's Care Circle email work (#139/#140).
+
+**Testing note:** jsdom has no layout engine and never applies `@media print`, so `VisitPrep.test.tsx` pins the button and the `print-hide`/`print-only` class contract the stylesheet is written against, not the printed output. The rendered result is a manual check.
+
+**Files changed:** `frontend/src/index.css`, `frontend/src/components/Layout.tsx`, `frontend/src/pages/VisitPrep.tsx`, `frontend/src/pages/VisitPrep.test.tsx`, `docs/notes/DECISIONS.md`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #99, DEC-037, DEC-028 (#93/#130 JSON export), DEC-032 (#139/#140 Care Circle email).
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
