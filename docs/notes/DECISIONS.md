@@ -1098,4 +1098,34 @@ This narrows, but does not eliminate, the no-automatic-loop-closure limitation: 
 
 ---
 
-*Last updated: 2026-08-06*
+### DEC-037: Sharing Visit Prep Is Client-Side Print → Browser Save-as-PDF, Not a Server-Side PDF Stack
+
+**Date:** 2026-08-09
+
+**Context:** HealthSteward generates a set of questions for a doctor's visit and then offers no way to get them *to* the visit except reading them off a laptop screen. Patients want a printed sheet to hand over, or a PDF to keep. Issue #99 lists the candidates: a client-side print stylesheet, a server-generated PDF, `mailto:`, or app-initiated SMTP.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **`@media print` stylesheet + a button calling `window.print()`** | The browser's own dialog offers "Save as PDF" on every target platform, so this *is* PDF export — with no new dependency, no server round-trip, and the document never leaving the machine. Also gives a real printed sheet, which is the primary ask | No control over pagination beyond what CSS offers; no server-side artifact to attach programmatically later |
+| Server-generated PDF (WeasyPrint / ReportLab / headless Chromium) | Byte-identical output across browsers; produces a file the backend could attach or store | A heavy new dependency (or a bundled browser) for a document the client can already render; adds a server-side rendering path for content that is currently client-only, for no privacy or capability gain |
+| Client-side PDF library (jsPDF / pdfmake) | A real file object without a server | Duplicates the layout that already exists as HTML/CSS in a second, weaker layout engine — a second rendering of the same content that will drift from the first |
+| Do nothing; users copy/paste | Zero cost | The feature the issue exists for |
+
+**Decision:** A `@media print` stylesheet in `frontend/src/index.css` plus a "Print / Save as PDF" button on the visit-prep page calling `window.print()`. PDF export is delegated to the browser's print dialog, which every target platform provides. No PDF dependency is added on either side, and the sheet is composed and rendered entirely on the user's machine — consistent with local-first, and notably a *narrower* data path than anything the app already does, since nothing crosses a process boundary at all.
+
+The stylesheet's rule is **print the content, hide the controls and chrome**: `.print-hide` marks anything interactive or decorative (app nav, buttons, edit affordances, error banners, the generate card), `.print-only` marks text that exists solely to identify a sheet once it is off-screen (patient name and print date), and everything else prints. Choosing what is "content" per-element was considered and rejected — a Print button that prints something other than the page the user is looking at is surprising, and every such judgment is one more thing to get wrong as the page grows. Text inputs and buttons are hidden globally in print, so an in-progress edit can't end up on paper.
+
+**Deliberately out of scope, and why:**
+- **`mailto:` "email to provider"** — proposed as the second half of this work; held pending a product call on #99 about body truncation (many mail clients cut `mailto:` bodies around ~2000 characters, and `mailto:` cannot attach a file, so a full prep can arrive cut off with no automatic fallback). Print is independently useful and this decision doesn't foreclose it.
+- **App-initiated SMTP** — a genuine new PHI egress point that needs its own DEC entry, and it overlaps the Care Circle email work scoped in DEC-032 (#139/#140). Building a second sending path here would mean two SMTP stories to reconcile later.
+- **Profile-summary / backup export** — partly served by the JSON export from DEC-028 (#93/#130). Whether this becomes the general human-readable export surface is a larger design question the issue raises and this doesn't settle.
+
+**Reasoning:** the deciding factor is that a PDF renderer is a large dependency to take on for a document the client can already lay out, and every option other than the browser's own dialog produces a *second* rendering of content that already renders correctly — which then drifts. The browser dialog also happens to be the only option where the document is never serialised anywhere the user didn't ask for, which matters more for a health record than the pagination control a server-side renderer would buy. Accepted cost: print output varies slightly between browsers, and the CSS can't guarantee page-break behaviour the way a real typesetter could — `break-inside: avoid` on list items and headings covers the case that actually matters (a question split across two pages).
+
+**Status:** Implemented for visit prep. Frontend tests in `frontend/src/pages/VisitPrep.test.tsx` pin the button's presence and that it calls `window.print()`, plus the `print-hide`/`print-only` class contract the stylesheet is written against — jsdom applies no `@media print`, so the rendered result of printing is a manual check, noted as such in the PR test plan.
+
+---
+
+*Last updated: 2026-08-09*

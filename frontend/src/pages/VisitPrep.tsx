@@ -133,7 +133,10 @@ export default function VisitPrep() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to={`/profiles/${profileId}`} className="text-gray-400 hover:text-gray-600">
+        <Link
+          to={`/profiles/${profileId}`}
+          className="text-gray-400 hover:text-gray-600 print-hide"
+        >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
@@ -145,10 +148,27 @@ export default function VisitPrep() {
           <p className="text-gray-500">
             {doctor?.name} • {new Date(appointment.scheduled_date).toLocaleDateString()}
           </p>
+          {/* Whose sheet this is. On screen the surrounding app answers that;
+              on paper nothing does, so print it (issue #99). */}
+          <p className="print-only text-sm">
+            {profile.name} — printed from HealthSteward on{' '}
+            {new Date().toLocaleDateString()}
+          </p>
         </div>
+        {prep && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="print-hide"
+            onClick={() => window.print()}
+          >
+            Print / Save as PDF
+          </Button>
+        )}
         {isPast && !isCompleted && (
           <Button
             size="sm"
+            className="print-hide"
             onClick={() => updateAppointmentMutation.mutate({ status: 'completed' })}
             disabled={updateAppointmentMutation.isPending}
           >
@@ -211,7 +231,7 @@ export default function VisitPrep() {
 
       {/* Generate Section - Only show if not completed */}
       {!prep && !isCompleted && (
-        <Card>
+        <Card className="print-hide">
           <CardHeader>
             <h3 className="font-semibold text-gray-900">Generate AI-Powered Questions</h3>
           </CardHeader>
@@ -244,7 +264,7 @@ export default function VisitPrep() {
               )}
             </Button>
             {generateMutation.isError && (
-              <p className="text-sm text-red-600">
+              <p className="print-hide text-sm text-red-600">
                 Failed to generate questions. Please check your API key is configured.
               </p>
             )}
@@ -256,7 +276,7 @@ export default function VisitPrep() {
       {prep && (
         <div className="space-y-6">
           {prep.used_fallback && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-start gap-2">
+            <div className="print-hide bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-start gap-2">
               <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
               </svg>
@@ -296,14 +316,19 @@ export default function VisitPrep() {
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-gray-900 text-lg">Questions to Ask Your Doctor</h3>
                 {!isCompleted && !isEditingPrep && (
-                  <Button size="sm" variant="secondary" onClick={startEditingPrep}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="print-hide"
+                    onClick={startEditingPrep}
+                  >
                     Edit
                   </Button>
                 )}
               </div>
 
               {isEditingPrep && (
-                <p className="text-sm text-gray-600">
+                <p className="print-hide text-sm text-gray-600">
                   One question per line. Delete a line to remove that question, or add a line to
                   ask something of your own. Clearing a whole category removes it.
                 </p>
@@ -344,7 +369,7 @@ export default function VisitPrep() {
 
           {/* Save/Cancel while editing, Regenerate otherwise */}
           {!isCompleted && (
-            <div className="flex justify-center gap-3">
+            <div className="print-hide flex justify-center gap-3">
               {isEditingPrep ? (
                 <>
                   <Button onClick={saveEditedPrep} disabled={updatePrepMutation.isPending}>
@@ -371,7 +396,7 @@ export default function VisitPrep() {
           )}
 
           {updatePrepMutation.isError && (
-            <p className="text-sm text-red-600 text-center">
+            <p className="print-hide text-sm text-red-600 text-center">
               Failed to save your changes. Please try again.
             </p>
           )}
@@ -394,7 +419,7 @@ export default function VisitPrep() {
           <CardContent className="space-y-4">
             {isEditingNotes || !appointment.visit_notes ? (
               <>
-                <p className="text-gray-600 text-sm">
+                <p className="print-hide text-gray-600 text-sm">
                   Record notes from your visit: what was discussed, recommendations, follow-ups, etc.
                 </p>
                 <Textarea
