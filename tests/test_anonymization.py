@@ -9,7 +9,11 @@ from src.utils.anonymization import (
     AnonymizedProfile,
     PII_PATTERNS,
     SPACY_AVAILABLE,
+    _normalise_entity_value,
     anonymize_text,
+    current_token_scope,
+    scrub_leaked_tokens,
+    token_scope,
 )
 
 
@@ -853,3 +857,252 @@ class TestModuleLevelFunctions:
         assert "[REDACTED]" in result
         assert len(events) == 1
         assert events[0].entity_type == "phone"
+
+
+class TestTokenScope:
+    """Per-entity tokens instead of a flat `[REDACTED]` (issue #17).
+
+    The point is relational: "referred by Dr. Smith to Dr. Jones" loses the
+    fact that those are two different providers when both become the same
+    literal. Inside a `token_scope()` they become `PERSON_1` and `PERSON_2`,
+    consistently across every `anonymize_text()` call in the scope.
+
+    These exercise the regex path, which needs no spaCy — the NER half is in
+    `TestTokenScopeNER` below and skips when the model isn't installed.
+    """
+
+    @pytest.fixture
+    def anonymizer(self):
+        return Anonymizer(use_ner=False)
+
+    def test_no_scope_is_byte_for_byte_todays_behaviour(self, anonymizer):
+        """The default path must not change at all. Tokenisation is opt-in, so
+        every existing caller — including the module-level singleton — keeps
+        emitting `[REDACTED]` and can't accumulate a cross-patient map."""
+        text = "Call 555-123-4567 or 555-987-6543"
+        result, _ = anonymizer.anonymize_text(text)
+
+        assert result == "Call [REDACTED] or [REDACTED]"
+        assert current_token_scope() is None
+
+    def test_distinct_values_get_distinct_tokens(self, anonymizer):
+        with token_scope():
+            result, _ = anonymizer.anonymize_text("Call 555-123-4567 or 555-987-6543")
+
+        assert result == "Call PHONE_1 or PHONE_2"
+
+    def test_the_same_value_gets_the_same_token_within_a_field(self, anonymizer):
+        with token_scope():
+            result, _ = anonymizer.anonymize_text(
+                "Call 555-123-4567; if no answer call 555-123-4567 again"
+            )
+
+        assert result.count("PHONE_1") == 2
+        assert "PHONE_2" not in result
+
+    def test_the_same_value_gets_the_same_token_across_calls(self, anonymizer):
+        """The whole reason the map is scoped rather than per-call: within one
+        `prepare_visit()` the same entity is anonymized from several separate
+        entry points (profile, doctor, appointment, concerns)."""
+        with token_scope():
+            first, _ = anonymizer.anonymize_text(
+                "Contact 555-123-4567", field_name="condition:1:notes"
+            )
+            second, _ = anonymizer.anonymize_text(
+                "Also 555-123-4567 and 555-987-6543", field_name="doctor:1:notes"
+            )
+
+        assert first == "Contact PHONE_1"
+        assert second == "Also PHONE_1 and PHONE_2"
+
+    def test_leaving_a_scope_clears_the_map(self, anonymizer):
+        """Two patients in one process must never share a numbering space."""
+        with token_scope():
+            first, _ = anonymizer.anonymize_text("Call 555-123-4567")
+        with token_scope():
+            second, _ = anonymizer.anonymize_text("Call 555-987-6543")
+
+        assert first == "Call PHONE_1"
+        assert second == "Call PHONE_1"  # restarts, not PHONE_2
+        assert current_token_scope() is None
+
+    def test_the_module_singleton_does_not_leak_between_scopes(self):
+        """`anonymize_text()`'s singleton is the path that would accumulate a
+        cross-patient map if scope state lived on the instance."""
+        with token_scope():
+            first, _ = anonymize_text("Reach me at 555-123-4567")
+        with token_scope():
+            second, _ = anonymize_text("Reach me at 555-987-6543")
+
+        assert first == second == "Reach me at PHONE_1"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_tasks_get_independent_scopes(self):
+        """Scope state is a ContextVar, so two requests running concurrently
+        against the singleton can't see each other's tokens."""
+        import asyncio
+
+        async def anonymize(phone: str) -> str:
+            with token_scope():
+                await asyncio.sleep(0)  # force interleaving
+                result, _ = anonymize_text(f"Call {phone}")
+                await asyncio.sleep(0)
+                return result
+
+        first, second = await asyncio.gather(
+            anonymize("555-123-4567"), anonymize("555-987-6543")
+        )
+        assert first == second == "Call PHONE_1"
+
+    def test_distinct_types_number_independently(self, anonymizer):
+        with token_scope():
+            result, _ = anonymizer.anonymize_text(
+                "Call 555-123-4567 or email pat@example.com"
+            )
+
+        assert result == "Call PHONE_1 or email EMAIL_1"
+
+    def test_label_anchored_patterns_keep_their_label(self, anonymizer):
+        """`MRN: MRN_1` — the label still says what kind of identifier was
+        removed, exactly as `MRN: [REDACTED]` did (see PII_REPLACEMENTS)."""
+        with token_scope():
+            result, _ = anonymizer.anonymize_text("MRN: 1234567 seen in clinic")
+
+        assert result == "MRN: MRN_1 seen in clinic"
+
+    def test_the_same_identifier_labeled_and_bare_is_one_entity(self, anonymizer):
+        """Tokens key on the matched value, not on which pattern caught it."""
+        with token_scope():
+            result, _ = anonymizer.anonymize_text("MRN: 1234567 — chart 1234567")
+
+        assert result.count("MRN_1") == 2
+        assert "MRN_2" not in result
+
+    def test_redaction_event_offsets_survive_variable_length_tokens(
+        self, anonymizer
+    ):
+        """`[REDACTED]` was fixed-width; tokens are not. Events are recorded
+        against the text state each pattern matched against, so an event from a
+        later pattern must still index correctly after an earlier pattern
+        replaced a match with a shorter or longer token (DEC-029)."""
+        text = "Call 555-123-4567 then email pat@example.com"
+        with token_scope():
+            _, events = anonymizer.anonymize_text(text)
+
+        phone = next(e for e in events if e.entity_type == "phone")
+        assert text[phone.start:phone.end] == "555-123-4567"
+
+        email = next(e for e in events if e.entity_type == "email")
+        post_phone = text.replace("555-123-4567", "PHONE_1")
+        assert post_phone[email.start:email.end] == "pat@example.com"
+
+    def test_events_still_never_carry_the_matched_value(self, anonymizer):
+        with token_scope():
+            _, events = anonymizer.anonymize_text(
+                "Call 555-123-4567", field_name="notes"
+            )
+
+        assert "555-123-4567" not in str([e.to_dict() for e in events])
+
+
+class TestEntityValueNormalisation:
+    """How two mentions are judged to be the same entity (issue #17, Q3).
+
+    Exact normalised matching only. A wrong *merge* would actively tell the
+    model two different providers are one person; under-merging just degrades
+    to roughly the pre-#17 behaviour for the mentions that didn't merge, which
+    is the safe failure direction. So: casefold, strip one leading title, strip
+    surrounding punctuation — and nothing fuzzier.
+    """
+
+    @pytest.mark.parametrize("first,second", [
+        ("Dr. Smith", "Smith"),
+        ("Dr. Smith", "smith"),
+        ("Smith,", "Smith"),
+        ("Dr.  Jane   Smith", "Jane Smith"),
+        ("Doctor Jane Smith", "jane smith"),
+    ])
+    def test_mentions_that_merge(self, first, second):
+        assert _normalise_entity_value(first) == _normalise_entity_value(second)
+
+    @pytest.mark.parametrize("first,second", [
+        ("Dr. Smith", "Dr. Smyth"),      # no fuzzy matching
+        ("Jane Smith", "Smith"),         # no surname-only coreference
+        ("Dr. Smith", "Dr. Jones"),
+    ])
+    def test_mentions_that_stay_distinct(self, first, second):
+        assert _normalise_entity_value(first) != _normalise_entity_value(second)
+
+
+class TestLeakedTokenGuard:
+    """The output-side guard (issue #17, step 3).
+
+    A model handed `PERSON_1` can echo it into a generated question. This
+    rewrites stray tokens back to `[REDACTED]` — the marker the app already
+    shows — so the worst case is exactly the pre-#17 behaviour. It is *not*
+    re-hydration: nothing here maps a token back to the value it stood for.
+    """
+
+    @pytest.mark.parametrize("text,expected", [
+        ("Ask PERSON_1 about the referral", "Ask [REDACTED] about the referral"),
+        ("PERSON_1 referred you to PERSON_2",
+         "[REDACTED] referred you to [REDACTED]"),
+        ("Confirm MRN_1 at the desk", "Confirm [REDACTED] at the desk"),
+        ("Call PHONE_12 before the visit", "Call [REDACTED] before the visit"),
+        ("Check INSURANCE_ID_1", "Check [REDACTED]"),
+    ])
+    def test_tokens_are_rewritten(self, text, expected):
+        assert scrub_leaked_tokens(text) == expected
+
+    @pytest.mark.parametrize("text", [
+        "Ask about your A1C trend since March",
+        "Discuss PERSONAL goals for this year",   # not a token
+        "Your PERSON of contact",                  # no index suffix
+        "Bring the MRN card",
+        "",
+    ])
+    def test_ordinary_text_is_untouched(self, text):
+        assert scrub_leaked_tokens(text) == text
+
+    def test_none_passes_through(self):
+        assert scrub_leaked_tokens(None) is None
+
+
+@requires_ner
+class TestTokenScopeNER:
+    """The half of issue #17 that motivated it: distinct people in free text.
+
+    Skips wherever spaCy/`en_core_web_sm` is absent, matching `TestNERPath`.
+    """
+
+    @pytest.fixture
+    def anonymizer(self):
+        return Anonymizer(use_ner=True)
+
+    def test_two_people_in_one_sentence_get_two_tokens(self, anonymizer):
+        with token_scope():
+            result, _ = anonymizer.anonymize_text(
+                "Referred by Dr. Smith to Dr. Jones"
+            )
+
+        assert "PERSON_1" in result and "PERSON_2" in result
+        assert "Smith" not in result and "Jones" not in result
+
+    def test_the_same_person_across_fields_gets_one_token(self, anonymizer):
+        with token_scope():
+            first, _ = anonymizer.anonymize_text(
+                "Robert Martinez ordered the panel", field_name="condition:1:notes"
+            )
+            second, _ = anonymizer.anonymize_text(
+                "Follow up with Robert Martinez", field_name="doctor:1:notes"
+            )
+
+        assert "PERSON_1" in first
+        assert "PERSON_1" in second
+        assert "PERSON_2" not in second
+
+    def test_no_scope_still_emits_the_flat_redaction(self, anonymizer):
+        result, _ = anonymizer.anonymize_text("Referred by Dr. Smith to Dr. Jones")
+
+        assert result.count("[REDACTED]") == 2
+        assert "PERSON_1" not in result
