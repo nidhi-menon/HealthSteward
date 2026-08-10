@@ -1938,4 +1938,32 @@ Related: issue #54 (piece 1 still open), DEC-034, issue #12, issue #14, issue #4
 
 ---
 
+## 59. Eval Question-Count Floor Is Now Scope-Aware (#75, DEC-033)
+
+**Date:** 2026-08-08
+
+**Context:** `cross_specialty_scope` had been failing format validity since the v3 prompt work — 6 questions against a floor of 8 — and #75 asked which failure mode it was before changing anything: a data-sparse fixture the DEC-018 scaling should already cover, or the model under-delivering.
+
+**It's the first, and the entity count was hiding it.** `expected_min_questions()` scaled by `len(known_entities(case)) * 2`, and `known_entities()` has no scope filter. `cross_specialty_scope` counts 4 entities — T2DM, Metformin, Mild Plaque Psoriasis, Clobetasol Cream — so `4 * 2 = 8` handed it the *full* flat floor with no scale-down. Two of those four are the dermatology material the prompt explicitly forbids raising at an endocrinology visit, which is the only reason the fixture exists. In scope, the case is as sparse as `cold_start`; it just didn't look sparse. So the model was being scored down for correctly declining to pad — the same tension with the anti-hallucination rules DEC-018 already recorded.
+
+**The fix splits one function into two rather than narrowing it.** `known_entities()` has two callers with opposite needs, and this is the substance of the change. `score_groundedness()` asks *did the model invent this?* — it needs every real entity, including off-scope ones. `expected_min_questions()` asks *how much was there legitimately to ask about?* — it needs only in-scope ones. Narrowing the shared function would make a question about Clobetasol score as ungrounded (a hallucination) when it's a real entry in the patient's own record that `score_scope()` already flags, correctly, as a scope violation — one failure counted twice under two names, with the scope checker's signal destroyed in the process. So `known_entities()` is untouched and a new `in_scope_entities()` feeds the floor. Both now carry docstrings explaining why the other exists, because they look interchangeable and are not.
+
+**Scope is read the way each entity type already encodes it.** Medications carry `prescribing_doctor_key`, so their specialty resolves and is compared to the target doctor's through the same `are_specialties_related()` the runtime scope logic uses — no second notion of relatedness. A medication with no prescriber, or a prescriber with no specialty, counts as **in** scope: absence of a scope signal isn't evidence of being off scope, and defaulting the other way would quietly deflate the floor for any fixture that just didn't tag one. Conditions have no doctor link and nothing structural marking them as one specialty's, so `ConditionFixture` gained an explicit `in_scope: bool = True`, set `False` only on the psoriasis entry. Lab orders are always counted.
+
+**Why the fixture declares condition scope instead of the scorer deriving it from `icd_10`:** the alternative was mapping ICD-10 prefixes through `ICD10_SPECIALTY_MAP`, which is the hand-authored surface #72/#74 are mid-consolidation on. Coupling the harness's floor to it would mean eval thresholds silently move when unrelated consolidation work lands — the one property a measuring stick must not have. The counter-objection is real and worth naming: this is the fixture grading itself, and a mislabelled fixture would lower its own bar. It's bounded (it only ever moves a floor, never a verdict) and the pinned floors below make any such change show up in a diff. Full tradeoff in DEC-033.
+
+**Resulting floors, now pinned:** `cross_specialty_scope` 8→4, `groundedness_labs_vitals` 6 (unchanged — it was already below the flat 8 before this change), `cold_start` 3, `tool_call_necessity_dosing` 8, `retrieval_redundancy` 4. `EXPECTED_FLOORS` in the test module pins each one with a comment on where the number comes from, plus a test asserting every fixture case appears in that map so a newly added case can't skip the check by omission.
+
+**Worth saying out loud:** a floor of 4 means format validity is close to vacuous for `cross_specialty_scope` — it has largely stopped testing question *volume* there. Defensible, since the signal that matters for that fixture is the scope checker rather than the count, but it's a genuine reduction and better recorded than discovered. And with two cases now scaling below the documented flat 8, the exceptions are becoming the pattern; whether 8 is still the right default is left open rather than answered here.
+
+**Tests:** 10 new in `tests/test_eval_harness.py` — the five parametrised pinned floors, the every-case-is-pinned guard, the off-scope exclusion, a test that `known_entities()` stays scope-blind (asserting the same Clobetasol question scores grounded *and* as a scope violation, which is the invariant that would break if someone later "simplifies" the two functions back into one), the original 6-questions-now-passes case with a 3-questions-still-fails counter-check so the floor isn't vacuous in both directions, and the untagged-prescriber default. Suite: 339 passed, 25 skipped (up from 329). No frontend changes.
+
+**No prompt change**, so no version bump and no `PROMPT_CHANGELOG.md` entry — this is a scorer-threshold change, which is why it needed a DEC instead.
+
+**Files changed:** `eval/scorers.py`, `eval/fixtures.py`, `tests/test_eval_harness.py`, `docs/notes/DECISIONS.md` (DEC-033), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #75, DEC-033, DEC-018, PROMPT_CHANGELOG.md v3 entry, issue #72, issue #74.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
