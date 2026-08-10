@@ -8,7 +8,9 @@ not just be "a plausible patient":
 - cross_specialty_scope: a medication tagged for an unrelated specialty
   sits on the same profile as the target visit's own medication, so the
   scope checker (issue #29 build-order item #1) has something real to
-  catch if the model asks about it.
+  catch if the model asks about it. Its off-scope condition is marked
+  `in_scope=False` so the question-count floor doesn't count material the
+  prompt forbids the model from asking about (issue #75, DEC-033).
 - groundedness_labs_vitals: lab orders + a vitals trend exist so the
   groundedness entity-match check (item #6) has real entities to look for.
 - cold_start: zero past visits, zero medications — exercises the
@@ -43,6 +45,16 @@ class ConditionFixture:
     status: str = "active"
     severity: Optional[str] = None
     notes: Optional[str] = None
+    # Whether this condition is in scope for the case's *target* visit.
+    # Medications carry prescribing_doctor_key, so their scope is derivable;
+    # conditions have no doctor link and nothing structural marks them as
+    # belonging to one specialty, so a case that deliberately plants an
+    # off-scope condition states that intent here rather than having the
+    # scorer re-derive it from icd_10. Defaults True — only the fixtures
+    # built to test scope handling ever set it False. Consumed by
+    # scorers.in_scope_entities(); has no effect on the DB rows built by
+    # eval/db.py, so the model still sees the condition exactly as before.
+    in_scope: bool = True
 
 
 @dataclass
@@ -118,7 +130,7 @@ GENERATION_CASES: list[EvalCase] = [
         appointment_scheduled_date="2026-08-01T10:00:00",
         conditions=[
             ConditionFixture(name="Type 2 Diabetes Mellitus", icd_10="E11.9", status="active"),
-            ConditionFixture(name="Mild Plaque Psoriasis", icd_10="L40.0", status="active"),
+            ConditionFixture(name="Mild Plaque Psoriasis", icd_10="L40.0", status="active", in_scope=False),
         ],
         medications=[
             MedicationFixture(

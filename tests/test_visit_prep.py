@@ -1361,3 +1361,293 @@ async def test_prepare_visit_scrubs_tokens_the_model_echoes_back(
         "Care Team": ["What did [REDACTED] recommend?"]
     }
     assert data["context_summary"] == "Referred by [REDACTED] to [REDACTED]."
+
+
+# ============================================================================
+# Version history on regenerate (issue #54, DEC-034)
+# ============================================================================
+
+
+async def _regenerate(client: AsyncClient, appointment_id: str, questions_json: str):
+    """Re-run POST /prepare against a mocked Claude call returning
+    `questions_json`. Same mock plumbing as _generate_prep."""
+    mock_message = _mock_text_response(questions_json)
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
+        return await client.post(f"/api/visits/{appointment_id}/prepare")
+
+
+@pytest.mark.asyncio
+async def test_first_generation_creates_no_versions(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """Nothing was displaced, so there is nothing to archive. An empty list,
+    not a 404 — no history is a normal state for a prep."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+
+    response = await client.get(f"/api/visits/{appointment_id}/prep/versions")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_regenerate_archives_the_displaced_content(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """The core of issue #54: what regeneration overwrites is now recoverable
+    instead of destroyed."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+
+    await _regenerate(
+        client, appointment_id,
+        '{"questions": {"Fresh": ["Regenerated question"]}, "context_summary": "Fresh summary"}',
+    )
+
+    versions = (await client.get(f"/api/visits/{appointment_id}/prep/versions")).json()
+    assert len(versions) == 1
+    # The archived row holds exactly the *old* content, not the new.
+    assert versions[0]["generated_questions"] == {
+        "Medication Review": ["Original question"],
+        "Lifestyle": ["Keep me"],
+    }
+    assert versions[0]["context_summary"] == "Original summary"
+    assert versions[0]["version_number"] == 1
+
+    # ...and the live prep holds the new content, unchanged behaviour.
+    current = (await client.get(f"/api/visits/{appointment_id}/prep")).json()
+    assert current["generated_questions"] == {"Fresh": ["Regenerated question"]}
+
+
+@pytest.mark.asyncio
+async def test_repeated_regeneration_accumulates_versions_newest_first(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """Three generations leave two archived versions, numbered in the order
+    they were displaced and returned newest-first."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data,
+        questions_json='{"questions": {"A": ["first"]}, "context_summary": "first summary"}',
+    )
+    await _regenerate(
+        client, appointment_id,
+        '{"questions": {"B": ["second"]}, "context_summary": "second summary"}',
+    )
+    await _regenerate(
+        client, appointment_id,
+        '{"questions": {"C": ["third"]}, "context_summary": "third summary"}',
+    )
+
+    versions = (await client.get(f"/api/visits/{appointment_id}/prep/versions")).json()
+    assert [v["version_number"] for v in versions] == [2, 1]
+    assert versions[0]["generated_questions"] == {"B": ["second"]}
+    assert versions[1]["generated_questions"] == {"A": ["first"]}
+
+    current = (await client.get(f"/api/visits/{appointment_id}/prep")).json()
+    assert current["generated_questions"] == {"C": ["third"]}
+
+
+@pytest.mark.asyncio
+async def test_regenerate_preserves_hand_edits_in_history(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """The concrete harm the issue describes: the patient hand-edits their
+    questions (issue #14), regenerates for an unrelated reason, and their own
+    written content is gone. It is now in the version history.
+
+    Note this is the *edited* text being archived, not the original
+    generation — the snapshot captures whatever was live at the moment of
+    overwrite, which is the content that actually had value.
+    """
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    await client.patch(
+        f"/api/visits/{appointment_id}/prep",
+        json={"generated_questions": {"Mine": ["A question I wrote myself"]}},
+    )
+
+    await _regenerate(
+        client, appointment_id,
+        '{"questions": {"Fresh": ["Regenerated"]}, "context_summary": "Fresh"}',
+    )
+
+    versions = (await client.get(f"/api/visits/{appointment_id}/prep/versions")).json()
+    assert len(versions) == 1
+    assert versions[0]["generated_questions"] == {"Mine": ["A question I wrote myself"]}
+
+
+@pytest.mark.asyncio
+async def test_patch_edit_does_not_create_a_version(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """Scope boundary, pinned deliberately: this issue is about regeneration
+    silently destroying content, not about undoing the patient's own
+    deliberate edits. PATCH is left alone; if edit-undo is wanted it is a
+    separate decision, not a side effect of this one."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    await client.patch(
+        f"/api/visits/{appointment_id}/prep",
+        json={"generated_questions": {"Mine": ["Edited"]}},
+    )
+
+    versions = (await client.get(f"/api/visits/{appointment_id}/prep/versions")).json()
+    assert versions == []
+
+
+@pytest.mark.asyncio
+async def test_version_snapshots_used_fallback_separately_from_current(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """A version must carry its own used_fallback, or a real generation
+    becomes indistinguishable from the hardcoded placeholder issue #47
+    produces when the backend is unreachable — which would make the history
+    actively misleading rather than merely incomplete."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    current = (await client.get(f"/api/visits/{appointment_id}/prep")).json()
+    assert current["used_fallback"] is False
+
+    # Regenerate with a backend that fails outright, so the new live prep is
+    # the generic placeholder while the archived one is the real generation.
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=Exception("backend down"))
+        mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
+        await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    after = (await client.get(f"/api/visits/{appointment_id}/prep")).json()
+    assert after["used_fallback"] is True
+
+    versions = (await client.get(f"/api/visits/{appointment_id}/prep/versions")).json()
+    assert len(versions) == 1
+    assert versions[0]["used_fallback"] is False
+    assert versions[0]["generated_questions"] == {
+        "Medication Review": ["Original question"],
+        "Lifestyle": ["Keep me"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_version_records_when_the_content_was_written(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """content_updated_at is the displaced prep's own updated_at, so the
+    history can say when a version was written rather than only when it was
+    archived."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    appointment_id = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data
+    )
+    before = (await client.get(f"/api/visits/{appointment_id}/prep")).json()
+
+    await _regenerate(
+        client, appointment_id,
+        '{"questions": {"Fresh": ["Regenerated"]}, "context_summary": "Fresh"}',
+    )
+
+    versions = (await client.get(f"/api/visits/{appointment_id}/prep/versions")).json()
+    assert versions[0]["content_updated_at"] is not None
+    assert versions[0]["content_updated_at"] == before["updated_at"]
+    assert versions[0]["created_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_versions_404_when_appointment_missing(client: AsyncClient):
+    """A missing appointment is still a 404, matching the other routes here —
+    only *empty history* is an empty list."""
+    response = await client.get("/api/visits/non-existent-id/prep/versions")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_versions_empty_when_appointment_has_no_prep_at_all(
+    client: AsyncClient, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/",
+        json={**sample_appointment_data, "doctor_id": doctor_response.json()["id"]},
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    response = await client.get(f"/api/visits/{appointment_id}/prep/versions")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_versions_are_scoped_to_their_own_appointment(
+    client: AsyncClient, monkeypatch, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """Two appointments each with history — neither sees the other's. The
+    versions route joins through visit_preps, so a broken join would leak
+    one appointment's prior questions onto another's page."""
+    from src.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    first = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data,
+        questions_json='{"questions": {"First": ["one"]}, "context_summary": "first"}',
+    )
+    second = await _generate_prep(
+        client, sample_profile_data, sample_doctor_data, sample_appointment_data,
+        questions_json='{"questions": {"Second": ["two"]}, "context_summary": "second"}',
+    )
+    assert first != second
+
+    await _regenerate(
+        client, first, '{"questions": {"FirstNew": ["1b"]}, "context_summary": "1b"}'
+    )
+
+    first_versions = (await client.get(f"/api/visits/{first}/prep/versions")).json()
+    second_versions = (await client.get(f"/api/visits/{second}/prep/versions")).json()
+
+    assert len(first_versions) == 1
+    assert first_versions[0]["generated_questions"] == {"First": ["one"]}
+    assert second_versions == []

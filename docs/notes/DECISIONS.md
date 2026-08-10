@@ -1098,6 +1098,111 @@ This narrows, but does not eliminate, the no-automatic-loop-closure limitation: 
 
 ---
 
+### DEC-033: The Eval Question-Count Floor Counts In-Scope Entities Only, and Fixtures Declare Condition Scope Themselves
+
+**Date:** 2026-08-08
+
+**Context:** Issue #75. `expected_min_questions()` (`eval/scorers.py`) scales the format-validity floor by `len(known_entities(case)) * 2`, floored at 3 and capped at 8 — DEC-018's fix for `cold_start` failing a flat 8-question bar with almost nothing to ask about. `cross_specialty_scope` kept failing anyway (6 questions against 8), and the issue asked which of two failure modes it was: a genuinely data-sparse fixture the scaling should cover, or a model under-delivering questions it could legitimately generate.
+
+It is the first, and the reason was hidden by an entity count that looked healthy. `known_entities()` unions conditions + medications + lab orders with no scope filter, so `cross_specialty_scope` counts 4: Type 2 Diabetes Mellitus, Metformin, Mild Plaque Psoriasis, and Clobetasol Cream. `4 * 2 = 8`, so the case gets the *full* flat floor and no scale-down at all. But the last two are dermatology material on an endocrinology visit — precisely what the v3 prompt forbids the model from raising, and the entire reason this fixture exists. The case is as data-sparse *in scope* as `cold_start`; it just didn't look it. The model producing 6 questions is arguably correct behaviour being scored as a failure, the same tension with the anti-hallucination rules DEC-018 already recorded.
+
+That also answers the issue's open question — yes, the count needs to be scope-aware — but only for the floor.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Narrow `known_entities()` itself to in-scope entities | One function, no new concept | Breaks its other caller. `score_groundedness()` needs *all* real entities: drop Clobetasol and a question about it scores as ungrounded — a hallucination — when it's a real entry in the patient's record that `score_scope()` already flags, correctly, as a scope violation. One failure would be counted twice under two names, and the scope checker's own signal would be destroyed |
+| **Add `in_scope_entities()` for the floor; leave `known_entities()` scope-blind for groundedness** | Each scorer asks the question it actually means — "how much is there legitimately to ask about" vs. "did the model invent this" | Two similar-looking functions someone could reach for the wrong one of; mitigated by docstrings on both saying why the other exists |
+| Derive condition scope from `icd_10` against `ICD10_SPECIALTY_MAP` | Reuses data already in the repo; scorer derives scope rather than being told it | That map is the hand-authored surface #72/#74 are mid-consolidation on. Building the eval harness's floor on it couples the harness to known debt and means a consolidation change silently moves eval thresholds |
+| **Add an explicit `in_scope` flag to `ConditionFixture`** | The fixture already exists to encode a scope distinction; stating it is clarifying rather than redundant, and dependency-free | It is the fixture grading itself — a fixture author could mislabel and quietly lower the bar. Bounded: it only ever moves a floor, never a pass/fail verdict, and the pinned per-case floors make any change visible in a diff |
+| Scope medications only, accept conditions are over-counted | No fixture change at all | Gives a floor of 6, which `cross_specialty_scope` still fails at 6 questions — doesn't resolve the case it was filed for |
+
+**Decision:**
+1. Add `in_scope_entities(case)` and have `expected_min_questions()` count it. `known_entities()` is unchanged and stays the input to `score_groundedness()`.
+2. Scope each entity type the way it already encodes scope. **Medications:** compare the prescriber's specialty to the target doctor's via the same `are_specialties_related()` the runtime scope logic uses. A medication with no prescriber, or a prescriber with no specialty, counts as **in** scope — absence of a scope signal is not evidence of being off scope, and defaulting the other way would silently deflate the floor for any fixture that just didn't tag one. **Conditions:** an explicit `ConditionFixture.in_scope: bool = True`, set `False` only on `cross_specialty_scope`'s psoriasis. **Lab orders:** always counted.
+3. Pin every case's resulting floor in `tests/test_eval_harness.py` (`EXPECTED_FLOORS`), with a companion test asserting every fixture case appears in that map, so a new case can't skip the check by omission.
+
+**Consequences worth stating plainly:** `cross_specialty_scope`'s floor drops from 8 to 4, so format validity is close to vacuous for this one case — it mostly stops testing question *volume* there. That is arguably correct, since the interesting signal for this fixture is the scope checker rather than the count, but it is a real reduction in what the case checks and shouldn't be discovered later as a surprise. Separately, two of five cases now scale below the documented flat 8 (three, counting `groundedness_labs_vitals`, which was already at 6 before this change and is unaffected by it) — the exceptions are becoming the pattern, and whether 8 is still the right documented default is a question this DEC leaves open rather than answering. Filed as #154.
+
+**Reasoning:** Splitting the two callers rather than mutating the shared one is the whole substance here: "what may this question reference" and "what should this question have covered" look like the same set and are not, and collapsing them costs the harness a distinct scorer. Fixture-declared condition scope over ICD-10 derivation because the harness's job is to be a trustworthy measuring stick — coupling it to a map that is actively being consolidated means eval thresholds move when unrelated work lands, which is exactly the property a measuring stick must not have. The self-grading objection is real but bounded, and pinned floors convert it from invisible to reviewable.
+
+No prompt changed, so no version bump and no `PROMPT_CHANGELOG.md` entry.
+
+**Status:** Implemented (#75).
+
+---
+
+### DEC-034: Visit-Prep History Lives in a Separate Append-Only Table, Read-Only, Unpruned
+
+**Date:** 2026-08-08
+
+**Context:** Issue #54, piece 2. `prepare_visit` (`src/api/visits.py`) reassigned `generated_questions`/`context_summary` on an existing `VisitPrep` in place, so one click on "Regenerate Questions" (`VisitPrep.tsx`) permanently destroyed whatever the previous run produced — including any hand-edits the patient had made to it under issue #14. Not a missing feature: silent, unrecoverable destruction of user content from a prominent button. Entry 56 (#46) had already deferred "the history table" as a substrate #12, #54 and #97 would each want, explicitly to avoid designing it three times. This decides its shape for the visit-prep case.
+
+**Scope: piece 2 only.** #54 also asks for a review gate before first persistence (piece 1). That is a product decision #12 explicitly claims — it plans an append-only per-claim table that doubles as the review surface. Building an interim Save/Discard step now means building a review surface twice and deleting one, which is the throwaway work #12's own write-up warns against. Piece 2 needs no product decision, and an append-only version history is a prerequisite for #12's per-claim table rather than a competitor to it, so nothing built here is discarded when #12 lands. #54 stays open for piece 1.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Append rows to `visit_preps` itself, dropping the unique constraint on `appointment_id` | One table; history and current row are literally the same shape | `appointment_id` being unique is what makes "the current prep" a single `scalar_one_or_none()` in `visits.py`, `appointments.py` (checklist) and `profile_export.py`. Dropping it changes what `GET /api/visits/{id}/prep` *means* and every one of those callers becomes a latent "which row did I get?" bug |
+| Add `previous_questions`/`previous_summary` columns to `visit_preps` | Smallest possible change; no new table | Keeps exactly one generation back. Two regenerations and the older one is destroyed anyway — the same bug with a longer fuse |
+| **Separate `visit_prep_versions` table, written only by the regenerate path** | `visit_preps` keeps its shape, its constraint and every existing reader; history is unbounded; additive migration with nothing to backfill | Two places to look for prep content; a join to read history |
+| Warn before overwriting instead of preserving | No schema change at all | The issue offers this as a *minimum*, and it protects nothing if the user clicks through — which is the case that produces the loss |
+
+**Decision:**
+1. **New `visit_prep_versions` table** (`visit_prep_id` FK, `version_number`, `generated_questions`, `context_summary`, `used_fallback`, `content_updated_at`, `created_at`). Written by one helper, `_snapshot_prep_version`, called immediately before the reassignment in `prepare_visit` — after `agent.prepare_visit()` returns, so a failed generation leaves the prep untouched and archives nothing.
+2. **`version_number` is 1-based and monotonic per prep**, assigned `max(existing) + 1`, where version 1 is the *first content displaced* (i.e. the original generation). Not derived from a count on read, so the number stays stable if versions ever become individually deletable.
+3. **Both timestamps kept.** `content_updated_at` (the displaced prep's `updated_at`) answers "when was this written"; `created_at` answers "when was it replaced". Keeping only one loses the other, and silently dropping a timestamp is the same class of loss this table exists to prevent.
+4. **`used_fallback` is snapshotted per version.** Without it a real generation is indistinguishable from the hardcoded placeholder issue #47 produces when the backend is unreachable, which would make the history actively misleading rather than merely incomplete.
+5. **Read-only history.** `GET /api/visits/{appointment_id}/prep/versions`, newest first, plus a collapsed "Previous versions (N)" disclosure in `VisitPrep.tsx`. No restore, no diff. Restore re-raises the same overwrite question one level up — does restoring clobber the current prep, or snapshot it too? — and the data-loss harm is gone once the old content is visible and copyable. Cheap to add later; hard to un-ship if the semantics are wrong.
+6. **No retention policy; nothing is pruned.** Every regenerate keeps a row forever. At single-user scale that's a handful of small JSON blobs per appointment, and a pruning rule would silently delete exactly the content this table exists to protect.
+7. **Empty content is not archived.** A prep row with neither questions nor a summary has nothing worth preserving, and a version row for it would put a "Previous versions (1)" affordance in front of the user that opens onto nothing.
+8. **No backfill in the migration.** Generations overwritten before this table existed are gone; synthesising a "version 1" from current content would fabricate a history that never happened.
+9. **PATCH (`/prep`, issue #14) does *not* create a version.** This issue is about regeneration destroying content silently, not about undoing the patient's own deliberate edits. Pinned by a test so the boundary is explicit rather than incidental. Note the snapshot still captures the *edited* state when a regenerate displaces it, which is the content that actually had value.
+10. **Version history is included in profile export** (`EXPORT_FORMAT_VERSION` 1 → 2). Beyond the plan on the issue, and justified by the same reasoning as the table: an export that dropped history would re-introduce the loss at backup time. The bump is for an additive key, made anyway because only the version number distinguishes "no history was kept" from "this export predates history being kept".
+
+**Verified not to break other readers:** the #110 pre-visit checklist reads `VisitPrep.generated_questions` via `scalar_one_or_none()` on `visit_preps` (`src/api/appointments.py`), and `profile_export.py` selects preps by `appointment_id`. Both keep working unchanged because `visit_preps` is untouched — which is the entire argument for option 3 over option 1.
+
+**Reasoning:** The unique constraint on `appointment_id` is load-bearing in a way that isn't obvious from the model definition — it's what lets three separate modules treat "the prep for this appointment" as a single row without ordering or filtering. Storing history in place would trade a contained schema addition for a diffuse correctness risk across all of them. Read-only over restore, and unpruned over a retention policy, are the same instinct twice: this feature exists because content was being destroyed, so every ambiguous call resolves toward keeping more and doing less to it.
+
+**Status:** Implemented (#54, piece 2). Piece 1 (review gate before first persistence) remains open on #54, pending #12.
+
+---
+
+### DEC-035: An Apply Never Reports a Change It Didn't Make — Unreadable Stop Dates Fall Back to the Visit Date, or Skip Visibly
+
+**Date:** 2026-08-09
+
+**Context:** `apply_items` handled a parsed AVS "medication stop" by writing `Medication.end_date = _parse_date_string(med.date)` (`src/api/documents.py`). `_parse_date_string` returns `None` for any string outside its four known formats (`%m/%d/%Y`, `%Y-%m-%d`, `%B %d, %Y`, `%B %d %Y`) — so `"last week"`, `"6/1/26"`, or a blank/garbled OCR date all produced `None`. `None` is exactly what an active medication's `end_date` already holds, so the write was a genuine no-op while the plan still reported `action: update`, `reason: "marks this medication stopped"`, and counted it under `medications_stopped`. The user was told a medication was recorded as stopped while the profile still listed it as active. Issue #149; surfaced by #143's pre-apply diff, which rendered it as `end_date: (empty) → (empty)` instead of hiding it in a silent write.
+
+The narrow bug is one branch, but the policy question generalises to every field apply parses: what should `_build_apply_plan` do when a parsed value can't be interpreted? The de-facto answer was "write the null and report success", and that answer will be wrong the same way for the next date or numeric field added.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Fall back to the visit date when it's readable, name the inference in the plan `reason`; skip visibly when it isn't** | The medication actually ends up stopped, which is what the document asserted; the visit date is the document's own anchor, already used by the `_is_newer` guard; the preview shows a real value change rather than `(empty) → (empty)`, so the inference is reviewable before it's committed | Stores a date the document never stated — a downstream reader of `end_date` alone can't tell an inferred date from a transcribed one |
+| Always skip and flag, never infer a date | Nothing inferred is ever written to a medical record | Leaves the medication active in the profile when the document plainly says it was stopped — the profile stays wrong about something clinically load-bearing, which is the more consequential of the two errors |
+| Widen `_parse_date_string` to accept more formats | Fixes the `"6/1/26"` class of input at the source | Doesn't fix the general case (`"last week"` has no reference point), and a permissive parser that quietly guesses wrong is a worse-hidden version of the same bug. Rejected as a substitute; a narrow format addition remains available later on its own merits |
+| Leave it; treat the `(empty) → (empty)` preview row from #143 as sufficient warning | Zero change | Depends on the user reading a diff row that renders as no change at all, and the reported count still says a medication was stopped |
+
+**Decision:** A medication stop resolves its `end_date` through one helper, `_stop_end_date(date_str, visit_dt)`, which returns `(date | None, reason)`:
+
+- Parseable stop date → that date, with today's unchanged reason string.
+- Unreadable or missing stop date, visit date readable → the visit date, with a reason that names both the problem and the substitution (e.g. `marks this medication stopped — stop date "last week" couldn't be read, using the visit date 2099-12-31`).
+- Unreadable or missing stop date, visit date also unreadable → `action: skip` under the existing `medications_stopped` skip bucket, with a reason saying the stop couldn't be applied. No write, and the count no longer claims one.
+
+The rule this generalises to, for future parsed fields: **an apply never reports a change it didn't make.** Prefer a visible approximation, named as an approximation, over a silent no-op; where no honest approximation exists, skip visibly rather than writing a value indistinguishable from "unset".
+
+Deliberately **not** generalised to medication *creates*, which use the same `_parse_date_string(med.date)` for `start_date`. A null `start_date` on a new medication honestly reads as "start date unknown" — it isn't confusable with a different, wrong state the way a null `end_date` is confusable with "still active" — so creates keep today's behaviour, pinned by a test.
+
+**Reasoning:** The two error directions are not symmetric. Writing the visit date is wrong by however far the real stop date was from the visit — usually days, and the document itself is the closest anchor available. Writing nothing is wrong about whether the patient is on the medication at all, which is the fact downstream care decisions actually read. Since #143 the inference is also reviewable before it commits: the preview shows the substituted date and the reason that explains it, so the user can reject a fallback they disagree with instead of discovering it later. Both alternatives the issue itself offered (reject-and-flag, or fall back to a sensible default) were acceptable to the reporter; this takes the fallback where one exists and the rejection where one doesn't, so neither case ends in a silent no-op.
+
+**Status:** Implemented. Tests in `tests/test_documents_apply.py` cover: unreadable, malformed, empty and absent stop dates all falling back to the visit date; the preview naming the inference and showing a real `end_date` change; the no-visit-date case skipping rather than counting; and medication creates still accepting an unreadable `start_date` unchanged.
+
+---
+
 ### DEC-036: Free-Text Redaction Uses Scoped Per-Entity Tokens; Tokens Are Guarded on Output, Not Re-Hydrated
 
 **Date:** 2026-08-09
@@ -1129,7 +1234,7 @@ Two ideas of "stable id" now exist in this module and must not be conflated: `_m
 
 **Reasoning:** what crosses DEC-006's trust boundary is now *shaped* differently — the model can see that two redacted mentions are the same entity or different ones — even though it still exports no raw identifier and no way to recover one. That's a change worth recording rather than leaving as an implementation detail, because the natural next question ("so can we map them back?") has a deliberate answer, and because the `ContextVar` scoping is the kind of decision that looks like over-engineering until someone moves the map onto the instance and quietly leaks one patient's numbering into another's request.
 
-**Status:** Implemented. 33 new tests in `tests/test_anonymization.py` and `tests/test_visit_prep.py` cover: distinct values → distinct tokens; one value → one token within a field, across fields and across call sites; scope exit clearing the map; the singleton not leaking between scopes; concurrent asyncio tasks staying independent; unchanged `[REDACTED]` outside a scope; labels preserved; `RedactionEvent` offsets still correct now that replacements are variable-length rather than fixed-width; normalisation merging and non-merging cases; and the leakage guard end-to-end through `prepare_visit`. Re-hydration remains open on #17.
+**Status:** Implemented. 33 new tests in `tests/test_anonymization.py` and `tests/test_visit_prep.py` cover: distinct values → distinct tokens; one value → one token within a field, across fields and across call sites; scope exit clearing the map; the singleton not leaking between scopes; concurrent asyncio tasks staying independent; unchanged `[REDACTED]` outside a scope; labels preserved; `RedactionEvent` offsets still correct now that replacements are variable-length rather than fixed-width; normalisation merging and non-merging cases; and the leakage guard end-to-end through `prepare_visit`. Re-hydration remains open on #17. A follow-up test/lint guard against a future scope-forgetting caller is filed as #156.
 
 ---
 

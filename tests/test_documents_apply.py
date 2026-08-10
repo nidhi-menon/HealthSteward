@@ -234,6 +234,126 @@ async def test_medication_stop_sets_end_date(
     assert existing.end_date == date(2026, 6, 1)
 
 
+# ---------------------------------------------------------------------------
+# Unreadable medication stop dates (issue #149)
+#
+# `_parse_date_string` returns None outside its four formats, and None is what
+# an active medication's `end_date` already holds — so the stop used to be a
+# no-op write that still reported as applied. These pin both halves of the fix:
+# fall back to the visit date when there is one, skip visibly when there isn't.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop_date", ["last week", "6/1/26", "", None])
+async def test_unreadable_stop_date_falls_back_to_the_visit_date(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data, stop_date
+):
+    profile_id = await _profile(client, sample_profile_data)
+    document_id = await _make_document(db_session, profile_id, visit_date=FUTURE_VISIT)
+
+    existing = Medication(profile_id=profile_id, name="Metformin", dosage="500mg")
+    db_session.add(existing)
+    await db_session.commit()
+    await db_session.refresh(existing)
+
+    resp = await client.post(
+        f"/api/profiles/{profile_id}/documents/{document_id}/apply",
+        json=_payload(medication_stops=[
+            {"name": "Metformin", "action": "stop", "date": stop_date},
+        ]),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["counts"]["medications_stopped"] == 1
+
+    await db_session.refresh(existing)
+    # Actually stopped, using the document's own anchor date.
+    assert existing.end_date == date(2099, 12, 31)
+
+
+@pytest.mark.asyncio
+async def test_unreadable_stop_date_is_named_as_inferred_in_the_preview(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data
+):
+    """The fallback date must be visible as inferred, not passed off as stated."""
+    profile_id = await _profile(client, sample_profile_data)
+    document_id = await _make_document(db_session, profile_id, visit_date=FUTURE_VISIT)
+
+    db_session.add(Medication(profile_id=profile_id, name="Metformin"))
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/api/profiles/{profile_id}/documents/{document_id}/apply/preview",
+        json=_payload(medication_stops=[
+            {"name": "Metformin", "action": "stop", "date": "last week"},
+        ]),
+    )
+    assert resp.status_code == 200
+
+    entry = next(e for e in resp.json()["entries"] if e["entity_type"] == "medication")
+    assert entry["action"] == "update"
+    assert "last week" in entry["reason"]
+    assert "2099-12-31" in entry["reason"]
+    # The diff shows a real value change, not `(empty) -> (empty)`.
+    change = next(c for c in entry["changes"] if c["field"] == "end_date")
+    assert change["changed"] is True
+    assert change["new_value"] == "2099-12-31"
+
+
+@pytest.mark.asyncio
+async def test_unreadable_stop_date_with_no_visit_date_is_skipped_not_counted(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data
+):
+    profile_id = await _profile(client, sample_profile_data)
+    document_id = await _make_document(db_session, profile_id, visit_date=None)
+
+    existing = Medication(profile_id=profile_id, name="Metformin", dosage="500mg")
+    db_session.add(existing)
+    await db_session.commit()
+    await db_session.refresh(existing)
+
+    resp = await client.post(
+        f"/api/profiles/{profile_id}/documents/{document_id}/apply",
+        json=_payload(medication_stops=[
+            {"name": "Metformin", "action": "stop", "date": "last week"},
+        ]),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    # The count stops lying: nothing was stopped, so nothing is reported as such.
+    assert body["counts"]["medications_stopped"] == 0
+    assert body["skipped"]["medications_stopped"] == 1
+
+    await db_session.refresh(existing)
+    assert existing.end_date is None
+
+
+@pytest.mark.asyncio
+async def test_medication_start_still_accepts_an_unreadable_start_date(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data
+):
+    """Creates are deliberately untouched — a null `start_date` reads as unknown,
+    not as a false negative, so the #149 fix stays scoped to the stop path."""
+    profile_id = await _profile(client, sample_profile_data)
+    document_id = await _make_document(db_session, profile_id)
+
+    resp = await client.post(
+        f"/api/profiles/{profile_id}/documents/{document_id}/apply",
+        json=_payload(medication_starts=[
+            {"name": "Lisinopril", "action": "start", "strength": "10mg",
+             "date": "last week"},
+        ]),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["counts"]["medications_started"] == 1
+
+    result = await db_session.execute(
+        select(Medication).where(Medication.profile_id == profile_id)
+    )
+    created = result.scalars().one()
+    assert created.start_date is None
+
+
 @pytest.mark.asyncio
 async def test_medication_update_changes_dosage_and_frequency(
     client: AsyncClient, db_session: AsyncSession, sample_profile_data
