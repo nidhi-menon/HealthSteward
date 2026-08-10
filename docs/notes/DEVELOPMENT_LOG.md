@@ -1902,6 +1902,32 @@ Related: issue #27, issue #44 (the snooze/undo behaviour now under test), CONTRI
 
 ---
 
+## 62. Per-Entity Tokens in Free-Text Anonymization (#17, DEC-036)
+
+**Date:** 2026-08-09
+
+**Context:** structured fields have had relational anonymization since DEC-006 — the same doctor always becomes "your Endocrinologist". Free text had none: every match became the same literal `[REDACTED]`, so "referred by Dr. Smith to Dr. Jones" reached the model as two identical placeholders and the fact that they're two different providers was gone. The suggestion that prompted this (via Reddit, recorded on #17) was to replace with `PERSON_1`/`PERSON_2` instead, keeping relational structure without ever exporting a raw identifier.
+
+**The design turns on where the map lives.** `VisitPrepAgent` builds its own `Anonymizer`, so per-request state would be nearly free there — but `anonymize_text()`'s module-level `get_anonymizer()` singleton is process-wide, and plain instance state would accumulate a **cross-patient** value → token map on that path. So the map is not instance state at all:
+
+- **`token_scope()` context manager**, with scope state in a `ContextVar`. Inside a scope, redaction emits `PERSON_1`, `PHONE_1`, `MRN_1`… keyed on the normalised matched value. Outside one, behaviour is byte-for-byte what it always was — pinned by a test, so no existing caller (including the eval PII prototypes) changes by accident.
+- **A `ContextVar` rather than instance state** means each asyncio task gets its own copy: two concurrent requests through the singleton cannot see each other's tokens. There's a test that runs two `anonymize_text()` calls interleaved across tasks and asserts both start at `PHONE_1`.
+- **`prepare_visit()` opens exactly one scope** covering profile/doctor/appointment anonymization, additional concerns, Stage 4 context selection and agentic-loop tool results — every `anonymize_text()` entry point in the request.
+
+**Two different notions of "stable" now live in this module and must not be conflated.** `_make_entity_id` (DEC-029) is keyed by field + occurrence index and identifies a redaction *event* for the audit log; the token map is keyed by normalised value and identifies an *entity* across fields. The same doctor mentioned in two fields gets two `entity_id`s and one token. Both are correct; they answer different questions.
+
+**Matching is exact-normalised only** — casefold, strip one leading title, strip surrounding punctuation. No fuzzy matching, no surname-only coreference. A wrong merge would tell the model two different providers are one person, which is worse than the status quo; under-merging just degrades to roughly pre-#17 behaviour for the mentions that didn't merge.
+
+**Output side: a leakage guard, not re-hydration.** `scrub_leaked_tokens()` rewrites any token that survives into generated output back to `[REDACTED]`, applied to `questions` and `context_summary` on every return path from `prepare_visit` including the fallback. So the worst case a patient can see is exactly what they'd have seen before #17. Whether tokens should be *re-hydrated* to real values for the patient's own eyes is the open question #17 itself flags; it stays open, and this design forecloses nothing — re-hydration would run first and the guard would catch whatever it couldn't map.
+
+**No prompt change, so no version bump and no `PROMPT_CHANGELOG.md` entry.** Telling the model what `PERSON_1` means would probably help, but a prompt wording change needs eval evidence per the conventions, and blocking an offline, unit-testable change on an eval cycle isn't a good trade. Filed as #151.
+
+**Files changed:** `src/utils/anonymization.py`, `src/agents/visit_prep.py`, `tests/test_anonymization.py`, `tests/test_visit_prep.py`, `docs/notes/DECISIONS.md`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #17, DEC-036, DEC-006, DEC-029 (the other "stable id"), #151 (prompt follow-up), #156 (scope-forgetting guard follow-up).
+
+---
+
 ## 61. A Medication Stop No Longer Reports Success Without Stopping Anything (#149, DEC-035)
 
 **Date:** 2026-08-09

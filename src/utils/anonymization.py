@@ -27,6 +27,8 @@ Per DEC-006:
 
 import hashlib
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -283,6 +285,162 @@ PII_REPLACEMENTS = {
 
 DEFAULT_REDACTION = '[REDACTED]'
 
+# Token type per PII_PATTERNS key, for scoped tokenisation (issue #17). Both MRN
+# patterns share a type on purpose: the same identifier written with a label in
+# one field and bare in another is one entity, and tokens key on the matched
+# value, not on which pattern happened to catch it.
+TOKEN_TYPES = {
+    'zip_code': 'ZIP',
+    'phone_intl': 'PHONE',
+    'phone': 'PHONE',
+    'email': 'EMAIL',
+    'ssn': 'SSN',
+    'date': 'DATE',
+    'date_iso': 'DATE',
+    'date_written': 'DATE',
+    'po_box': 'ADDRESS',
+    'address': 'ADDRESS',
+    'mrn': 'MRN',
+    'insurance_id': 'INSURANCE_ID',
+    'mrn_unlabeled': 'MRN',
+    'PERSON': 'PERSON',
+}
+
+# Matches any token this module can emit, for the output-side leakage guard.
+TOKEN_PATTERN = re.compile(
+    r'\b(?:' + '|'.join(sorted(set(TOKEN_TYPES.values()))) + r')_\d+\b'
+)
+
+# Titles stripped before two mentions are compared. Deliberately short: exact
+# normalised matching only, no coreference resolution and nothing fuzzier (see
+# `_normalise_entity_value`).
+_TITLE_PREFIXES = (
+    'dr', 'dr.', 'doctor', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.',
+    'miss', 'prof', 'prof.', 'professor',
+)
+
+
+def _normalise_entity_value(value: str) -> str:
+    """Normalise a matched value so two mentions of one entity collapse to one
+    token — casefold, drop a leading title, strip surrounding punctuation and
+    collapse internal whitespace.
+
+    Deliberately conservative (issue #17, Q3). A wrong *merge* is worse than
+    today's behaviour: today the model learns nothing about the relationship
+    between two redacted mentions; a bad merge would actively tell it two
+    different providers are the same person. Under-merging just degrades to
+    roughly today's state for the mentions that didn't merge, which is the safe
+    failure direction — so no fuzzy matching, no surname-only equivalence beyond
+    title stripping, no coreference.
+    """
+    cleaned = re.sub(r'\s+', ' ', value).strip().strip('.,;:#-').casefold()
+    parts = cleaned.split(' ')
+    if len(parts) > 1 and parts[0] in _TITLE_PREFIXES:
+        parts = parts[1:]
+    return ' '.join(parts).strip()
+
+
+class _TokenScope:
+    """The value → token map for one logical unit of anonymization."""
+
+    def __init__(self) -> None:
+        self._tokens: dict[tuple[str, str], str] = {}
+        self._counts: dict[str, int] = {}
+
+    def token_for(self, token_type: str, value: str) -> str:
+        key = (token_type, _normalise_entity_value(value))
+        existing = self._tokens.get(key)
+        if existing is not None:
+            return existing
+        index = self._counts.get(token_type, 0) + 1
+        self._counts[token_type] = index
+        token = f"{token_type}_{index}"
+        self._tokens[key] = token
+        return token
+
+    def as_dict(self) -> dict[str, str]:
+        """Token → normalised source value, for tests and diagnostics only.
+
+        Never logged and never returned to a caller outside the process: the
+        values here are the raw PII the scope exists to keep off the wire.
+        """
+        return {token: value for (_, value), token in self._tokens.items()}
+
+
+# Scope state lives in a ContextVar, not on the Anonymizer instance, so the
+# module-level singleton behind `anonymize_text()` can never accumulate a
+# cross-patient map: each asyncio task (i.e. each request) gets its own copy of
+# the context, and a scope opened in one is invisible to every other.
+_active_token_scope: ContextVar[Optional[_TokenScope]] = ContextVar(
+    'anonymizer_token_scope', default=None
+)
+
+
+def current_token_scope() -> Optional[_TokenScope]:
+    """The token scope in effect for this task, or None outside a scope."""
+    return _active_token_scope.get()
+
+
+@contextmanager
+def token_scope():
+    """Give per-entity tokens (`PERSON_1`, `MRN_1`) to everything anonymized
+    inside this block, consistent across every `anonymize_text()` call in it.
+
+    Outside a scope, redaction behaviour is byte-for-byte what it has always
+    been: every match becomes `[REDACTED]`. Tokenisation is opt-in per call
+    site so no existing caller changes behaviour by accident (issue #17).
+    """
+    token = _active_token_scope.set(_TokenScope())
+    try:
+        yield _active_token_scope.get()
+    finally:
+        _active_token_scope.reset(token)
+
+
+def scrub_leaked_tokens(text: Optional[str]) -> Optional[str]:
+    """Rewrite any token that survived into model output back to `[REDACTED]`.
+
+    The leakage guard for issue #17: a model handed `PERSON_1` in its input can
+    echo it verbatim in a generated question, which would look broken. This
+    rewrites stray tokens to the neutral marker the app already shows for
+    redacted content, so the worst case is exactly today's behaviour rather
+    than an opaque identifier.
+
+    Deliberately *not* re-hydration — nothing here maps a token back to the
+    real value it stood for. Whether tokens should be re-hydrated for the
+    patient's own eyes is still open on #17; this guard is compatible with
+    either answer, since re-hydration would run first and this would catch
+    whatever it couldn't map.
+    """
+    if not text:
+        return text
+    return TOKEN_PATTERN.sub(DEFAULT_REDACTION, text)
+
+
+def _replacement_for(pattern_name: str, scope: Optional[_TokenScope]):
+    """The `re.sub` replacement for one pattern — a template outside a scope,
+    a per-match token-minting function inside one.
+
+    Label-anchored patterns keep their label either way, so anonymized text
+    still reads as `MRN: MRN_1` rather than losing the clinical context. The
+    token is keyed on the identifier alone, without the label, so the same MRN
+    written `MRN: 1234567` in one field and bare in another is one entity.
+    """
+    if scope is None:
+        return PII_REPLACEMENTS.get(pattern_name, DEFAULT_REDACTION)
+
+    token_type = TOKEN_TYPES.get(pattern_name, pattern_name.upper())
+
+    def replace(match: 're.Match') -> str:
+        label = ''
+        value = match.group(0)
+        if 'label' in match.re.groupindex and match.group('label'):
+            label = match.group('label')
+            value = value[len(label):]
+        return label + scope.token_for(token_type, value)
+
+    return replace
+
 
 class Anonymizer:
     """Handles PII anonymization for health data before sending to LLMs."""
@@ -388,12 +546,13 @@ class Anonymizer:
         result = text
         events: list[RedactionEvent] = []
         occurrence_counts: dict[str, int] = {}
+        scope = current_token_scope()
 
         # Apply regex patterns in declaration order — see the ordering note on
         # PII_PATTERNS. Label-anchored patterns use a replacement template that
         # preserves their label; everything else redacts the whole match.
         for pattern_name, pattern in PII_PATTERNS.items():
-            replacement = PII_REPLACEMENTS.get(pattern_name, DEFAULT_REDACTION)
+            replacement = _replacement_for(pattern_name, scope)
             for match in pattern.finditer(result):
                 idx = occurrence_counts.get(pattern_name, 0)
                 occurrence_counts[pattern_name] = idx + 1
@@ -425,7 +584,14 @@ class Anonymizer:
                     document_id=document_id,
                 ))
             for ent in sorted(person_entities, key=lambda e: e.start_char, reverse=True):
-                result = result[:ent.start_char] + '[REDACTED]' + result[ent.end_char:]
+                # Replaced right-to-left so earlier offsets stay valid, but the
+                # token is assigned by value, so a repeated name still collapses
+                # to one token regardless of the order they're rewritten in.
+                person = (
+                    scope.token_for('PERSON', ent.text) if scope
+                    else DEFAULT_REDACTION
+                )
+                result = result[:ent.start_char] + person + result[ent.end_char:]
 
         return result, events
 

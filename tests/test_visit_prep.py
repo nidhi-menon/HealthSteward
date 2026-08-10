@@ -1242,6 +1242,127 @@ async def test_regenerate_after_edit_replaces_edits(
     assert response.json()["generated_questions"] == {"Fresh": ["Regenerated question"]}
 
 
+@pytest.mark.asyncio
+async def test_prepare_visit_tokenises_free_text_consistently(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Issue #17: within one prepare_visit(), the same free-text value resolves
+    to the same token everywhere, so the model can tell distinct entities apart
+    instead of seeing one undifferentiated `[REDACTED]`.
+
+    The same number appears in the appointment purpose and in the user's typed
+    concerns — two separate `anonymize_text()` entry points — and a second,
+    different number appears alongside it.
+    """
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {
+        **sample_appointment_data,
+        "doctor_id": doctor_id,
+        "purpose": "Follow-up, call the clinic at 555-123-4567",
+    }
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(
+        '{"questions": {"General": ["Q"]}, "context_summary": "S"}'
+    )
+
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(
+            f"/api/visits/{appointment_id}/prepare",
+            json={
+                "additional_concerns":
+                    "Same number 555-123-4567, my partner is on 555-987-6543",
+            },
+        )
+
+    assert response.status_code == 200
+
+    sent = str(mock_client.messages.create.call_args.kwargs["messages"])
+    assert "555-123-4567" not in sent and "555-987-6543" not in sent
+    # One entity, one token — reached from two different call sites.
+    assert sent.count("PHONE_1") == 2
+    # ...and the other number is visibly a different entity.
+    assert "PHONE_2" in sent
+    assert "[REDACTED]" not in sent
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_scrubs_tokens_the_model_echoes_back(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Issue #17's leakage guard: a model handed `PERSON_1` can echo it into a
+    generated question. The patient must never see the raw token — it falls
+    back to `[REDACTED]`, which is exactly what they'd have seen before #17.
+    """
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(
+        '{"questions": {"Care Team": ["What did PERSON_1 recommend?"]},'
+        ' "context_summary": "Referred by PERSON_1 to PERSON_2."}'
+    )
+
+    with patch("src.agents.base.AsyncAnthropic") as mock_anthropic, \
+         patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic.return_value = mock_client
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["generated_questions"] == {
+        "Care Team": ["What did [REDACTED] recommend?"]
+    }
+    assert data["context_summary"] == "Referred by [REDACTED] to [REDACTED]."
+
+
 # ============================================================================
 # Version history on regenerate (issue #54, DEC-034)
 # ============================================================================

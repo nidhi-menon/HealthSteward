@@ -1203,4 +1203,39 @@ Deliberately **not** generalised to medication *creates*, which use the same `_p
 
 ---
 
+### DEC-036: Free-Text Redaction Uses Scoped Per-Entity Tokens; Tokens Are Guarded on Output, Not Re-Hydrated
+
+**Date:** 2026-08-09
+
+**Context:** DEC-006 gives structured fields stable, relational anonymization — the same doctor always becomes "your Endocrinologist", a DOB always becomes an age. Free text got none of that: `Anonymizer.anonymize_text()` replaced every match with the same literal `[REDACTED]`, so "referred by Dr. Smith to Dr. Jones" reached the model as two identical placeholders and the fact that they are two different providers was destroyed. Community feedback on the pluggable-backend post put the alternative plainly: replace with `PERSON_1`, `DATE_1` etc., and the model keeps relational structure without ever seeing a raw identifier. Issue #17.
+
+The complication is state. `VisitPrepAgent` constructs its own `Anonymizer` per instance, but `anonymize_text()`'s module-level `get_anonymizer()` singleton is shared process-wide — plain instance state on `Anonymizer` would accumulate a **cross-patient** value → token map on that path, which is a worse privacy property than the one being fixed.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Explicit `token_scope()` context manager, scope state in a `ContextVar`; unchanged `[REDACTED]` outside a scope** | The map's lifetime is stated at the call site rather than inferred; each asyncio task gets its own context, so concurrent requests through the singleton can't see each other's tokens; every existing caller is byte-for-byte unchanged | Callers must opt in — a future call site that wants relational tokens and forgets the scope silently gets the old behaviour |
+| Make `Anonymizer` statefully mutable (map as instance state, cleared per request) | Simplest diff; no new concept | The shared singleton accumulates a cross-patient map unless every caller remembers to clear it — a leak whose failure mode is silent and whose blast radius is other patients' data |
+| Tokens always on, everywhere, no scope concept | No opt-in to forget | Same cross-patient problem in a worse form, and it changes output for every existing caller (including the eval PII prototypes) as a side effect |
+| Do nothing; keep flat `[REDACTED]` | Zero risk | The model cannot reason about relationships between distinct redacted entities — the actual complaint |
+
+**Decision — scoping:** a `token_scope()` context manager. Inside a scope, free-text redaction emits `PERSON_1`, `PHONE_1`, `MRN_1`… keyed on the **normalised matched value**, so one entity resolves to one token across every `anonymize_text()` call in the scope. `VisitPrepAgent.prepare_visit()` opens exactly one, covering profile/doctor/appointment anonymization, additional concerns, Stage 4 context selection and agentic-loop tool results. Outside a scope, behaviour is exactly what it was: `[REDACTED]`. Scope state lives in a `ContextVar`, not on the instance, so the singleton path cannot carry a map between patients or between concurrent requests. Label-anchored patterns keep their label (`MRN: MRN_1`), as they already did with `[REDACTED]`.
+
+Two ideas of "stable id" now exist in this module and must not be conflated: `_make_entity_id` (DEC-029) is keyed by *field + occurrence index* and identifies a redaction **event** for the audit log; the token map is keyed by *normalised value* and identifies an **entity** across fields. The same doctor in two fields gets two different `entity_id`s and one token — both correct, for different questions.
+
+**Decision — matching granularity:** exact normalised match only: casefold, strip one leading title (`Dr.`, `Doctor`, `Mr.`…), strip surrounding punctuation, collapse whitespace. No fuzzy matching, no surname-only coreference, no coreference resolution of any kind. The asymmetry is the reason: a wrong *merge* actively tells the model that two different providers are one person, which is a confidently-wrong input of exactly the kind #12 exists to fight; under-merging degrades to roughly the pre-#17 behaviour for the mentions that didn't merge, which is a safe failure direction.
+
+**Decision — output side:** a leakage guard, **not** re-hydration. `scrub_leaked_tokens()` rewrites any token surviving into generated output back to `[REDACTED]`, and `prepare_visit()` runs it over `questions` and `context_summary` on every return path including the fallback. Reverse-mapping tokens to real values would mean splicing a name into a sentence the model composed around a placeholder; getting that subtly wrong ("ask `PERSON_1` about…" → "ask Dr. Smith about…" when `PERSON_1` was the patient's daughter) produces a confidently wrong medical prompt. The guard gets the same UX protection — the patient never sees an opaque `PERSON_1` — with no possibility of misattribution, and its worst case is precisely the pre-#17 behaviour.
+
+**Whether tokens should be re-hydrated for the patient's own eyes remains open**, and is deliberately not settled here: issue #17 flags it as undecided and it is a product decision about output the repo owner should make. This design forecloses nothing — re-hydration, if it lands, would run before the guard and the guard would catch whatever it couldn't map. The narrower variant worth considering if relational fidelity is wanted all the way to the UI is re-hydrating **only** tokens whose source value came from the patient's own profile, never from free text.
+
+**Not done, deliberately:** the visit-prep prompts are unchanged, so there is no version bump and no `PROMPT_CHANGELOG.md` entry. Telling the model "`PERSON_1`/`PERSON_2` denote distinct people whose names were removed" would likely help, but any prompt wording change requires eval evidence per this project's conventions — i.e. real model runs — and blocking a mechanical, offline-testable change on an eval cycle trades a certain improvement for an uncertain schedule. Filed as #151 instead. Also unchanged: structured fields, which already have equivalent stable behaviour under DEC-006, and Ollama's Stage 2 relevance scoring, which sends raw local text by design and never passes through `anonymize_text` (the issue's own non-goal).
+
+**Reasoning:** what crosses DEC-006's trust boundary is now *shaped* differently — the model can see that two redacted mentions are the same entity or different ones — even though it still exports no raw identifier and no way to recover one. That's a change worth recording rather than leaving as an implementation detail, because the natural next question ("so can we map them back?") has a deliberate answer, and because the `ContextVar` scoping is the kind of decision that looks like over-engineering until someone moves the map onto the instance and quietly leaks one patient's numbering into another's request.
+
+**Status:** Implemented. 33 new tests in `tests/test_anonymization.py` and `tests/test_visit_prep.py` cover: distinct values → distinct tokens; one value → one token within a field, across fields and across call sites; scope exit clearing the map; the singleton not leaking between scopes; concurrent asyncio tasks staying independent; unchanged `[REDACTED]` outside a scope; labels preserved; `RedactionEvent` offsets still correct now that replacements are variable-length rather than fixed-width; normalisation merging and non-merging cases; and the leakage guard end-to-end through `prepare_visit`. Re-hydration remains open on #17. A follow-up test/lint guard against a future scope-forgetting caller is filed as #156.
+
+---
+
 *Last updated: 2026-08-09*

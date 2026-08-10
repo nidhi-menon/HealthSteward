@@ -21,7 +21,14 @@ from src.agents.tools import UnknownToolError, VisitPrepTools, get_tools_for_pro
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
 from src.services import settings_service
-from src.utils.anonymization import Anonymizer, AnonymizedAppointment, AnonymizedProfile, RedactionEvent
+from src.utils.anonymization import (
+    Anonymizer,
+    AnonymizedAppointment,
+    AnonymizedProfile,
+    RedactionEvent,
+    scrub_leaked_tokens,
+    token_scope,
+)
 from src.utils.context_selection import ContextSelectionResult, ContextSelector
 
 
@@ -149,6 +156,32 @@ def _infer_specialty_from_clinic(clinic: Optional[str]) -> Optional[str]:
         if keyword in clinic_lower:
             return specialty
     return None
+
+
+def _scrub_generated_output(result: dict[str, Any]) -> dict[str, Any]:
+    """Run the token leakage guard over everything a user will read (issue #17).
+
+    Scoped tokens (`PERSON_1`) are more useful to the model than an
+    undifferentiated `[REDACTED]`, but they are input-side machinery: a model
+    that echoes one into a question would show the patient something that looks
+    broken. This rewrites any surviving token back to `[REDACTED]` — the marker
+    the app already displays for redacted content — so the worst case is
+    exactly the pre-#17 behaviour.
+
+    Applies to the fallback response too: cheap, and it means no return path
+    out of `prepare_visit` is unguarded by construction rather than by audit.
+    """
+    scrubbed = dict(result)
+    questions = scrubbed.get("questions")
+    if isinstance(questions, dict):
+        scrubbed["questions"] = {
+            category: [scrub_leaked_tokens(q) for q in items]
+            if isinstance(items, list) else items
+            for category, items in questions.items()
+        }
+    if isinstance(scrubbed.get("context_summary"), str):
+        scrubbed["context_summary"] = scrub_leaked_tokens(scrubbed["context_summary"])
+    return scrubbed
 
 
 class VisitPrepAgent(BaseAgent):
@@ -322,6 +355,36 @@ Before finalizing your response, count your questions. You must have between 8 a
         temperature: float = 0.7,
     ) -> dict[str, Any]:
         """Generate visit preparation questions and context.
+
+        Wraps the whole run in one `token_scope()` (issue #17), which is what
+        makes free-text redaction relational: every `anonymize_text()` call
+        below — profile, doctor, appointment, additional concerns, Stage 4
+        context selection, agentic-loop tool results — resolves the same
+        underlying value to the same `PERSON_1`/`MRN_1` token, so the model can
+        tell two distinct redacted people apart instead of seeing one
+        undifferentiated `[REDACTED]`. The map lives and dies with this call;
+        nothing about one patient survives into the next request.
+
+        The generated output is then passed through `scrub_leaked_tokens`
+        before it is returned, so a model that echoes a token verbatim can't
+        put an opaque `PERSON_1` in front of the user. That guard is not
+        re-hydration — see `scrub_leaked_tokens` and #17's open question.
+        """
+        with token_scope():
+            result = await self._prepare_visit_in_scope(
+                appointment,
+                additional_concerns=additional_concerns,
+                temperature=temperature,
+            )
+        return _scrub_generated_output(result)
+
+    async def _prepare_visit_in_scope(
+        self,
+        appointment: Appointment,
+        additional_concerns: Optional[str] = None,
+        temperature: float = 0.7,
+    ) -> dict[str, Any]:
+        """The visit-prep pipeline itself. Always called inside a token scope.
 
         Uses anonymization and context selection per DEC-006 and DEC-008.
 
