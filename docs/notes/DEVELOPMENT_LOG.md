@@ -1902,6 +1902,30 @@ Related: issue #27, issue #44 (the snooze/undo behaviour now under test), CONTRI
 
 ---
 
+## 61. A Medication Stop No Longer Reports Success Without Stopping Anything (#149, DEC-035)
+
+**Date:** 2026-08-09
+
+**Context:** applying a parsed AVS "medication stop" set `Medication.end_date = _parse_date_string(med.date)`. That helper returns `None` for anything outside its four date formats — `"last week"`, `"6/1/26"`, a blank OCR field — and `None` is already what an active medication's `end_date` holds. So the write changed nothing while the plan still said `action: update`, `reason: "marks this medication stopped"`, and the response still counted it under `medications_stopped`. The user was told the medication was recorded as stopped; the profile still listed it as active. Pre-existing, not introduced by #143 — #143's preview only made it visible, as an `end_date: (empty) → (empty)` row.
+
+**The fix is one helper, `_stop_end_date(date_str, visit_dt)`**, which returns the date to write *and* the reason to show, so the plan entry can't drift from what the write actually does:
+
+- Readable stop date → that date, reason unchanged from today.
+- Unreadable/missing stop date, readable visit date → the visit date, with the reason naming the substitution: `marks this medication stopped — stop date "last week" couldn't be read, using the visit date 2099-12-31`. Because the preview (#143) renders reasons and per-field diffs, the inference is reviewable *before* it commits, and the diff shows a real value change instead of empty-to-empty.
+- Unreadable/missing stop date, unreadable visit date → `action: skip` in the existing `medications_stopped` skip bucket. Nothing written, and the count stops claiming otherwise.
+
+**Why fall back rather than always reject.** Both were on the table in the issue. The two errors aren't symmetric: an inferred `end_date` is wrong by the gap between the real stop and the visit — usually days, and the visit date is the document's own anchor, already trusted by the `_is_newer` guard. Writing nothing is wrong about whether the patient is on the medication at all, which is the fact follow-up care actually reads. DEC-035 records the general rule this instance of: an apply never reports a change it didn't make.
+
+**Deliberately not generalised to creates.** `start_date` on a medication create parses the same way and can also land as `None`, but a null start date honestly reads as "unknown" rather than as a different, wrong state — it isn't confusable with "still active" the way a null `end_date` is. Creates keep today's behaviour, pinned by `test_medication_start_still_accepts_an_unreadable_start_date` so the scoping is deliberate rather than an omission.
+
+**`_parse_date_string` was left alone.** Adding `%m/%d/%y` would fix the `"6/1/26"` example specifically, but not the general case, and a parser that guesses more permissively fails in exactly the same silent direction this issue is about. Widening the *visible* failure path was the point; widening the parser can be argued separately on its own merits.
+
+**Files changed:** `src/api/documents.py`, `tests/test_documents_apply.py`, `docs/notes/DECISIONS.md`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #149, DEC-035, #46/#143 (the preview that surfaced it).
+
+---
+
 ## 60. Regenerating Visit Prep No Longer Destroys the Previous Output (#54, DEC-034)
 
 **Date:** 2026-08-08

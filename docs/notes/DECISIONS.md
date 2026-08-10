@@ -1170,4 +1170,37 @@ No prompt changed, so no version bump and no `PROMPT_CHANGELOG.md` entry.
 
 ---
 
-*Last updated: 2026-08-08*
+### DEC-035: An Apply Never Reports a Change It Didn't Make — Unreadable Stop Dates Fall Back to the Visit Date, or Skip Visibly
+
+**Date:** 2026-08-09
+
+**Context:** `apply_items` handled a parsed AVS "medication stop" by writing `Medication.end_date = _parse_date_string(med.date)` (`src/api/documents.py`). `_parse_date_string` returns `None` for any string outside its four known formats (`%m/%d/%Y`, `%Y-%m-%d`, `%B %d, %Y`, `%B %d %Y`) — so `"last week"`, `"6/1/26"`, or a blank/garbled OCR date all produced `None`. `None` is exactly what an active medication's `end_date` already holds, so the write was a genuine no-op while the plan still reported `action: update`, `reason: "marks this medication stopped"`, and counted it under `medications_stopped`. The user was told a medication was recorded as stopped while the profile still listed it as active. Issue #149; surfaced by #143's pre-apply diff, which rendered it as `end_date: (empty) → (empty)` instead of hiding it in a silent write.
+
+The narrow bug is one branch, but the policy question generalises to every field apply parses: what should `_build_apply_plan` do when a parsed value can't be interpreted? The de-facto answer was "write the null and report success", and that answer will be wrong the same way for the next date or numeric field added.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Fall back to the visit date when it's readable, name the inference in the plan `reason`; skip visibly when it isn't** | The medication actually ends up stopped, which is what the document asserted; the visit date is the document's own anchor, already used by the `_is_newer` guard; the preview shows a real value change rather than `(empty) → (empty)`, so the inference is reviewable before it's committed | Stores a date the document never stated — a downstream reader of `end_date` alone can't tell an inferred date from a transcribed one |
+| Always skip and flag, never infer a date | Nothing inferred is ever written to a medical record | Leaves the medication active in the profile when the document plainly says it was stopped — the profile stays wrong about something clinically load-bearing, which is the more consequential of the two errors |
+| Widen `_parse_date_string` to accept more formats | Fixes the `"6/1/26"` class of input at the source | Doesn't fix the general case (`"last week"` has no reference point), and a permissive parser that quietly guesses wrong is a worse-hidden version of the same bug. Rejected as a substitute; a narrow format addition remains available later on its own merits |
+| Leave it; treat the `(empty) → (empty)` preview row from #143 as sufficient warning | Zero change | Depends on the user reading a diff row that renders as no change at all, and the reported count still says a medication was stopped |
+
+**Decision:** A medication stop resolves its `end_date` through one helper, `_stop_end_date(date_str, visit_dt)`, which returns `(date | None, reason)`:
+
+- Parseable stop date → that date, with today's unchanged reason string.
+- Unreadable or missing stop date, visit date readable → the visit date, with a reason that names both the problem and the substitution (e.g. `marks this medication stopped — stop date "last week" couldn't be read, using the visit date 2099-12-31`).
+- Unreadable or missing stop date, visit date also unreadable → `action: skip` under the existing `medications_stopped` skip bucket, with a reason saying the stop couldn't be applied. No write, and the count no longer claims one.
+
+The rule this generalises to, for future parsed fields: **an apply never reports a change it didn't make.** Prefer a visible approximation, named as an approximation, over a silent no-op; where no honest approximation exists, skip visibly rather than writing a value indistinguishable from "unset".
+
+Deliberately **not** generalised to medication *creates*, which use the same `_parse_date_string(med.date)` for `start_date`. A null `start_date` on a new medication honestly reads as "start date unknown" — it isn't confusable with a different, wrong state the way a null `end_date` is confusable with "still active" — so creates keep today's behaviour, pinned by a test.
+
+**Reasoning:** The two error directions are not symmetric. Writing the visit date is wrong by however far the real stop date was from the visit — usually days, and the document itself is the closest anchor available. Writing nothing is wrong about whether the patient is on the medication at all, which is the fact downstream care decisions actually read. Since #143 the inference is also reviewable before it commits: the preview shows the substituted date and the reason that explains it, so the user can reject a fallback they disagree with instead of discovering it later. Both alternatives the issue itself offered (reject-and-flag, or fall back to a sensible default) were acceptable to the reporter; this takes the fallback where one exists and the rejection where one doesn't, so neither case ends in a silent no-op.
+
+**Status:** Implemented. Tests in `tests/test_documents_apply.py` cover: unreadable, malformed, empty and absent stop dates all falling back to the visit date; the preview naming the inference and showing a real `end_date` change; the no-visit-date case skipping rather than counting; and medication creates still accepting an unreadable `start_date` unchanged.
+
+---
+
+*Last updated: 2026-08-09*

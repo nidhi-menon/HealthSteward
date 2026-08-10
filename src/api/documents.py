@@ -371,6 +371,40 @@ class _PlanEntry:
 
 _SKIP_RECORD_IS_NEWER = "the existing record is newer than this visit"
 _SKIP_ALREADY_IN_DOCUMENT = "already included earlier in this document"
+_STOP_REASON = "marks this medication stopped"
+
+
+def _stop_end_date(
+    date_str: str | None, visit_dt: datetime | None
+) -> tuple[date | None, str]:
+    """Decide the `end_date` a medication stop should write, and say why.
+
+    Issue #149: `_parse_date_string` returns `None` for anything outside its
+    four formats, and `None` is exactly what an active medication's `end_date`
+    already holds — so feeding it straight through made an unreadable stop date
+    a silent no-op that still reported as applied.
+
+    The rule this encodes: never report an applied change that didn't change
+    anything (DEC-035). A stop the document clearly asserted still gets applied
+    when there's an honest date to fall back on — the visit's own date, which
+    the plan entry names as inferred — and is skipped visibly when there isn't.
+    """
+    parsed = _parse_date_string(date_str)
+    if parsed is not None:
+        return parsed, _STOP_REASON
+
+    given = (date_str or "").strip()
+    problem = (
+        f'stop date "{given}" couldn\'t be read' if given
+        else "no stop date in the document"
+    )
+    if visit_dt is None:
+        return None, (
+            f"can't mark this medication stopped — {problem}, and this "
+            f"document has no readable visit date to fall back on"
+        )
+    fallback = visit_dt.date()
+    return fallback, f"{_STOP_REASON} — {problem}, using the visit date {fallback}"
 
 
 def _display_value(value: Any) -> str | None:
@@ -623,10 +657,20 @@ async def _build_apply_plan(
                 reason="no active medication matches this name",
             ))
         elif _is_newer(visit_dt, existing_med.updated_at):
-            end_date = _parse_date_string(med.date)
+            end_date, reason = _stop_end_date(med.date, visit_dt)
+            if end_date is None:
+                # Writing `None` here would be a no-op — an active medication's
+                # `end_date` is already `None` — while still reporting the stop
+                # as applied (issue #149). Skip visibly instead.
+                plan.append(_PlanEntry(
+                    entity_type="medication", action="skip", label=med.name,
+                    entity_id=existing_med.id, reason=reason,
+                    skip_key="medications_stopped",
+                ))
+                continue
             plan.append(_PlanEntry(
                 entity_type="medication", action="update", label=existing_med.name,
-                entity_id=existing_med.id, reason="marks this medication stopped",
+                entity_id=existing_med.id, reason=reason,
                 changes=[_change("end_date", existing_med.end_date, end_date)],
                 count_key="medications_stopped", model=Medication,
                 update_values={"end_date": end_date},
