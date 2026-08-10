@@ -1926,4 +1926,68 @@ Related: issue #149, DEC-035, #46/#143 (the preview that surfaced it).
 
 ---
 
+## 60. Regenerating Visit Prep No Longer Destroys the Previous Output (#54, DEC-034)
+
+**Date:** 2026-08-08
+
+**Context:** `prepare_visit` (`src/api/visits.py:55-59`) reassigned `generated_questions`/`context_summary` on an existing `VisitPrep` in place. One click on "Regenerate Questions" — a prominent button on the prep page — permanently destroyed whatever the previous run produced, including any hand-edits made to it under issue #14. This is not a missing feature; it's silent, unrecoverable destruction of user content, which is why it was picked ahead of everything else on the backlog. Entry 56 (#46) had already deferred "the history table" as a substrate #12, #54 and #97 would each want, specifically to avoid designing it three times.
+
+**Scope: piece 2 only — the durability fix. Piece 1 (a review gate before first persistence) is left to #12.** The issue offers both and asks whether they should wait on #12. They split cleanly: piece 2 needs no product decision and nothing it writes is discarded when #12 lands (an append-only history is a prerequisite for #12's per-claim table, not a competitor to it). Piece 1 *is* a review-UX decision #12 explicitly claims, and building an interim Save/Discard step now means building a review surface twice and deleting one — the throwaway work #12's own write-up warns against. #54 stays open for piece 1.
+
+**A separate `visit_prep_versions` table, not extra rows in `visit_preps`.** `VisitPrep.appointment_id` is `unique=True`, and that constraint turns out to be load-bearing in a way the model definition doesn't advertise: it's what lets three separate modules — `visits.py`, the #110 checklist in `appointments.py`, and `profile_export.py` — treat "the prep for this appointment" as a single `scalar_one_or_none()` with no ordering or filtering. Dropping it to store history in place would change what `GET /api/visits/{id}/prep` *means* and turn each of those call sites into a latent "which row did I get?" bug. A separate table trades that diffuse correctness risk for a contained, purely additive schema change. Verified rather than assumed: the checklist and export paths both read `visit_preps` unchanged and needed no modification.
+
+**Snapshot-then-overwrite.** One helper, `_snapshot_prep_version`, called immediately before the reassignment — and deliberately *after* `agent.prepare_visit()` returns, so a generation that raises leaves the existing prep untouched and archives nothing. `version_number` is 1-based and monotonic per prep, assigned `max(existing) + 1` rather than from a count on read, so a number can't change meaning later if versions ever become individually deletable. Version 1 is the *first content displaced*, i.e. the original generation.
+
+**Three details that each prevent the history from being quietly wrong:**
+
+- **`used_fallback` is snapshotted per version.** Without it, a real generation and issue #47's hardcoded "backend unreachable" placeholder look identical in the history — misleading rather than merely incomplete. Surfaced in the UI too, as a note on the affected version.
+- **Both timestamps are kept.** `content_updated_at` (the displaced prep's `updated_at`) answers "when was this written"; `created_at` answers "when was it replaced". Keeping one would lose the other, and silently dropping a timestamp is the same class of loss this table exists to prevent.
+- **Empty content isn't archived.** A prep with neither questions nor a summary has nothing worth preserving, and a version row for it would put a "Previous versions (1)" affordance in front of the user that opens onto nothing.
+
+**Read-only history, no restore, no pruning.** `GET /api/visits/{appointment_id}/prep/versions` returns newest-first (`[]`, not 404, when there's no history — that's a normal state for a prep, not a missing resource), and `VisitPrep.tsx` gains a collapsed "Previous versions (N)" disclosure that expands to the old questions read-only. Restore would re-raise the same overwrite question one level up (does restoring clobber the current prep, or snapshot it too?), and the harm is already gone once the old content is visible and copyable. Nothing is pruned either: every regenerate keeps a row forever, which at single-user scale is a handful of small JSON blobs per appointment, and a retention rule would silently delete exactly the content this exists to protect. Both calls are the same instinct twice — every ambiguous decision here resolves toward keeping more and doing less to it.
+
+**PATCH does not create a version**, pinned by a test so the boundary is explicit. This issue is about regeneration destroying content silently, not about undoing the patient's own deliberate edits; edit-undo would be its own decision. Note the snapshot still captures the *edited* state when a regenerate displaces it — which is the content that actually had value, and the exact scenario the issue describes.
+
+**One addition beyond the issue: version history is included in profile export**, `EXPORT_FORMAT_VERSION` 1 → 2. Same reasoning as the table itself, and then some — this exists because overwritten prep content was worth not destroying, so an export that dropped it would re-introduce the loss at backup time. The bump is for a purely additive key, made anyway because only the version number distinguishes "no history was kept" from "this export predates history being kept".
+
+**No backfill.** Generations overwritten before this table existed are gone. Synthesising a "version 1" row from current content would fabricate a history that never happened, which is worse than an empty one.
+
+**Tests:** 10 new in `tests/test_visit_prep.py` — first generation archives nothing; regenerate archives exactly the displaced content while the live prep holds the new; three generations leave two versions numbered in displacement order and returned newest-first; a hand-edit survives a regenerate *in the history* (the issue's concrete harm scenario); PATCH creates no version; `used_fallback` snapshots independently of the current row (asserted against a genuinely failing backend, so the archived version reads `false` while the live prep reads `true`); `content_updated_at` matches the prep's own pre-regenerate `updated_at`; 404 for a missing appointment vs. `[]` for empty history; and versions scoped to their own appointment, since a broken join would leak one appointment's prior questions onto another's page. Plus 1 in `tests/test_profile_export.py` for the export, and 5 frontend tests in `frontend/src/pages/VisitPrep.versions.test.tsx` covering the disclosure — hidden with no history, collapsed by default, labelled per version, no restore affordance, and the fallback marker. Backend: 340 passed, 25 skipped (up from 329). Frontend: 38 passed (up from 33); `tsc -b` and `vite build` green.
+
+**Migration checked by hand, not just generated:** applied to a fresh DB, downgraded, and re-applied; confirmed the downgrade leaves `visit_preps` intact. Diffed the migration's emitted DDL against the ORM metadata's — identical. A composite `(visit_prep_id, version_number)` index was written and then removed for that reason: it bought nothing at this scale and existed only in the migration, which is exactly the drift that makes a future autogenerate diff noisy.
+
+**Files changed:** `src/data/models.py`, `src/api/visits.py`, `src/models/schemas.py`, `src/api/profile_export.py`, `alembic/versions/d3f81a6c204b_add_visit_prep_versions.py`, `tests/test_visit_prep.py`, `tests/test_profile_export.py`, `frontend/src/pages/VisitPrep.tsx`, `frontend/src/pages/VisitPrep.versions.test.tsx`, `frontend/src/api/client.ts`, `frontend/src/types/index.ts`, `docs/notes/DECISIONS.md` (DEC-034), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #54 (piece 1 still open), DEC-034, issue #12, issue #14, issue #47, issue #97, issue #110, entry 56 (#46).
+
+---
+
+## 59. Eval Question-Count Floor Is Now Scope-Aware (#75, DEC-033)
+
+**Date:** 2026-08-08
+
+**Context:** `cross_specialty_scope` had been failing format validity since the v3 prompt work — 6 questions against a floor of 8 — and #75 asked which failure mode it was before changing anything: a data-sparse fixture the DEC-018 scaling should already cover, or the model under-delivering.
+
+**It's the first, and the entity count was hiding it.** `expected_min_questions()` scaled by `len(known_entities(case)) * 2`, and `known_entities()` has no scope filter. `cross_specialty_scope` counts 4 entities — T2DM, Metformin, Mild Plaque Psoriasis, Clobetasol Cream — so `4 * 2 = 8` handed it the *full* flat floor with no scale-down. Two of those four are the dermatology material the prompt explicitly forbids raising at an endocrinology visit, which is the only reason the fixture exists. In scope, the case is as sparse as `cold_start`; it just didn't look sparse. So the model was being scored down for correctly declining to pad — the same tension with the anti-hallucination rules DEC-018 already recorded.
+
+**The fix splits one function into two rather than narrowing it.** `known_entities()` has two callers with opposite needs, and this is the substance of the change. `score_groundedness()` asks *did the model invent this?* — it needs every real entity, including off-scope ones. `expected_min_questions()` asks *how much was there legitimately to ask about?* — it needs only in-scope ones. Narrowing the shared function would make a question about Clobetasol score as ungrounded (a hallucination) when it's a real entry in the patient's own record that `score_scope()` already flags, correctly, as a scope violation — one failure counted twice under two names, with the scope checker's signal destroyed in the process. So `known_entities()` is untouched and a new `in_scope_entities()` feeds the floor. Both now carry docstrings explaining why the other exists, because they look interchangeable and are not.
+
+**Scope is read the way each entity type already encodes it.** Medications carry `prescribing_doctor_key`, so their specialty resolves and is compared to the target doctor's through the same `are_specialties_related()` the runtime scope logic uses — no second notion of relatedness. A medication with no prescriber, or a prescriber with no specialty, counts as **in** scope: absence of a scope signal isn't evidence of being off scope, and defaulting the other way would quietly deflate the floor for any fixture that just didn't tag one. Conditions have no doctor link and nothing structural marking them as one specialty's, so `ConditionFixture` gained an explicit `in_scope: bool = True`, set `False` only on the psoriasis entry. Lab orders are always counted.
+
+**Why the fixture declares condition scope instead of the scorer deriving it from `icd_10`:** the alternative was mapping ICD-10 prefixes through `ICD10_SPECIALTY_MAP`, which is the hand-authored surface #72/#74 are mid-consolidation on. Coupling the harness's floor to it would mean eval thresholds silently move when unrelated consolidation work lands — the one property a measuring stick must not have. The counter-objection is real and worth naming: this is the fixture grading itself, and a mislabelled fixture would lower its own bar. It's bounded (it only ever moves a floor, never a verdict) and the pinned floors below make any such change show up in a diff. Full tradeoff in DEC-033.
+
+**Resulting floors, now pinned:** `cross_specialty_scope` 8→4, `groundedness_labs_vitals` 6 (unchanged — it was already below the flat 8 before this change), `cold_start` 3, `tool_call_necessity_dosing` 8, `retrieval_redundancy` 4. `EXPECTED_FLOORS` in the test module pins each one with a comment on where the number comes from, plus a test asserting every fixture case appears in that map so a newly added case can't skip the check by omission.
+
+**Worth saying out loud:** a floor of 4 means format validity is close to vacuous for `cross_specialty_scope` — it has largely stopped testing question *volume* there. Defensible, since the signal that matters for that fixture is the scope checker rather than the count, but it's a genuine reduction and better recorded than discovered. And with two cases now scaling below the documented flat 8, the exceptions are becoming the pattern; whether 8 is still the right default is left open rather than answered here.
+
+**Tests:** 10 new in `tests/test_eval_harness.py` — the five parametrised pinned floors, the every-case-is-pinned guard, the off-scope exclusion, a test that `known_entities()` stays scope-blind (asserting the same Clobetasol question scores grounded *and* as a scope violation, which is the invariant that would break if someone later "simplifies" the two functions back into one), the original 6-questions-now-passes case with a 3-questions-still-fails counter-check so the floor isn't vacuous in both directions, and the untagged-prescriber default. Suite: 339 passed, 25 skipped (up from 329). No frontend changes.
+
+**No prompt change**, so no version bump and no `PROMPT_CHANGELOG.md` entry — this is a scorer-threshold change, which is why it needed a DEC instead.
+
+**Files changed:** `eval/scorers.py`, `eval/fixtures.py`, `tests/test_eval_harness.py`, `docs/notes/DECISIONS.md` (DEC-033), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #75, DEC-033, DEC-018, PROMPT_CHANGELOG.md v3 entry, issue #72, issue #74.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

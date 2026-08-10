@@ -50,6 +50,17 @@ export default function VisitPrep() {
     retry: false,
   });
 
+  // Issue #54: prior generations, kept because "Regenerate Questions" used to
+  // destroy the previous output outright. Read-only on purpose — a restore
+  // action would re-raise the same overwrite question one level up, and being
+  // able to see and copy the old questions already removes the data loss.
+  const { data: prepVersions } = useQuery({
+    queryKey: ['visitPrepVersions', appointmentId],
+    queryFn: () => visitPrep.versions(appointmentId!),
+    enabled: !!appointmentId && !!prep,
+  });
+  const [showVersions, setShowVersions] = useState(false);
+
   // Initialize visit notes from appointment
   useEffect(() => {
     if (appointment?.visit_notes) {
@@ -63,6 +74,9 @@ export default function VisitPrep() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['visitPrep', appointmentId] });
       queryClient.invalidateQueries({ queryKey: ['upcomingWithoutPrep', profileId] });
+      // Regenerating is exactly what adds a version, so the history list is
+      // stale the moment this succeeds.
+      queryClient.invalidateQueries({ queryKey: ['visitPrepVersions', appointmentId] });
     },
   });
 
@@ -374,6 +388,85 @@ export default function VisitPrep() {
             <p className="text-sm text-red-600 text-center">
               Failed to save your changes. Please try again.
             </p>
+          )}
+
+          {/* Previous versions (issue #54). Hidden entirely when there is no
+              history, so a prep that has never been regenerated looks exactly
+              as it did before. Read-only: no restore, no diff. */}
+          {prepVersions && prepVersions.length > 0 && (
+            <div className="border-t border-gray-200 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowVersions((v) => !v)}
+                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                aria-expanded={showVersions}
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform ${showVersions ? 'rotate-90' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                Previous versions ({prepVersions.length})
+              </button>
+
+              {showVersions && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm text-gray-600">
+                    Earlier questions for this visit, kept from before each time you regenerated.
+                    They're shown for reference only — copy anything you still want into the
+                    current list above.
+                  </p>
+                  {prepVersions.map((version) => (
+                    <Card key={version.id}>
+                      <CardHeader className="bg-gray-50">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h4 className="font-medium text-gray-900 text-sm">
+                            Version {version.version_number}
+                          </h4>
+                          <span className="text-xs text-gray-400">
+                            {version.content_updated_at
+                              ? `written ${new Date(version.content_updated_at).toLocaleString()}`
+                              : `replaced ${new Date(version.created_at).toLocaleString()}`}
+                          </span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {version.used_fallback && (
+                          <p className="text-xs text-amber-700">
+                            These were generic default questions — the AI backend was
+                            unreachable when this version was generated.
+                          </p>
+                        )}
+                        {version.context_summary && (
+                          <p className="text-sm text-gray-600 italic">{version.context_summary}</p>
+                        )}
+                        {version.generated_questions &&
+                          Object.entries(version.generated_questions).map(([category, questions]) => (
+                            <div key={category}>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                {category}
+                              </p>
+                              <ul className="mt-1 space-y-1">
+                                {questions.map((question, idx) => (
+                                  <li key={idx} className="flex gap-2 text-sm text-gray-700">
+                                    <span aria-hidden="true" className="text-gray-400">
+                                      •
+                                    </span>
+                                    <span>{question}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

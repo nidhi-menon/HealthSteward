@@ -203,6 +203,61 @@ async def test_export_includes_a_hand_edited_visit_prep(
     assert prep["appointment_id"] == appointment_id
     assert prep["generated_questions"] == {"Medication Review": ["A question I wrote myself"]}
     assert prep["context_summary"] == "My own summary"
+    # No regenerations happened, so the history key is present but empty —
+    # present, because a consumer shouldn't have to handle a missing key.
+    assert export["visit_prep_versions"] == []
+
+
+@pytest.mark.asyncio
+async def test_export_includes_prior_visit_prep_versions(
+    client: AsyncClient, db_session, sample_profile_data, sample_doctor_data,
+    sample_appointment_data,
+):
+    """Version history is exported alongside the live prep (issue #54). This
+    table exists precisely because overwritten prep content was worth not
+    destroying, so an export that dropped it would re-introduce the loss at
+    backup time."""
+    from src.data.models import VisitPrep, VisitPrepVersion
+
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    doctor_id = (
+        await client.post(f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data)
+    ).json()["id"]
+    appointment_id = (
+        await client.post(
+            f"/api/profiles/{profile_id}/appointments/",
+            json={**sample_appointment_data, "doctor_id": doctor_id},
+        )
+    ).json()["id"]
+
+    prep = VisitPrep(
+        appointment_id=appointment_id,
+        generated_questions={"Current": ["Latest question"]},
+        context_summary="Latest summary",
+    )
+    db_session.add(prep)
+    await db_session.flush()
+    db_session.add(
+        VisitPrepVersion(
+            visit_prep_id=prep.id,
+            version_number=1,
+            generated_questions={"Older": ["A question that got regenerated away"]},
+            context_summary="Older summary",
+        )
+    )
+    await db_session.commit()
+
+    export = (await client.get(f"/api/profiles/{profile_id}/export")).json()
+
+    assert len(export["visit_prep_versions"]) == 1
+    version = export["visit_prep_versions"][0]
+    assert version["visit_prep_id"] == prep.id
+    assert version["version_number"] == 1
+    assert version["generated_questions"] == {
+        "Older": ["A question that got regenerated away"]
+    }
+    # The live prep is still exported separately, unchanged.
+    assert export["visit_preps"][0]["generated_questions"] == {"Current": ["Latest question"]}
 
 
 @pytest.mark.asyncio
