@@ -765,6 +765,14 @@ Before finalizing your response, count your questions. You must have between 8 a
         lines.append(f"- Date: {appointment.scheduled_date}")
         if appointment.purpose:
             lines.append(f"- Purpose: {appointment.purpose}")
+        # Same label the past-visits section uses (issue #43) — prep_notes was
+        # reaching the model for every *past* visit but not for the one being
+        # prepared, so the field the patient fills in to steer this generation
+        # was the one thing the generation couldn't see. Already anonymized by
+        # anonymize_appointment; re-anonymizing here would double-count its
+        # redaction events (issue #16's per-request aggregation).
+        if appointment.prep_notes:
+            lines.append(f"- Planned to discuss: {appointment.prep_notes}")
         if appointment.doctor.notes:
             lines.append(f"- Provider Notes: {appointment.doctor.notes}")
 
