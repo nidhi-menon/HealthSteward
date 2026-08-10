@@ -146,6 +146,20 @@ export interface VisitPrepUpdate {
   context_summary?: string;
 }
 
+// Issue #54: a prior generation, archived just before regeneration
+// overwrote it. `content_updated_at` is when that content was last written;
+// `created_at` is when it was archived.
+export interface VisitPrepVersion {
+  id: string;
+  visit_prep_id: string;
+  version_number: number;
+  generated_questions: Record<string, string[]> | null;
+  context_summary: string | null;
+  used_fallback: boolean;
+  content_updated_at: string | null;
+  created_at: string;
+}
+
 // Scanned File (from data/avs/ directory)
 export interface ScannedFile {
   filename: string;
