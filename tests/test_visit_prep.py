@@ -176,6 +176,136 @@ async def test_prepare_visit_includes_doctor_notes_in_context(
 
 
 @pytest.mark.asyncio
+async def test_prepare_visit_includes_upcoming_prep_notes_in_context(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """Issue #43: `Appointment.prep_notes` reached the model for every *past*
+    visit ("Planned to discuss:", see the past-visits section) but was dropped
+    from the "## Upcoming Appointment" block — so the field the patient fills
+    in specifically to steer this generation was the one thing the generation
+    couldn't see.
+
+    Also pins that the value arrives *anonymized* and costs exactly one
+    redaction event: the line reads the already-anonymized
+    `AnonymizedAppointment`, so re-anonymizing here would double-count against
+    issue #16's per-request aggregation.
+    """
+    from sqlalchemy import select
+
+    from src.config import get_settings
+    from src.data.models import ConversationLog
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {
+        **sample_appointment_data,
+        "doctor_id": doctor_id,
+        "prep_notes": "Ask about the fatigue, reachable at 555-123-4567",
+    }
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(
+        '{"questions": {"General": ["Test question"]}, "context_summary": "Test summary"}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    context_message = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+
+    # The line is present, under the upcoming-appointment heading rather than
+    # anywhere else in the context.
+    upcoming_block = context_message.split("## Upcoming Appointment", 1)[1].split("\n##", 1)[0]
+    assert "Ask about the fatigue" in upcoming_block
+    assert "- Planned to discuss:" in upcoming_block
+
+    # Anonymized, not the raw field: the phone number never reaches the model.
+    assert "555-123-4567" not in context_message
+
+    # Exactly one redaction event for this field — not two.
+    result = await db_session.execute(
+        select(ConversationLog)
+        .where(ConversationLog.role == "assistant")
+        .order_by(ConversationLog.timestamp.desc())
+    )
+    events = result.scalars().first().extra_data.get("redaction_events") or []
+    prep_note_events = [
+        e for e in events
+        if e.get("field_name") == f"appointment:{appointment_id}:prep_notes"
+    ]
+    assert len(prep_note_events) == 1
+    assert prep_note_events[0]["entity_type"] == "phone"
+
+
+@pytest.mark.asyncio
+async def test_prepare_visit_omits_prep_notes_line_when_unset(
+    client: AsyncClient,
+    monkeypatch,
+    sample_profile_data,
+    sample_doctor_data,
+    sample_appointment_data,
+):
+    """The counterpart to the test above: no empty "Planned to discuss:" line
+    when the patient left prep notes blank. These fixtures create no past
+    appointments, so the label must not appear anywhere in the context.
+    """
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_provider", "claude")
+
+    profile_response = await client.post("/api/profiles/", json=sample_profile_data)
+    profile_id = profile_response.json()["id"]
+
+    doctor_response = await client.post(
+        f"/api/profiles/{profile_id}/doctors/", json=sample_doctor_data
+    )
+    doctor_id = doctor_response.json()["id"]
+
+    appointment_data = {**sample_appointment_data, "doctor_id": doctor_id}
+    appointment_data.pop("prep_notes", None)
+    appointment_response = await client.post(
+        f"/api/profiles/{profile_id}/appointments/", json=appointment_data
+    )
+    appointment_id = appointment_response.json()["id"]
+
+    mock_message = _mock_text_response(
+        '{"questions": {"General": ["Test question"]}, "context_summary": "Test summary"}'
+    )
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic_backend:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic_backend.return_value = mock_client
+
+        response = await client.post(f"/api/visits/{appointment_id}/prepare")
+
+    assert response.status_code == 200
+    context_message = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "Planned to discuss" not in context_message
+
+
+@pytest.mark.asyncio
 async def test_get_visit_prep(
     client: AsyncClient,
     monkeypatch,
