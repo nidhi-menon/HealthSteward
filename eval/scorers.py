@@ -31,8 +31,8 @@ def _all_questions(result: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def expected_min_questions(case: EvalCase) -> int:
-    """Scale the expected minimum question count with how much real data a
-    case actually has, rather than enforcing a fixed 8 for every case.
+    """Scale the expected minimum question count with how much *in-scope* data
+    a case actually has, rather than enforcing a fixed 8 for every case.
 
     Found via #29's first real runs: cold_start (one condition, nothing
     else) failing the fixed 8-question floor was in tension with the
@@ -42,8 +42,16 @@ def expected_min_questions(case: EvalCase) -> int:
     entity, floor of 3, capped at the prompt's own stated 8, is a rough
     but principled scale-down for sparse cases; richer cases still expect
     the full 8.
+
+    Counts in_scope_entities, not known_entities (issue #75, DEC-033):
+    cross_specialty_scope has 4 entities but half of them are the
+    dermatology material the prompt explicitly forbids discussing at an
+    endocrinology visit, so counting all 4 produced a full floor of 8 for
+    a case with only 2 things it's actually allowed to ask about — the
+    same data-sparsity as cold_start, hidden behind a healthy-looking
+    entity count.
     """
-    return min(8, max(3, len(known_entities(case)) * 2))
+    return min(8, max(3, len(in_scope_entities(case)) * 2))
 
 
 def score_format(result: dict[str, Any], min_questions: int = 8) -> dict[str, Any]:
@@ -68,9 +76,66 @@ def score_format(result: dict[str, Any], min_questions: int = 8) -> dict[str, An
 
 
 def known_entities(case: EvalCase) -> set[str]:
-    """Entity names (lowercased) that a grounded question is allowed to reference."""
+    """Entity names (lowercased) that a grounded question is allowed to reference.
+
+    Deliberately *not* scope-aware, and deliberately not narrowed to match
+    in_scope_entities (issue #75): score_groundedness asks "did the model
+    invent this?", which is a different question from "should the model
+    have brought this up?". Dropping the off-scope dermatology medication
+    here would make a question about Clobetasol read as ungrounded — a
+    hallucination — when it's a real entity from the patient's own record
+    that score_scope already catches, correctly, as a scope violation.
+    Conflating the two would double-count one failure and destroy the
+    scope checker's own signal.
+    """
     entities = {c.name.lower() for c in case.conditions}
     entities |= {m.name.lower() for m in case.medications}
+    entities |= {lab.test_name.lower() for lab in case.lab_orders}
+    return entities
+
+
+def in_scope_entities(case: EvalCase) -> set[str]:
+    """Entity names (lowercased) the model is legitimately *expected* to ask
+    about at this case's target visit — i.e. known_entities minus anything
+    the prompt's cross-specialty rules forbid discussing.
+
+    Used only for the question-count floor (expected_min_questions), never
+    for groundedness. Scope is read the same way each entity type already
+    encodes it:
+
+    - Medications carry prescribing_doctor_key, so their specialty is
+      resolvable and compared to the target doctor's via the same
+      are_specialties_related() the runtime scope logic uses. A medication
+      with no prescriber, or one whose prescriber has no specialty, counts
+      as in scope — absence of a scope signal isn't evidence of being off
+      scope, and defaulting the other way would silently deflate the floor.
+    - Conditions have no doctor link and nothing structural marks them as
+      one specialty's, so the fixture states its own intent via
+      ConditionFixture.in_scope rather than having this function guess
+      from icd_10. Deriving it from ICD10_SPECIALTY_MAP was the
+      alternative, and was rejected: that map is the hand-authored surface
+      #72/#74 are mid-consolidation on, and coupling the eval harness's
+      floor to it would inherit that debt. See DEC-033.
+    - Lab orders are always counted: they're ordered for this profile and
+      nothing in the fixtures ties one to a non-target specialty.
+    """
+    doctors_by_key = {d.key: d for d in case.doctors}
+    target_doctor = doctors_by_key.get(case.target_doctor_key)
+    target_specialty = target_doctor.specialty if target_doctor else None
+
+    entities = {c.name.lower() for c in case.conditions if c.in_scope}
+
+    for med in case.medications:
+        prescriber = doctors_by_key.get(med.prescribing_doctor_key) if med.prescribing_doctor_key else None
+        prescriber_specialty = prescriber.specialty if prescriber else None
+        if (
+            target_specialty
+            and prescriber_specialty
+            and not are_specialties_related(target_specialty, prescriber_specialty)
+        ):
+            continue
+        entities.add(med.name.lower())
+
     entities |= {lab.test_name.lower() for lab in case.lab_orders}
     return entities
 
