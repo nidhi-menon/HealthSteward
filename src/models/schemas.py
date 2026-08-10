@@ -298,6 +298,28 @@ class VisitPrepUpdate(BaseModel):
     context_summary: Optional[str] = None
 
 
+class VisitPrepVersionResponse(BaseModel):
+    """A prior generation of a visit prep, archived before it was overwritten (issue #54).
+
+    `content_updated_at` is when this content was last written — the prep's
+    `updated_at` at the moment it was displaced — while `created_at` is when
+    the snapshot itself was taken. They're close together (the snapshot
+    happens during the regenerate request that displaces it), and the gap
+    between them is how long this version was the live one.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    visit_prep_id: str
+    version_number: int
+    generated_questions: Optional[dict] = None
+    context_summary: Optional[str] = None
+    used_fallback: bool = False
+    content_updated_at: Optional[datetime] = None
+    created_at: datetime
+
+
 # ============================================================================
 # Conversation Log Schemas
 # ============================================================================

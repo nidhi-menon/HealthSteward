@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from eval import retrieval_stage1, scorers
-from eval.fixtures import GENERATION_CASES, DoctorFixture, EvalCase
+from eval.fixtures import GENERATION_CASES, DoctorFixture, EvalCase, MedicationFixture
 from eval.run import run_generation_case
 from src.data.models import Base
 
@@ -70,6 +70,91 @@ def test_expected_min_questions_scales_down_for_sparse_cases():
 
     assert scorers.expected_min_questions(cold_start) < 8
     assert scorers.expected_min_questions(richer) == 8
+
+
+# Pins the floor each fixture case is actually held to, so the numbers are
+# regression-covered rather than re-derived by hand every time someone
+# wonders why a case passed or failed format validity (issue #75).
+EXPECTED_FLOORS = {
+    "cross_specialty_scope": 4,   # 2 in-scope entities; 2 more are off-scope dermatology
+    "groundedness_labs_vitals": 6,  # 3 in-scope entities, all countable
+    "cold_start": 3,              # 1 entity, so the max(3, ...) floor binds
+    "tool_call_necessity_dosing": 8,  # 4 in-scope entities, capped at the prompt's own 8
+    "retrieval_redundancy": 4,    # 2 in-scope entities
+}
+
+
+@pytest.mark.parametrize("case_id,expected_floor", sorted(EXPECTED_FLOORS.items()))
+def test_expected_min_questions_per_case(case_id, expected_floor):
+    case = next(c for c in GENERATION_CASES if c.id == case_id)
+    assert scorers.expected_min_questions(case) == expected_floor
+
+
+def test_every_fixture_case_has_a_pinned_floor():
+    """A new case added without a pinned floor would silently skip the check
+    above, so make the omission itself a failure."""
+    assert {c.id for c in GENERATION_CASES} == set(EXPECTED_FLOORS)
+
+
+def test_in_scope_entities_excludes_off_scope_medication_and_condition():
+    """The whole point of #75: cross_specialty_scope looks entity-rich (4)
+    but half of it is material the v3 prompt forbids discussing, so the
+    floor was demanding 8 questions from 2 questions' worth of input."""
+    case = next(c for c in GENERATION_CASES if c.id == "cross_specialty_scope")
+
+    assert len(scorers.known_entities(case)) == 4
+    assert scorers.in_scope_entities(case) == {"type 2 diabetes mellitus", "metformin"}
+    assert "clobetasol cream" not in scorers.in_scope_entities(case)
+    assert "mild plaque psoriasis" not in scorers.in_scope_entities(case)
+
+
+def test_known_entities_stays_scope_blind_for_groundedness():
+    """known_entities must keep counting off-scope entities, or a question
+    about the real-but-off-scope Clobetasol would score as a hallucination
+    instead of a scope violation — see the docstring on known_entities."""
+    case = next(c for c in GENERATION_CASES if c.id == "cross_specialty_scope")
+    entities = scorers.known_entities(case)
+
+    assert "clobetasol cream" in entities
+    assert "mild plaque psoriasis" in entities
+
+    result = {"questions": {"Medication Review": ["Should I ask about my Clobetasol Cream too?"]}}
+    assert scorers.score_groundedness(result, entities)["grounded_rate"] == 1.0
+    assert scorers.score_scope(result, {"clobetasol cream"})["violation_count"] == 1
+
+
+def test_cross_specialty_scope_six_questions_now_passes_format_validity():
+    """The observed failure this issue was filed for: the model produced 6
+    questions against a flat floor of 8. With a scope-aware floor of 4 the
+    same output passes, and 3 still fails, so the check isn't vacuous."""
+    case = next(c for c in GENERATION_CASES if c.id == "cross_specialty_scope")
+    floor = scorers.expected_min_questions(case)
+
+    six = {"questions": {"Condition Management": [f"q{i}" for i in range(6)]}}
+    three = {"questions": {"Condition Management": [f"q{i}" for i in range(3)]}}
+
+    assert scorers.score_format(six, min_questions=floor)["valid"] is True
+    assert scorers.score_format(three, min_questions=floor)["valid"] is False
+
+
+def test_medication_with_unknown_prescriber_specialty_counts_as_in_scope():
+    """Absence of a scope signal isn't evidence of being off scope —
+    defaulting the other way would silently deflate the floor for any
+    fixture that just didn't bother tagging a prescriber."""
+    case = EvalCase(
+        id="untagged_prescriber", description="", profile_name="x",
+        doctors=[
+            DoctorFixture(key="t", name="Dr. X", specialty="Endocrinology"),
+            DoctorFixture(key="u", name="Dr. Y"),  # no specialty
+        ],
+        target_doctor_key="t",
+        appointment_purpose="p", appointment_scheduled_date="2026-01-01T10:00:00",
+        medications=[
+            MedicationFixture(name="Untagged Med", prescribing_doctor_key="u"),
+            MedicationFixture(name="No Prescriber Med"),
+        ],
+    )
+    assert scorers.in_scope_entities(case) == {"untagged med", "no prescriber med"}
 
 
 def test_score_format_respects_custom_min_questions():

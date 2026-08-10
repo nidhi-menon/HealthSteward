@@ -37,6 +37,7 @@ from src.data.models import (
     Referral,
     Vitals,
     VisitPrep,
+    VisitPrepVersion,
 )
 
 router = APIRouter(prefix="/api/profiles", tags=["Health Profiles"])
@@ -45,7 +46,13 @@ router = APIRouter(prefix="/api/profiles", tags=["Health Profiles"])
 # know about. Present from v1 so a future importer never has to guess which
 # shape it's looking at — the one thing that is genuinely expensive to add
 # retroactively, since files already on disk won't have it.
-EXPORT_FORMAT_VERSION = 1
+#
+# v2 (issue #54): added the `visit_prep_versions` key. Additive — a v1 reader
+# would ignore it — but bumped anyway, because the difference between a v1
+# and a v2 file is whether absent history means "none was kept" or "this
+# export predates history being kept", and an importer can only tell those
+# apart from the version number.
+EXPORT_FORMAT_VERSION = 2
 
 # Every profile-scoped table, exported in full — including primary keys and
 # foreign keys, since the relationships between records (which appointment was
@@ -124,9 +131,28 @@ async def _build_export_document(
         prep_result = await db.execute(
             select(VisitPrep).where(VisitPrep.appointment_id.in_(appointment_ids))
         )
-        document["visit_preps"] = [_serialize(row) for row in prep_result.scalars().all()]
+        preps = list(prep_result.scalars().all())
+        document["visit_preps"] = [_serialize(row) for row in preps]
+
+        # Prior generations too (issue #54). Same reasoning as the preps
+        # themselves, and then some: this table exists specifically because
+        # overwritten prep content was worth not destroying, so an export
+        # that dropped it would re-introduce the loss at export time.
+        prep_ids = [prep.id for prep in preps]
+        if prep_ids:
+            version_result = await db.execute(
+                select(VisitPrepVersion)
+                .where(VisitPrepVersion.visit_prep_id.in_(prep_ids))
+                .order_by(VisitPrepVersion.visit_prep_id, VisitPrepVersion.version_number)
+            )
+            document["visit_prep_versions"] = [
+                _serialize(row) for row in version_result.scalars().all()
+            ]
+        else:
+            document["visit_prep_versions"] = []
     else:
         document["visit_preps"] = []
+        document["visit_prep_versions"] = []
 
     return document
 
