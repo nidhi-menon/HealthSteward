@@ -1,6 +1,6 @@
 # HealthSteward — Technical Design Document
 
-**Snapshot as of:** DEC-018 · 2026-07-19
+**Snapshot as of:** DEC-036 · 2026-08-19
 
 This is a point-in-time architecture snapshot, not a living doc — it reflects the system as understood at the DEC entry above and is re-written only when a subsequent DEC represents a genuine architectural shift (new/removed subsystem, changed trust boundary, deprecated core pattern), not on every change. See `CLAUDE.md` for the re-snapshot rule. For decision-by-decision detail, see `docs/notes/DECISIONS.md`; for narrative build history, see `docs/notes/DEVELOPMENT_LOG.md`.
 
@@ -22,6 +22,7 @@ Full motivation: see README "Motivation" section (kept there since it's the prim
 - Generate genuinely useful, specialty-relevant visit-prep questions from the patient's own data
 - Keep health data local by default; anonymize anything that must leave the machine
 - Turn parsed AVS data into closed-loop action (follow-ups booked, labs done, referrals scheduled), not just storage
+- Accept structured data from other sources the patient already has (FHIR export bundles), not just AVS PDFs, without silently overwriting conflicting records
 - Degrade gracefully — a failing LLM call or unreliable tool-use backend should never block the user from getting *something* useful
 
 **Explicit non-goals (stated once here rather than left implicit):**
@@ -35,8 +36,9 @@ Full motivation: see README "Motivation" section (kept there since it's the prim
 
 ```mermaid
 flowchart TD
-    PDF[AVS PDF<br/>data/avs/] --> OllamaParse[Ollama<br/>local, qwen2.5:7b]
+    PDF[AVS PDF<br/>data/avs/&lt;profile_id&gt;/] --> OllamaParse[Ollama<br/>local, qwen2.5:7b]
     OllamaParse -->|extracted items| Review[Review & Confirm]
+    FHIR[FHIR Bundle<br/>file upload] -->|deterministic parse,<br/>fuzzy-dupe flag| Review
     Review --> DB[(SQLite)]
 
     DB -->|raw past visits| Select[Context Selection]
@@ -65,11 +67,15 @@ Full component-level detail: `docs/notes/IMPLEMENTATION.md`.
 
 ## 4. Data & Privacy
 
-**Data sources:** `src/data/models.py` — `HealthProfile`, `Condition`, `Medication`, `Doctor`, `Appointment`, `Document`, `Vitals`, `LabOrder`, `Referral`, `FollowUp`. All primary keys are UUIDs, not sequential integers, specifically to avoid inferring record counts (DEC-004).
+**Data sources:** `src/data/models.py` — `HealthProfile`, `Condition`, `Medication`, `Doctor`, `Appointment`, `Document`, `Vitals`, `LabOrder`, `Referral`, `FollowUp`. All primary keys are UUIDs, not sequential integers, specifically to avoid inferring record counts (DEC-004). AVS source PDFs live under `data/avs/<profile_id>/` (DEC-030), partitioned per profile so cross-profile leakage is structurally impossible rather than merely filtered on the current screen; unassignable files land in `_unassigned/` rather than a silent guess. As of DEC-031, structured records can also arrive via one-time FHIR Bundle file upload (two resource types at launch), deterministically parsed with a fuzzy name-match flag against existing `Condition`/`Medication` rows surfaced in the preview UI — nothing is auto-merged, and full reconciliation across sources (issue #97) is explicitly deferred.
 
-**Labelling / ground truth:** N/A — nothing is trained. "Labels" in this system are user-confirmed extractions: AVS-parsed items are always presented for review before being written to the profile (DEC-010), never auto-applied.
+**Labelling / ground truth:** N/A — nothing is trained. "Labels" in this system are user-confirmed extractions: AVS-parsed and FHIR-imported items are always presented for review before being written to the profile (DEC-010, DEC-031), never auto-applied.
 
-**PII boundary (DEC-006, hard constraint — see `CONTRIBUTING.md`):** structured fields get deterministic replacement (name → "Patient", DOB → age), free text goes through regex + spaCy NER. Documented as best-effort on free text, not a guarantee — genuinely novel bypasses are a `SECURITY.md`-reportable finding, not a bug ticket.
+**Deletion:** profiles use soft-delete with a 30-day lazy-expiry cleanup, not a scheduled purge job (DEC-027) — every profile-scoped route (including export, per the #123 amendment) resolves through `get_live_profile_or_404` so a deleted profile is uniformly unreachable. AVS source files are not deleted at soft-delete time; deletion is deferred to purge time so a restore within the 30-day window doesn't come back missing its originals (DEC-030).
+
+**Visit-prep history:** each `prepare_visit()` run is appended to a separate, read-only, unpruned history table rather than overwriting the profile's current prep (DEC-034) — regenerating never destroys a prior run.
+
+**PII boundary (DEC-006, hard constraint — see `CONTRIBUTING.md`):** structured fields get deterministic replacement (name → "Patient", DOB → age); free text goes through regex + spaCy NER and, as of DEC-036, scoped per-entity redaction tokens rather than a flat category label — the same doctor mentioned twice in one field maps to the same token, distinct entities get distinct tokens, and tokens are guarded on output (never re-hydrated back to the real value). Documented as best-effort on free text, not a guarantee — genuinely novel bypasses are a `SECURITY.md`-reportable finding, not a bug ticket. Every redaction event (type + span + stable hashed id, never the raw value) is logged per visit-prep request for auditability (DEC-029).
 
 **Local-only enforcement:** `src/parsers/agent/ollama_chat.py` has a hard localhost-only safety check — PDF parsing cannot silently start talking to an external host even if misconfigured.
 
@@ -108,7 +114,7 @@ Results are diffed against the prior run (`eval/results/`, gitignored) rather th
 
 ## 9. Alternatives Considered
 
-Full detail lives in `docs/notes/DECISIONS.md` (DEC-001 through DEC-018) — this section is a pointer, not a duplicate. Headline calls: Claude native tool use over the Agent SDK or LangGraph (DEC-009 — no new deps, framework overhead unwarranted for a single agent); SQLite over Postgres for Phase 1 (DEC-003); UUID over integer primary keys (DEC-004); local-only Ollama for PDF parsing over any cloud OCR/vision option (DEC-005/DEC-010); Ollama flipped to the default agentic backend over keeping Claude as default (DEC-016); deterministic-only eval harness v1 over building the full judge-dependent plan in one pass (DEC-018).
+Full detail lives in `docs/notes/DECISIONS.md` (DEC-001 through DEC-036) — this section is a pointer, not a duplicate. Headline calls: Claude native tool use over the Agent SDK or LangGraph (DEC-009 — no new deps, framework overhead unwarranted for a single agent); SQLite over Postgres for Phase 1 (DEC-003); UUID over integer primary keys (DEC-004); local-only Ollama for PDF parsing over any cloud OCR/vision option (DEC-005/DEC-010); Ollama flipped to the default agentic backend over keeping Claude as default (DEC-016); deterministic-only eval harness v1 over building the full judge-dependent plan in one pass (DEC-018); soft-delete with lazy expiry over a scheduled purge job (DEC-027); FHIR import scoped to file-upload, two resource types, deferred reconciliation rather than a full ingestion/reconciliation system in one pass (DEC-031); scoped per-entity redaction tokens, guarded not re-hydrated, over the original flat-category free-text redaction (DEC-036).
 
 ## 10. Risks
 
