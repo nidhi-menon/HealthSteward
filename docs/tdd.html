@@ -154,6 +154,7 @@
     color: var(--ink-soft); background: none; border: none;
     border-left: 2px solid transparent;
     padding: 8px 18px; cursor: pointer;
+    transition: border-left-color 0.15s ease, background 0.15s ease, color 0.15s ease;
   }
   nav.side button.tab:hover { color: var(--ink); background: var(--paper-raised); }
   nav.side button.tab.active {
@@ -163,7 +164,9 @@
 
   main.content { flex: 1; min-width: 0; padding: 44px 40px 100px; }
   .panel { display: none; max-width: 820px; margin: 0 auto; }
-  .panel.active { display: block; }
+  .panel.active { display: block; animation: panel-in 0.28s ease; }
+  @keyframes panel-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) { .panel.active { animation: none; } }
   .panel > .eyebrow { margin-bottom: 10px; }
   .panel > h1 { font-size: clamp(22px, 3.4vw, 30px); margin: 0 0 8px; }
   .panel > .dek { color: var(--ink-faint); font-size: 14.5px; margin: 0 0 34px; max-width: 91ch; }
@@ -250,7 +253,9 @@
     border: 1px solid var(--line); background: var(--paper); border-radius: 4px;
     padding: 7px 9px; font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--ink);
     flex: 1 1 auto;
+    transition: border-color 0.15s ease, transform 0.15s ease;
   }
+  .arch-node:hover { border-color: var(--teal-bright); transform: translateY(-1px); }
   .arch-node svg { flex: none; width: 16px; height: 16px; color: var(--ink-faint); }
   .arch-node .arch-sub {
     display: block; font-size: 10.5px; color: var(--ink-faint); font-weight: 400;
@@ -367,7 +372,8 @@
   .strat-tag.strat-det { color: var(--ink-faint); }
 
   .tool-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
-  .tool-card { border: 1px solid var(--line); border-radius: 5px; padding: 12px 14px; }
+  .tool-card { border: 1px solid var(--line); border-radius: 5px; padding: 12px 14px; transition: border-color 0.15s ease, transform 0.15s ease; }
+  .tool-card:hover { border-color: var(--teal-bright); transform: translateY(-1px); }
   .tool-card .tc-name {
     font-family: ui-monospace, monospace; font-size: 12px; color: var(--teal-bright);
     margin-bottom: 6px; display: block;
@@ -419,7 +425,10 @@
     cursor: pointer; padding: 14px 16px; font-family: ui-monospace, monospace;
     font-size: 13.5px; font-weight: 600; color: var(--ink); list-style: none;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    transition: background 0.15s ease;
   }
+  .accordion-item summary:hover { background: var(--paper-raised); }
+  .accordion-item .plus { transition: transform 0.2s ease; display: inline-block; }
   .accordion-item summary::-webkit-details-marker { display: none; }
   .accordion-item summary .plus { color: var(--teal-bright); font-size: 15px; flex: none; }
   .accordion-item[open] summary .plus { transform: rotate(45deg); display: inline-block; }
@@ -435,7 +444,8 @@
     padding: 6px 12px; cursor: pointer; border-radius: 3px;
   }
   .dec-filters button.active { background: var(--tag-bg); border-color: var(--teal-bright); color: var(--ink); }
-  .dec-card { border: 1px solid var(--line); padding: 16px 18px; margin-bottom: 10px; }
+  .dec-card { border: 1px solid var(--line); padding: 16px 18px; margin-bottom: 10px; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+  .dec-card:hover { border-color: var(--teal-bright); box-shadow: 0 2px 10px -4px rgba(32, 70, 76, 0.18); }
   .dec-card .dec-id { font-family: ui-monospace, monospace; font-size: 11px; color: var(--teal-bright); letter-spacing: 0.04em; }
   .dec-card h4 { margin: 6px 0 8px; font-size: 15px; font-family: ui-monospace, monospace; }
   .dec-card table, .mini-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
@@ -555,7 +565,7 @@
 
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
-      <div class="eyebrow">Snapshot as of DEC-024 · 2026-07-22</div>
+      <div class="eyebrow">Snapshot as of 2026-08-19</div>
       <h1>HealthSteward — Technical Design Document</h1>
       <p class="dek">A point-in-time architecture snapshot, written up for anyone who wants to go deep on how it's built. Re-written on architectural shifts, not on every change; see the note at the bottom of this page.</p>
 
@@ -613,7 +623,7 @@
           <div class="chart-line"><div class="tag">Backend</div><div><p>FastAPI + SQLAlchemy (async) + SQLite, migrations via Alembic</p></div></div>
           <div class="chart-line"><div class="tag">Frontend</div><div><p>React 19 + TypeScript + Tailwind CSS + Vite</p></div></div>
           <div class="chart-line"><div class="tag">AI (agentic)</div><div><p>Pluggable backend — Ollama (<code>llama3.2</code> by default) locally, or Claude API (Sonnet), or any OpenAI-compatible provider — for visit prep's tool-use loop, switchable at runtime from Settings. <code>llama3.2</code> specifically for reliable multi-turn tool-calling, since this loop is conversational.</p></div></div>
-          <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama for two different local jobs, on two different models: <code>qwen2.5:7b</code> for AVS PDF parsing (single-shot text→JSON extraction, where Qwen2.5 at this size is generally considered strong at structured output) — and context-selection's Stage 2 relevance scoring, which reuses whichever model <code>ollama_model</code> is set to (<code>llama3.2</code> by default, the same model the agentic loop uses), not a dedicated scoring model. Both fit the same 8GB-RAM/4-bit-quantized ceiling DEC-009 established. The AVS parser's model choice isn't benchmarked — no documented comparison against alternatives (<a href="https://github.com/nidhi-menon/HealthSteward/issues/59">issue #59</a>).</p></div></div>
+          <div class="chart-line"><div class="tag">AI (local)</div><div><p>Ollama handles two distinct local jobs on two different models: <code>qwen2.5:7b</code> for AVS PDF parsing (strong at structured text→JSON extraction at this size), and <code>llama3.2</code> by default for context-selection relevance scoring, the same model the agentic loop uses. Both sized to run reliably on 8GB of RAM with 4-bit quantization.</p></div></div>
         </div>
       </section>
     </section>
@@ -741,23 +751,23 @@
               <div class="arch-phase">
                 <div class="arch-phase-title">Orchestrate</div>
                 <div class="arch-phase-row">
-                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Agentic tool-use loop<span class="arch-sub">≤ agent_max_turns</span></div></div>
+                  <div class="arch-node"><svg aria-hidden="true"><use href="#icon-gear"></use></svg><div>Agentic tool-use loop<span class="arch-sub">bounded turn count</span></div></div>
                   <div class="arch-inline-arrow">→</div>
                   <div class="arch-node arch-node--boundary"><svg aria-hidden="true"><use href="#icon-lock"></use></svg><div>Query DB, anonymize result<span class="arch-sub">tool calls</span></div></div>
                 </div>
 
                 <div class="arch-tools-row">
                   <span class="arch-tools-label">available</span>
-                  <span class="arch-tool">get_medication_details</span>
-                  <span class="arch-tool">lookup_past_visits</span>
+                  <span class="arch-tool">Medication details lookup</span>
+                  <span class="arch-tool">Past-visit lookup</span>
                 </div>
                 <div class="arch-tools-row">
                   <span class="arch-tools-label">roadmap</span>
-                  <span class="arch-tool arch-tool--roadmap">lookup_upcoming_appointments</span>
-                  <span class="arch-tool arch-tool--roadmap">get_doctor_details</span>
-                  <span class="arch-tool arch-tool--roadmap">drug interaction checker <span class="arch-tool-issue">#24</span></span>
-                  <span class="arch-tool arch-tool--roadmap">lab + imaging results lookup <span class="arch-tool-issue">#22</span></span>
-                  <span class="arch-tool arch-tool--roadmap">procedures/hospitalizations lookup <span class="arch-tool-issue">#23</span></span>
+                  <span class="arch-tool arch-tool--roadmap">Upcoming-appointments lookup</span>
+                  <span class="arch-tool arch-tool--roadmap">Doctor details lookup</span>
+                  <span class="arch-tool arch-tool--roadmap">drug interaction checker</span>
+                  <span class="arch-tool arch-tool--roadmap">lab + imaging results lookup</span>
+                  <span class="arch-tool arch-tool--roadmap">procedures/hospitalizations lookup</span>
                 </div>
 
                 <div class="arch-branch-tag">⇄ optionally calls out to Claude or a custom provider — see right</div>
@@ -815,7 +825,7 @@
           <div class="boundary">
             <div class="eyebrow">Stays on device — default</div>
             <h4>Ollama, local</h4>
-            <p>PDF parsing always runs on a local model, and visit prep's agentic loop does too by default (DEC-016). Raw records never touch the network — enforced by a hard localhost-only safety check in the Ollama client, not just convention.</p>
+            <p>PDF parsing always runs on a local model, and visit prep's agentic loop does too by default. Raw records never touch the network — enforced by a hard localhost-only safety check, not just convention.</p>
           </div>
           <div class="boundary">
             <div class="eyebrow">Anonymized first</div>
@@ -827,7 +837,7 @@
 
       <section class="block">
         <h2>Reliability design</h2>
-        <p>The agentic tool-use loop is <strong>fallback-not-hard-failure by construction</strong>, three layers deep: if it can't converge within <code>agent_max_turns</code> (default 6) or a backend produces a malformed tool call, it falls back to the pre-existing single-shot prompt-in/JSON-out call; if <em>that</em> fails too — or anything else in <code>prepare_visit()</code> raises, LLM-related or not — an outer catch-all returns a fixed set of generic questions rather than an error. That hardcoded fallback, not the single-shot call, is the real floor: no functional regression is possible by design, only degraded quality on failure, and <code>prepare_visit()</code> never raises to its caller. That outer fallback is flagged, not silent — <code>VisitPrep.used_fallback</code> (DEC-020) persists whether a given result is this generic placeholder, and the UI shows a warning banner pointing at Settings when it is, so a misconfigured or unreachable backend no longer looks like a normal successful generation.</p>
+        <p>The agentic tool-use loop is <strong>fallback-not-hard-failure by construction</strong>, three layers deep: if it can't converge within its turn budget (default 6) or a backend produces a malformed tool call, it falls back to the pre-existing single-shot prompt-in/JSON-out call; if <em>that</em> fails too — for any reason, LLM-related or not — an outer catch-all returns a fixed set of generic questions rather than an error. That hardcoded fallback, not the single-shot call, is the real floor: no functional regression is possible by design, only degraded quality on failure, and the visit-prep flow never surfaces a raw error to the user. That outer fallback is flagged, not silent — the result is marked as a fallback, and the UI shows a warning banner pointing at Settings when it happens, so a misconfigured or unreachable backend no longer looks like a normal successful generation.</p>
       </section>
     </section>
 
@@ -842,41 +852,31 @@
       <details class="accordion-item" open>
         <summary>AVS PDF parsing <span class="plus">+</span></summary>
         <div class="body">
-          <p><strong>Section-routing architecture</strong> in <code>src/parsers/</code>: rather than sending the whole document to an LLM, the text is split into named sections and each one is handled by whichever strategy actually fits it — deterministic regex where the shape of the data is predictable (a medication list, a header line), a focused local-LLM call only where it isn't (freeform vitals prose, referral mentions).</p>
+          <p><strong>Section-routing architecture:</strong> rather than sending the whole document to an LLM, the text is split into named sections and each one is handled by whichever strategy actually fits it — deterministic parsing where the shape of the data is predictable (a medication list, a header line), a focused local-LLM call only where it isn't (freeform vitals prose, referral mentions).</p>
 
           <div class="loop-box">
-            <div class="loop-box-label">parse_avs_pdf() — src/parsers/__init__.py</div>
+            <div class="loop-box-label">AVS parsing pipeline</div>
             <div class="loop-steps">
               <div class="loop-step"><svg aria-hidden="true"><use href="#icon-file"></use></svg>Raw PDF text</div>
               <div class="loop-arrow">→</div>
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>SectionSplitter<span class="arch-sub" style="margin-left:4px;">header regexes</span></div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>Section splitter<span class="arch-sub" style="margin-left:4px;">finds section boundaries</span></div>
               <div class="loop-arrow">→</div>
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>SectionRouter<span class="arch-sub" style="margin-left:4px;">walks PIPELINE, one section at a time</span></div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>Section router<span class="arch-sub" style="margin-left:4px;">picks a strategy per section</span></div>
               <div class="loop-arrow">→</div>
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>Ollama<span class="arch-sub" style="margin-left:4px;">llm / hybrid sections only</span></div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>Ollama<span class="arch-sub" style="margin-left:4px;">only for unstructured sections</span></div>
               <div class="loop-arrow">→</div>
-              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>postprocess_safety()</div>
+              <div class="loop-step"><svg aria-hidden="true"><use href="#icon-check"></use></svg>Safety post-check</div>
             </div>
           </div>
 
-          <p><strong>SectionSplitter</strong> (<code>src/parsers/agent/section_splitter.py</code>) is what turns raw PDF text into the named chunks the router hands off — a table of regexes (<code>SECTION_HEADERS</code>) matched against the text to find where each section starts, covering two structurally different export formats side by side:</p>
-
-          <table class="mini-table">
-            <tr><th>Format</th><th>Example header pattern</th><th>Section key</th></tr>
-            <tr><td>Sutter Health AVS</td><td><code>Today'?s\s+Visit</code></td><td>todays_visit</td></tr>
-            <tr><td>Sutter Health AVS</td><td><code>(?:Tests\s+ordered|New\s+orders\s+ordered|Lab\s+order)</code></td><td>lab_orders</td></tr>
-            <tr><td>Tebra clinical note</td><td><code>^Assessment$</code></td><td>assessment</td></tr>
-            <tr><td>Tebra clinical note</td><td><code>^Vitals\b</code></td><td>vitals_section</td></tr>
-          </table>
+          <p>The document is split into named sections (visit summary, medications, labs, assessment, vitals, and so on) using structural cues — headers, layout patterns — that hold across the two clinical-export formats this has been built and tested against so far. Each section is then capped to a focused chunk of text, so a downstream LLM call never has to search a bloated block of the document for the one fact it needs.</p>
 
           <ul>
-            <li><strong>Order matters</strong> — <code>SECTION_HEADERS</code> is a list, not a dict; earlier patterns are matched first when two headers could plausibly overlap on section boundaries.</li>
-            <li><strong>Truncated to <code>MAX_SECTION_CHARS = 2000</code> chars per section</strong> — this, not just the section-routing split itself, is what keeps each LLM call small and focused rather than re-feeding a bloated chunk of the document.</li>
-            <li><strong>Cached after first access</strong> — <code>.get()</code>/<code>.all_sections()</code> only run the regex table once per document, even though multiple router stages (e.g. <code>vitals</code> pulls from <code>todays_visit</code>, <code>vitals_section</code>, <em>and</em> <code>physical_exam</code>) request overlapping sections.</li>
-            <li><strong>A section can feed more than one router stage, and a stage can pull from more than one section</strong> — the split and the routing are deliberately decoupled layers; <code>SectionSplitter</code> doesn't know which stage strategy is deterministic vs. LLM, it just answers "give me the text under header X."</li>
+            <li><strong>Section boundaries are found once per document</strong> and reused — several parsing steps read overlapping sections (vitals data, for instance, can appear in more than one place in a visit note), so the split only has to run one pass.</li>
+            <li><strong>Splitting and routing are decoupled layers</strong> — the piece that finds section boundaries doesn't know or care which sections get handled deterministically vs. by the local model; it just answers "give me the text under this header."</li>
           </ul>
 
-          <p>The router's strategy per section is a fixed table, decided up front by a human reading real Sutter Health and Tebra export samples — not inferred at runtime:</p>
+          <p>The strategy per section is a fixed table, decided up front by a human reading real export samples from the clinical systems this app has actually been tested against — not inferred at runtime:</p>
 
           <table class="mini-table">
             <tr><th>Section</th><th>Strategy</th><th>Why</th></tr>
@@ -893,20 +893,20 @@
 
           <div class="branch-cards">
             <div class="branch-card branch-card--ok">
-              <div class="bc-title"><span class="bc-dot"></span>Diagnoses: Assessment section found</div>
-              <p><code>extract_diagnoses()</code> regex-matches <code>Condition (ICD-code)</code> pairs. No LLM call for this section at all.</p>
+              <div class="bc-title"><span class="bc-dot"></span>Diagnoses: assessment section found</div>
+              <p>Matched directly against a predictable "Condition (ICD-code)" pattern. No LLM call needed for this section at all.</p>
             </div>
             <div class="branch-card branch-card--fallback">
-              <div class="bc-title"><span class="bc-dot"></span>Diagnoses: no Assessment section</div>
-              <p>Regex returns <code>None</code> (not <code>[]</code>) — the router reads that as "use the LLM" and routes to the <code>diagnoses</code> llm config instead.</p>
+              <div class="bc-title"><span class="bc-dot"></span>Diagnoses: no assessment section</div>
+              <p>When that structure isn't present, the router falls back to the local LLM for this section instead.</p>
             </div>
           </div>
 
-          <p>Each <code>llm</code>/<code>hybrid</code> section only receives the specific chunk(s) of text it needs (from <code>SectionSplitter</code>, capped at 2000 chars each) — never the full document — via a focused system prompt (<code>src/parsers/agent/prompts.py</code>) and a single <code>direct_chat()</code> call (<code>src/parsers/agent/ollama_chat.py</code>).</p>
+          <p>Each section that needs the LLM only receives the specific chunk of text it needs — never the full document — kept small and focused rather than re-feeding a bloated block of the visit note.</p>
 
           <ul>
-            <li><strong>Local-only, enforced not just documented</strong> — <code>ollama_chat.py</code> has a safety check that blocks any non-localhost URL, so a misconfiguration can't silently route PHI externally.</li>
-            <li><strong>Two document formats, one pipeline</strong> — the deterministic regexes carry parallel fallback chains for Sutter Health AVS exports and Tebra clinical-note exports, since the two look structurally different (e.g. header parsing tries the Sutter header-line pattern first, then falls back to Tebra's "Visited on:" / "MRN :" patterns).</li>
+            <li><strong>Local-only, enforced not just documented</strong> — a hard safety check blocks any non-localhost model endpoint, so a misconfiguration can't silently route health data externally.</li>
+            <li><strong>Two document formats, one pipeline</strong> — parsing carries parallel fallback logic for the two clinical-export formats it's been tested against, since they're structured differently.</li>
             <li><strong>Review before apply</strong> — parsed items are always presented for user confirmation with per-section checkboxes; nothing is auto-applied to the profile.</li>
             <li><strong>Deduplication</strong> — diagnoses dedupe by name on apply (existing conditions get ICD-10 backfilled if missing); medication stops match by name.</li>
           </ul>
@@ -918,7 +918,7 @@
       <details class="accordion-item">
         <summary>4-stage context selection <span class="plus">+</span></summary>
         <div class="body">
-          <p>Before generating visit-prep questions, relevant past-visit history is selected via a 4-stage pipeline in <code>src/utils/context_selection.py</code>:</p>
+          <p>Before generating visit-prep questions, relevant past-visit history is selected via a 4-stage pipeline:</p>
 
           <div class="loop-box">
             <div class="loop-box-label">runs once per visit prep, in order</div>
@@ -947,17 +947,17 @@
 
           <ol>
             <li><strong>Rules-based filter</strong> (instant, free) — always include same-doctor's last visit and PCP/Internal Medicine visits; apply a specialty-relevance mapping (e.g. Endocrinology ↔ Cardiology, Nephrology); exclude doctors flagged out of prep context. The same-doctor visit is <strong>pinned</strong> — its id is tracked through stages 2 and 3 so it can't be capped, score-filtered, or budget-dropped later, unlike every other candidate.</li>
-            <li><strong>Local LLM relevance scoring</strong> (Ollama) — only runs if more than 5 visits remain after stage 1; scores each 1-10, keeps ≥7 (pinned visit kept regardless). Candidates beyond <code>context_stage2_max_candidates</code> (default 15, the pinned visit exempt) are cut before scoring even happens — one sequential, unbatched Ollama call per candidate makes this a real cost, not just a formality.</li>
+            <li><strong>Local LLM relevance scoring</strong> (Ollama) — only runs if more than 5 visits remain after stage 1; scores each 1-10, keeps ≥7 (pinned visit kept regardless). Only the most recent 15 candidates (pinned visit exempt) are even considered at this stage — one Ollama call per candidate makes this a real cost, not just a formality.</li>
             <li><strong>Token budget check</strong> — packs visits by priority: pinned first, then stage 2's relevance score (highest first), then recency as a fallback when no score exists (stage 2 was skipped). Visits that don't fit are dropped, not summarized — see the callout below.</li>
             <li><strong>Anonymize</strong> — the only stage where data crosses into what the external-capable backend will see.</li>
           </ol>
           <p>Stage 2's relevance scoring deliberately runs on <em>raw, pre-anonymization</em> text — it's a local-only call, so there's no privacy reason to anonymize before it, and doing so first would degrade the local model's ability to judge relevance from real names/context.</p>
 
-          <p><strong>Why is this a separate deterministic pipeline instead of an agentic-loop tool call</strong> (DEC-023)? Two constraints from earlier decisions compound here. Small local models are unreliable at multi-turn tool-calling (DEC-009), so anything load-bearing for output quality — like which past visits matter — shouldn't depend on the agent choosing to call it correctly within a bounded <code>agent_max_turns</code>; it runs deterministically before the loop starts instead. The loop also needs <em>some</em> context in its first prompt to reason from at all, so full agent-driven retrieval would still need a bootstrapping mechanism — at which point most of this pipeline's value has already been re-invented, just less reliably. This split also lines up with how the eval harness scores retrieval (exact assertion) separately from generation (needs a judge, DEC-018) — folding retrieval into the loop would blur that line. The agentic loop's <code>lookup_past_visits</code> tool exists to go <em>beyond</em> this baseline, not duplicate it — since DEC-024, it excludes whatever this pipeline already selected at the SQL query level, so the two layers can't redundantly re-fetch the same visit.</p>
+          <p><strong>Why is this a separate deterministic pipeline instead of an agentic-loop tool call?</strong> Small local models are unreliable at multi-turn tool-calling, so anything load-bearing for output quality — like which past visits matter — shouldn't depend on the agent choosing to call it correctly within its turn budget; it runs deterministically before the loop starts instead. The loop also needs <em>some</em> context in its first prompt to reason from at all, so full agent-driven retrieval would still need a bootstrapping mechanism of its own. The agentic loop's history-lookup tool exists to go <em>beyond</em> this baseline, not duplicate it — it excludes whatever this pipeline already selected, so the two layers can't redundantly re-fetch the same visit.</p>
 
           <div class="callout gap">
             <span class="callout-label">Known gap</span>
-            <p>Stage 3 doesn't summarize — visits that don't fit the token budget are dropped (priority-ordered, with the count surfaced on <code>ContextSelectionResult</code> and logged), not condensed. That's deliberate: a lossy or hallucinated summary from a small quantized local model is a worse failure mode for medical context than an honestly-truncated list. Separately, <code>context_stage2_max_candidates</code> (default 15) is a placeholder, not a measured value, and stage 2 scores one candidate per Ollama call with no batching — <a href="https://github.com/nidhi-menon/HealthSteward/issues/56">issue #56</a> tracks grounding the cap in real latency and evaluating batched scoring.</p>
+            <p>Stage 3 doesn't summarize — visits that don't fit the token budget are dropped (priority-ordered, with the count surfaced and logged), not condensed. That's deliberate: a lossy or hallucinated summary from a small quantized local model is a worse failure mode for medical context than an honestly-truncated list. The candidate cap ahead of stage 2 is a placeholder, not a measured value, and grounding it in real latency (plus evaluating batched scoring) is open follow-up work.</p>
           </div>
         </div>
       </details>
@@ -967,7 +967,7 @@
       <details class="accordion-item">
         <summary>PII anonymization <span class="plus">+</span></summary>
         <div class="body">
-          <p>Hybrid approach in <code>src/utils/anonymization.py</code>: structured fields get deterministic handling (patient name omitted entirely — not substituted, just never included in <code>AnonymizedProfile</code>; DOB → exact age; doctor name → "your [specialty]"; prescribing doctor → "Prescribing physician"; doctor phone/email dropped, clinic kept), free text goes through regex (phone/email/SSN patterns) plus spaCy NER for names.</p>
+          <p>Hybrid approach: structured fields get deterministic handling (patient name omitted entirely — not substituted, just never included; DOB → exact age; doctor name → "your [specialty]"; prescribing doctor → "Prescribing physician"; doctor phone/email dropped, clinic kept), free text goes through regex (phone/email/SSN patterns) plus spaCy NER for names.</p>
           <ul>
             <li><strong>Documented as best-effort on free text, not a guarantee</strong> — NER can miss names in unusual phrasing. This is stated explicitly rather than implied, since silently overstating a privacy guarantee is worse than none.</li>
             <li><strong>The free-text date regex is deliberately over-inclusive</strong> — it redacts anything MM/DD/YYYY-shaped, not just birthdates, so a visit date mentioned inside notes prose gets swept up too. Same safe-by-default philosophy as this doc's other fail-open designs: better to over-redact than risk a real date slipping through.</li>
@@ -982,10 +982,10 @@
       <details class="accordion-item">
         <summary>Agentic tool-use loop <span class="plus">+</span></summary>
         <div class="body">
-          <p><code>_run_agentic_loop</code> in <code>src/agents/visit_prep.py</code>: send context + tool specs to the backend → if it returns tool calls, execute each against the DB, anonymize the result, append to the conversation, repeat → if it returns final text with no tool calls, that's the answer → if <code>agent_max_turns</code> is exhausted, or the model calls a tool name that doesn't exist, raise and let the caller fall back to single-shot.</p>
+          <p>Send context + tool specs to the backend → if it returns tool calls, execute each against the DB, anonymize the result, append to the conversation, repeat → if it returns final text with no tool calls, that's the answer → if the turn budget is exhausted, or the model calls a tool name that doesn't exist, fall back to single-shot generation instead.</p>
 
           <div class="loop-box">
-            <div class="loop-box-label">repeats up to agent_max_turns (default 6)</div>
+            <div class="loop-box-label">repeats up to a bounded turn count (default 6)</div>
             <div class="loop-steps">
               <div class="loop-step"><svg aria-hidden="true"><use href="#icon-gear"></use></svg>Model responds</div>
               <div class="loop-arrow">→</div>
@@ -1005,26 +1005,26 @@
             </div>
             <div class="branch-card branch-card--fallback">
               <div class="bc-title"><span class="bc-dot"></span>Fails or times out</div>
-              <p>Parse error, turn cap hit, or an unrecognized tool name → caught, and <code>prepare_visit()</code> falls back to a single-shot call.</p>
+              <p>Parse error, turn cap hit, or an unrecognized tool name → caught, and visit prep falls back to a single-shot call.</p>
             </div>
           </div>
 
           <div class="tool-cards">
             <div class="tool-card">
               <span class="tc-name">get_medication_details</span>
-              <p>On-demand structured lookup — dosage, frequency, purpose, side effects — for one or all current medications. Not a real interaction checker; that's a separate, bigger feature (issue #24).</p>
+              <p>On-demand structured lookup — dosage, frequency, purpose, side effects — for one or all current medications. Not a real interaction checker; that's a separate, bigger feature on the roadmap.</p>
             </div>
             <div class="tool-card">
               <span class="tc-name">lookup_past_visits</span>
-              <p>Deeper visit-history query beyond what's already in the context, filterable by specialty/keyword. Windowing to "since last visit with this provider" is scoped separately (issue #21).</p>
+              <p>Deeper visit-history query beyond what's already in the context, filterable by specialty/keyword.</p>
             </div>
           </div>
 
           <ul>
             <li><strong>Why bounded, not open-ended:</strong> an unbounded loop against a small/unreliable local model can spin. A hard turn cap makes worst-case latency and cost predictable.</li>
-            <li><strong>Why Ollama as default, not Claude API (DEC-016, superseding DEC-009's default):</strong> the dev machine (Apple M3, 8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool selection, non-convergence — which is still true and exactly why the fallback-to-single-shot behavior below matters. But defaulting the primary, most-used flow to an external API sat awkwardly next to the project's local-first pitch. Claude (and any custom OpenAI-compatible provider) remain fully supported, now as explicit opt-ins from Settings rather than the default.</li>
+            <li><strong>Why Ollama as default, not an external API:</strong> constrained hardware (8GB RAM) can only run 4-bit quantized 7-8B models, and small quantized models produce unreliable tool-calling — malformed JSON, wrong tool selection, non-convergence — which is exactly why the fallback-to-single-shot behavior matters. But defaulting the primary, most-used flow to an external API sat awkwardly next to the project's local-first pitch. Claude, and any custom OpenAI-compatible provider, remain fully supported as explicit opt-ins from Settings rather than the default.</li>
             <li><strong>Two tools today, deliberately bounded scope for v1</strong> — a real drug-interaction checker and a user-facing pause-to-ask-clarifying-questions flow were explicitly descoped as separate, bigger features.</li>
-            <li><strong>This loop's fallback isn't the last line of defense</strong> — if single-shot generation fails too (or anything else in <code>prepare_visit()</code> raises), an outer catch-all returns a fixed set of generic questions rather than an error. See Reliability Design in System Design for the full three-layer chain.</li>
+            <li><strong>This loop's fallback isn't the last line of defense</strong> — if single-shot generation fails too, an outer catch-all returns a fixed set of generic questions rather than an error. See Reliability Design in System Design for the full three-layer chain.</li>
           </ul>
         </div>
       </details>
@@ -1032,7 +1032,7 @@
       <details class="accordion-item">
         <summary>Specialty-aware prompting <span class="plus">+</span></summary>
         <div class="body">
-          <p>Before DEC-011, visit prep generated the same questions regardless of which specialist the appointment was with — it would suggest discussing a dermatology cream with a cardiologist. Fixed with two system prompt templates (<code>SYSTEM_PROMPT_TEMPLATE</code>, <code>SYSTEM_PROMPT_GENERIC</code> in <code>src/agents/visit_prep.py</code>) plus data enrichment that tags conditions and medications with the specialty that actually manages them.</p>
+          <p>Early on, visit prep generated the same questions regardless of which specialist the appointment was with — it would suggest discussing a dermatology cream with a cardiologist. Fixed with two system prompt templates (a specialty-aware one and a generic fallback) plus data enrichment that tags conditions and medications with the specialty that actually manages them.</p>
 
           <table class="mini-table">
             <tr><th>ICD-10 prefix/range</th><th>Mapped specialty</th></tr>
@@ -1043,9 +1043,9 @@
           </table>
 
           <ul>
-            <li><strong>ICD-10 → specialty mapping</strong> (<code>ICD10_SPECIALTY_MAP</code>, prefix and range matching via <code>_icd10_to_specialties()</code>) — exact prefixes checked before ranges, so a specific code like E28 doesn't get swallowed by the broader E20–E35 range.</li>
-            <li><strong>Medication → prescriber specialty tagging</strong> — matches a medication's free-text <code>prescribing_doctor</code> against the profile's <code>Doctor</code> records to label it (e.g. "prescribed for Dermatology"), so the model can tell which meds are actually this specialist's business.</li>
-            <li><strong>Clinic-name inference fallback</strong> (<code>_infer_specialty_from_clinic()</code>) — keyword-matches the clinic name (e.g. "Sutter Endocrinology") when <code>doctor.specialty</code> is null.</li>
+            <li><strong>ICD-10 → specialty mapping</strong> — exact codes checked before broader ranges, so a specific code like E28 doesn't get swallowed by a wider range it happens to fall inside.</li>
+            <li><strong>Medication → prescriber specialty tagging</strong> — matches a medication's prescribing doctor against the profile's doctor records to label it (e.g. "prescribed for Dermatology"), so the model can tell which meds are actually this specialist's business.</li>
+            <li><strong>Clinic-name inference fallback</strong> — keyword-matches the clinic name (e.g. "Endocrinology Associates") when a doctor's specialty isn't set explicitly.</li>
             <li><strong>The prompt itself draws the line explicitly:</strong> don't suggest unrelated-specialty medications, but <em>do</em> surface real cross-condition interactions relevant to this specialty (its own worked example: Hashimoto's and PCOS interact hormonally, which matters for an endocrinologist even if a gynecologist made the original diagnosis).</li>
           </ul>
         </div>
@@ -1056,14 +1056,13 @@
       <details class="accordion-item">
         <summary>Pluggable LLM backend <span class="plus">+</span></summary>
         <div class="body">
-          <p><code>src/agents/llm_backend.py</code>: an <code>LLMBackend</code> ABC with three implementations — <code>ClaudeBackend</code> (wraps <code>AsyncAnthropic</code>, uses Claude's native <code>tools=</code> parameter), <code>OllamaBackend</code> (calls Ollama's <code>/api/chat</code> with OpenAI-style function-calling tool specs), and <code>CustomOpenAICompatibleBackend</code> (DEC-016 — any endpoint speaking OpenAI's <code>/chat/completions</code> + tool-calling format: OpenAI, OpenRouter, Groq, Together, a self-hosted vLLM/LM Studio server, etc.). All three normalize into the same <code>ToolCall</code>/<code>LLMTurnResult</code> shape, so <code>_run_agentic_loop</code> never branches on which provider it's talking to — it just calls <code>backend.call(...)</code> and reads a uniform result.</p>
+          <p>A common backend interface with three implementations — one wrapping Claude's native tool-use API, one calling Ollama's chat API with OpenAI-style function-calling tool specs, and one for any endpoint speaking OpenAI's chat-completion + tool-calling format (OpenAI, OpenRouter, Groq, Together, a self-hosted server, etc.). All three normalize into the same result shape, so the agentic loop never branches on which provider it's talking to — it just calls the backend and reads a uniform result.</p>
 
           <ul>
-            <li><strong>One canonical tool spec, reused wire format:</strong> <code>src/agents/tools.py</code> defines <code>TOOL_SPECS</code> once, then <code>claude_tools()</code> adapts it for Claude and <code>ollama_tools()</code> covers both Ollama and the custom provider — Ollama's <code>/api/chat</code> already mirrors OpenAI's function-calling shape, so the custom backend needed no third adapter.</li>
-            <li><strong>One classification, shared by both call sites:</strong> <code>uses_openai_style_wire_format(provider)</code> is the single source of truth for the Ollama/custom-vs-Claude split, used by both <code>get_llm_backend()</code> (which class to instantiate) and <code>get_tools_for_provider()</code> (which tool-spec shape to build). Two independent <code>== "ollama"</code> checks could drift out of sync if a provider were added later; one shared function can't disagree with itself.</li>
-            <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes <code>LLM_PROVIDER=ollama</code> a real, fully-local <em>default</em> rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
-            <li><strong>Selected via a factory</strong>, <code>get_llm_backend(settings)</code>, keyed off <code>settings.llm_provider</code>. DEC-016 also consolidated dispatch inside <code>visit_prep.py</code> itself — it previously checked <code>llm_provider == "ollama"</code> via string equality in three separate places; all three now route through <code>get_llm_backend()</code>/<code>get_tools_for_provider()</code>.</li>
-            <li><strong>Runtime-editable, not just env-configured:</strong> <code>settings.llm_provider</code> is now overlaid from a DB-backed <code>AppSettings</code> singleton row (<code>src/services/settings_service.py</code>), so switching providers from the Settings page takes effect on the next request — no <code>.env</code> edit or restart needed.</li>
+            <li><strong>One canonical tool spec, reused wire format:</strong> tool definitions are declared once and adapted per provider — Ollama's chat API already mirrors OpenAI's function-calling shape, so the custom-provider backend needed no separate adapter.</li>
+            <li><strong>Why this matters beyond the agentic loop:</strong> it's what makes the local-Ollama default a real, fully-local path rather than a stub — the same tool-use loop, same tools, same anonymization boundary, just a different backend underneath.</li>
+            <li><strong>Selected via a factory</strong> keyed off the configured provider, with one shared classification used everywhere that split matters — instead of the same string-equality check duplicated in multiple places, which could quietly drift out of sync if a provider were added later.</li>
+            <li><strong>Runtime-editable, not just env-configured:</strong> the active provider is stored in the database, not just a startup environment variable, so switching providers from the Settings page takes effect on the next request — no config edit or restart needed.</li>
           </ul>
         </div>
       </details>
@@ -1075,9 +1074,9 @@
         <div class="body">
           <p>Closes the loop between "document parsed" and "patient acts on what the doctor ordered." Two surfaces: a post-AVS action panel (fires at the moment of highest engagement, right after confirming a parsed document) and a persistent "Needs Attention" overview section (catches items accumulated from past visits, always visible).</p>
           <ul>
-            <li>Snooze (1w/2w/1m) and completion state persist via <code>snoozed_until</code>/<code>completed_at</code> on <code>FollowUp</code>/<code>LabOrder</code>/<code>Referral</code>, plus a <code>NudgeState</code> table for computed nudges that have no natural row to attach state to (e.g. "past-due appointment").</li>
-            <li>Five computed nudge types drive the overview section: <strong>past-due appointments</strong> (<code>scheduled_date</code> passed, status still <code>scheduled</code>), <strong>upcoming appointments without prep</strong> (scheduled within the next 30 days, no <code>VisitPrep</code> row yet), <strong>completed visits with no AVS uploaded within 14 days</strong> of the appointment date, <strong>adverse vitals trends</strong> (meaningful directional change in weight/BMI/blood pressure/heart rate across &ge;2 recorded visits), and <strong>follow-ups, lab orders, and referrals</strong> that remain active (not yet completed) since they were logged. All five respect per-item snooze state so a dismissed nudge doesn't resurface until it expires.</li>
-            <li>Snoozing is recoverable and visible, not a silent hide (issue #44): a unified <code>GET /snoozed-items</code> endpoint inverts the snooze filter into its own view across both snooze mechanisms above, an "Un-snooze now" action reverses it early, and an undo banner appears for 8 seconds after any snooze action.</li>
+            <li>Snooze (1w/2w/1m) and completion state persist per item, plus a shared table for computed nudges that have no natural record of their own to attach state to (e.g. "past-due appointment").</li>
+            <li>Five computed nudge types drive the overview section: <strong>past-due appointments</strong>, <strong>upcoming appointments without prep</strong> (scheduled within the next 30 days, no prep generated yet), <strong>completed visits with no AVS uploaded within 14 days</strong> of the appointment date, <strong>adverse vitals trends</strong> (meaningful directional change in weight/BMI/blood pressure/heart rate across two or more recorded visits), and <strong>follow-ups, lab orders, and referrals</strong> that remain active since they were logged. All five respect per-item snooze state so a dismissed nudge doesn't resurface until it expires.</li>
+            <li>Snoozing is recoverable and visible, not a silent hide: a dedicated view lets a patient see everything they've snoozed, an "Un-snooze now" action reverses it early, and an undo banner appears for 8 seconds after any snooze action.</li>
             <li>Scheduled push notifications for genuinely disengaged patients — reaching someone who isn't currently in the app — were considered and explicitly deferred; it's new infrastructure (a scheduler + notification channel) that arguably conflicts with the local-first architecture, not a pure addition on existing data like the two shipped surfaces are.</li>
           </ul>
         </div>
@@ -1086,7 +1085,7 @@
       <details class="accordion-item">
         <summary>Data model &amp; schema design <span class="plus">+</span></summary>
         <div class="body">
-          <p><code>src/data/models.py</code>: <code>HealthProfile</code> at the root, with <code>Condition</code>, <code>Medication</code>, <code>Doctor</code>, and <code>Appointment</code> hanging off it. AVS-parsed data nests under <code>Document</code> — <code>Vitals</code> (1:1), <code>LabOrder</code>/<code>Referral</code>/<code>FollowUp</code> (1:many) — so every parsed item traces back to the source PDF it came from. <code>VisitPrep</code> and <code>ConversationLog</code> record generated output and (anonymized) LLM call history; <code>NudgeState</code> persists snooze/dismiss state for the nudges that have no natural row of their own.</p>
+          <p><code>HealthProfile</code> sits at the root, with <code>Condition</code>, <code>Medication</code>, <code>Doctor</code>, and <code>Appointment</code> hanging off it. AVS-parsed data nests under <code>Document</code> — <code>Vitals</code> (1:1), <code>LabOrder</code>/<code>Referral</code>/<code>FollowUp</code> (1:many) — so every parsed item traces back to the source PDF it came from. <code>VisitPrep</code> and <code>ConversationLog</code> record generated output and anonymized LLM call history; <code>NudgeState</code> persists snooze/dismiss state for the nudges that have no natural row of their own.</p>
 
           <div class="schema-diagram">
             <div class="schema-group">
@@ -1120,9 +1119,9 @@
           </div>
 
           <ul>
-            <li><strong>UUID primary keys, not auto-increment integers</strong> (DEC-004) — a sequential ID leaks how many records exist and lets rows be enumerated by guessing. UUIDs cost a little storage/perf, which is a fine trade for health data specifically.</li>
+            <li><strong>UUID primary keys, not auto-increment integers</strong> — a sequential ID leaks how many records exist and lets rows be enumerated by guessing. UUIDs cost a little storage/perf, which is a fine trade for health data specifically.</li>
             <li><strong>Profile-nested API routes</strong> (<code>/api/profiles/{id}/conditions/</code>, etc.) — ownership is enforced by the URL structure itself, not left to an ad-hoc check in each handler.</li>
-            <li><strong><code>Condition.icd_10</code></strong> was added specifically to enable specialty-aware prompting (DEC-010/DEC-011) — the schema changed because a feature needed it, not speculatively ahead of time.</li>
+            <li><strong>ICD-10 coding on conditions</strong> was added specifically to enable specialty-aware prompting — the schema changed because a feature needed it, not speculatively ahead of time.</li>
             <li><strong>Async throughout</strong> — SQLAlchemy 2.0 async sessions, <code>aiosqlite</code>, matching the async FastAPI route handlers end to end rather than mixing sync DB calls into an async app.</li>
           </ul>
         </div>
@@ -1133,7 +1132,7 @@
     <section class="panel" id="panel-decisions" role="tabpanel" aria-labelledby="tab-decisions" tabindex="0">
       <div class="eyebrow">Alternatives considered</div>
       <h1>Decisions &amp; Tradeoffs</h1>
-      <p class="dek">A curated set of the calls with real engineering tension — not all 18+ decision-log entries, just the ones worth defending in a conversation. Full log: <code>docs/notes/DECISIONS.md</code>.</p>
+      <p class="dek">A curated set of the calls with real engineering tension — not the full decision log, just the ones worth defending in a conversation.</p>
 
       <div class="dec-filters" id="decFilters" role="group" aria-label="Filter decisions by category">
         <button class="active" aria-pressed="true" data-filter="all">All</button>
@@ -1143,7 +1142,7 @@
       </div>
 
       <div class="dec-card" data-tags="ai">
-        <div class="dec-id">DEC-009 / DEC-013</div>
+        <div class="dec-id">AI / LLM</div>
         <h4>Agentic loop framework: native tool use, not Agent SDK or LangGraph</h4>
         <table>
           <tr><th>Option</th><th>Why not</th></tr>
@@ -1154,40 +1153,29 @@
       </div>
 
       <div class="dec-card" data-tags="ai privacy">
-        <div class="dec-id">DEC-009</div>
-        <h4>Local Ollama vs. Claude API for the agentic backend</h4>
+        <div class="dec-id">AI / LLM · Privacy</div>
+        <h4>Local Ollama vs. an external API for the agentic backend</h4>
         <table>
           <tr><th>Option</th><th>Tradeoff</th></tr>
-          <tr><td>Local Ollama (7-8B, quantized)</td><td>Free, maximum privacy — but only 4-5GB RAM available after OS on an 8GB M3, so only 4-bit quantized models fit, and those produce unreliable tool-calling (malformed JSON, wrong tools, loops)</td></tr>
-          <tr><td>Claude API (Sonnet)</td><td>Reliable tool use out of the box, ~$0.03-0.10 per visit prep (~$1/month typical use) — but leaves the local-first ideal for this one call path</td></tr>
+          <tr><td>Local Ollama (7-8B, quantized)</td><td>Free, maximum privacy — but constrained hardware (8GB RAM) only fits 4-bit quantized models, and those produce unreliable tool-calling (malformed JSON, wrong tools, loops)</td></tr>
+          <tr><td>Claude API (Sonnet)</td><td>Reliable tool use out of the box, negligible cost for personal use (~$1/month) — but leaves the local-first ideal for this one call path</td></tr>
         </table>
-        <div class="verdict"><strong>Chose (at the time):</strong> Claude API as default, Ollama as an explicit opt-in via <code>LLM_PROVIDER=ollama</code> with documented reduced reliability. Anonymization made the Claude path privacy-acceptable rather than privacy-ideal. <strong>Superseded by DEC-016</strong> (below) — the default flipped, this card's tool-reliability finding did not.</div>
-      </div>
-
-      <div class="dec-card" data-tags="ai privacy">
-        <div class="dec-id">DEC-016</div>
-        <h4>Flip the default agentic backend to Ollama; add a custom OpenAI-compatible provider</h4>
-        <table>
-          <tr><th>Option</th><th>Tradeoff</th></tr>
-          <tr><td>Keep Claude as default</td><td>Reliable tool-calling out of the box — but sits awkwardly next to a project pitched as local-first when the most-used flow defaults off-device</td></tr>
-          <tr><td>Flip default to Ollama, keep Claude opt-in</td><td>Privacy-first positioning holds by default — but more installs hit the small-model tool-calling unreliability DEC-009 documented, leaning harder on the existing single-shot fallback (DEC-013)</td></tr>
-        </table>
-        <div class="verdict"><strong>Chose:</strong> Ollama as default; Claude and a new <code>CustomOpenAICompatibleBackend</code> (any OpenAI-compatible endpoint — OpenAI, OpenRouter, Groq, self-hosted, etc.) as explicit opt-ins, switchable at runtime from a new Settings page (DB-backed, no <code>.env</code> edit or restart needed) rather than <code>.env</code>-only. DEC-009's reliability finding is unchanged — this supersedes its default choice, not its technical conclusion.</div>
+        <div class="verdict"><strong>Chose:</strong> Ollama as the default, fully local agentic backend; Claude API and any custom OpenAI-compatible provider (OpenAI, OpenRouter, Groq, a self-hosted server, etc.) remain fully supported as explicit opt-ins, switchable at runtime from a Settings page — no restart or config edit needed. The privacy-first default held even though it means more installs run into the small-model tool-calling unreliability documented above; that's exactly what the fallback-to-single-shot design below exists to absorb.</div>
       </div>
 
       <div class="dec-card" data-tags="data">
-        <div class="dec-id">DEC-003</div>
+        <div class="dec-id">Data</div>
         <h4>SQLite vs. PostgreSQL</h4>
         <table>
           <tr><th>Option</th><th>Tradeoff</th></tr>
           <tr><td>SQLite</td><td>Zero setup, file-based, portable — but single-writer, not ideal if multi-user ever ships</td></tr>
           <tr><td>PostgreSQL</td><td>Production-ready, concurrent — but requires a running server for a currently single-user local app</td></tr>
         </table>
-        <div class="verdict"><strong>Chose:</strong> SQLite for the current single-user phase; the SQLAlchemy abstraction keeps a later move to Postgres cheap if/when multi-user sharing (deferred, DEC-001) actually ships.</div>
+        <div class="verdict"><strong>Chose:</strong> SQLite for the current single-user phase; the database abstraction layer keeps a later move to Postgres cheap if/when multi-user sharing (deferred, not currently built toward) actually ships.</div>
       </div>
 
       <div class="dec-card" data-tags="data privacy">
-        <div class="dec-id">DEC-004</div>
+        <div class="dec-id">Data · Privacy</div>
         <h4>UUID vs. auto-increment integer primary keys</h4>
         <table>
           <tr><th>Option</th><th>Tradeoff</th></tr>
@@ -1198,7 +1186,7 @@
       </div>
 
       <div class="dec-card" data-tags="privacy">
-        <div class="dec-id">DEC-005 / DEC-010</div>
+        <div class="dec-id">Privacy</div>
         <h4>PDF parsing: local-only Ollama vs. cloud OCR/vision</h4>
         <table>
           <tr><th>Option</th><th>Tradeoff</th></tr>
@@ -1209,7 +1197,7 @@
       </div>
 
       <div class="dec-card" data-tags="ai">
-        <div class="dec-id">DEC-013</div>
+        <div class="dec-id">AI / LLM</div>
         <h4>Agentic loop scope: two read-only tools, not a full feature set</h4>
         <table>
           <tr><th>Descoped</th><th>Why</th></tr>
@@ -1218,24 +1206,46 @@
         </table>
         <div class="verdict"><strong>Chose:</strong> ship the smallest version of the loop that's actually useful — two tools buildable entirely from existing schema data, both read-only, both anonymized — rather than block the whole agentic architecture on the bigger features.</div>
       </div>
+
+      <div class="dec-card" data-tags="data">
+        <div class="dec-id">Data</div>
+        <h4>FHIR bundle import: file upload only, two resource types, reconciliation deferred</h4>
+        <table>
+          <tr><th>Option</th><th>Tradeoff</th></tr>
+          <tr><td>Full FHIR ingestion + live OAuth sync + cross-source reconciliation in one pass</td><td>Solves the whole problem at once — but reconciling a manually-entered record against a FHIR-coded one (e.g. "Type 2 Diabetes" vs. SNOMED-coded "Type 2 Diabetes Mellitus") is itself unscoped work, and blocking import on it delays a useful feature for an open-ended one</td></tr>
+          <tr><td>File-upload import, narrow resource scope, deterministic fuzzy-match flag</td><td>Ships something genuinely useful now — patients already have export bundles from other apps — without pretending to solve reconciliation it doesn't yet solve</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> one-time file-upload import for two resource types, with a deterministic fuzzy name-match check flagging likely duplicates against existing records in the review UI. Nothing auto-merges — the patient decides merge/skip/add-new. Full reconciliation across sources is a known, separately-tracked gap, not a silent one.</div>
+      </div>
+
+      <div class="dec-card" data-tags="privacy">
+        <div class="dec-id">Privacy</div>
+        <h4>Free-text redaction: scoped per-entity tokens, not a flat category label</h4>
+        <table>
+          <tr><th>Option</th><th>Tradeoff</th></tr>
+          <tr><td>Flat category replacement (every name → "[NAME]")</td><td>Simple — but collapses distinct people into one indistinguishable token, which can itself confuse or mislead a model reasoning over multiple doctors/relatives in the same text</td></tr>
+          <tr><td>Scoped per-entity tokens</td><td>The same doctor mentioned twice in one field maps to the same token, and distinct entities get distinct tokens — preserves the structure of the text without exposing the underlying value</td></tr>
+        </table>
+        <div class="verdict"><strong>Chose:</strong> scoped, per-entity tokens. Tokens are guarded on output and never re-hydrated back to the real value — the model can reason about "the same person mentioned earlier" without ever seeing who that person actually is.</div>
+      </div>
     </section>
 
     <!-- EVALUATION PLAN -->
     <section class="panel" id="panel-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0">
-      <div class="eyebrow">Tier 1 partially shipped, Tier 2 shipped (DEC-018) · Tier 3 (LLM-judge) still proposed</div>
+      <div class="eyebrow">Deterministic checks shipped · LLM-judge tier still proposed</div>
       <h1>Evaluation Plan</h1>
-      <p class="dek">The deterministic and cheap-no-judge tiers below (build order, tiers 1-2) are now implemented in <code>eval/</code> and run on-demand via <code>python -m eval.run</code> against a real pipeline and a real LLM backend, not just mocks — this closed out <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>. It's explicitly a smoke test, not a quality measure: it catches gross regressions (hallucination, scope violations, malformed output, retrieval rule breaks), and it already caught and fixed one real prompt regression on its first real run — see <code>docs/notes/PROMPT_CHANGELOG.md</code>'s v3 entry. Tier 3 (LLM-judge: relevance/usefulness, non-redundancy, deeper inferential groundedness) remains proposed, not built — see "Build order" below for what's actually shipped vs. still planned. Grounded in the actual pipeline (<code>context_selection.py</code>'s 4-stage selector, <code>visit_prep.py</code>'s prompt + agentic loop, <code>tools.py</code>'s two read-only tools), not a generic eval template.</p>
+      <p class="dek">A deterministic evaluation harness runs the real pipeline end-to-end against a real LLM backend, not mocks. It's explicitly a smoke test, not a quality measure: it catches gross regressions — hallucination, scope violations, malformed output, retrieval rule breaks — and it already caught and fixed one real prompt regression on its first real run. What it can't yet measure is the fuzzier stuff: whether output is actually good, not just correctly-shaped. That's the proposed next tier, described below.</p>
 
       <section class="block">
         <h2>Two eval surfaces inside visit prep</h2>
         <p>Retrieval and generation are separate AI decisions that fail differently — a generation eval can't tell you retrieval missed something, because the LLM never saw it to begin with. They need separate ground truth and separate metrics.</p>
         <div class="branch-cards">
           <div class="branch-card branch-card--ok">
-            <div class="bc-title"><span class="bc-dot"></span>Retrieval — ContextSelector, stages 1-2</div>
+            <div class="bc-title"><span class="bc-dot"></span>Retrieval — context selection, stages 1-2</div>
             <p>Which past visits/facts reach the prompt. Fails by <strong>omission</strong> (a relevant visit never reaches the LLM) or <strong>dilution</strong> (irrelevant history crowds the 2000-token budget).</p>
           </div>
           <div class="branch-card branch-card--fallback">
-            <div class="bc-title"><span class="bc-dot"></span>Generation — VisitPrepAgent.prepare_visit</div>
+            <div class="bc-title"><span class="bc-dot"></span>Generation — visit-prep question generation</div>
             <p>The questions themselves. Fails by <strong>hallucination</strong> (states a fact not in the anonymized context) or <strong>scope violation</strong> (asks the endocrinologist about a dermatology cream, which the system prompt explicitly forbids).</p>
           </div>
         </div>
@@ -1243,58 +1253,58 @@
 
       <section class="block">
         <h2>Retrieval eval</h2>
-        <p>Stage 1 is a deterministic function of <code>SPECIALTY_MAPPING</code> + flags — checkable by exact assertion, not fuzzy eval. Stage 2's LLM scoring is where real judgment is needed.</p>
+        <p>Stage 1 is a pure function of the specialty-mapping rules — checkable by exact assertion, not fuzzy eval. Stage 2's LLM scoring is where real judgment is needed.</p>
         <table class="mini-table">
           <tr><th>Judge?</th><th>What</th><th>Ground truth</th><th>Metric</th><th>Method</th></tr>
           <tr>
             <td><span class="strat-tag strat-det">deterministic</span></td>
-            <td>Stage 1 rules</td>
+            <td>Rules-based filtering</td>
             <td>Pure function of specialty mapping + flags — exact, not fuzzy</td>
             <td>Pass/fail assertion</td>
-            <td>Unit test, no LLM involved (cheap — close this gap first if it isn't covered)</td>
+            <td>Unit test, no LLM involved</td>
           </tr>
           <tr>
             <td><span class="strat-tag strat-det">deterministic</span></td>
-            <td>End-to-end selection (Stages 1-3)</td>
-            <td>~30-50 synthetic profiles, human-labeled <code>(target, past_visits[]) → expected_ids</code></td>
-            <td><strong>Recall@selected</strong> (primary — Stage 3's token budget makes recall the scarce resource), Precision@selected (secondary)</td>
-            <td>Deterministic replay of <code>select_context()</code> against fixtures — the full pipeline's output, not Stage 2 in isolation</td>
+            <td>End-to-end selection</td>
+            <td>Synthetic profiles, human-labeled expected picks</td>
+            <td><strong>Recall</strong> (primary — the token budget makes recall the scarce resource), precision (secondary)</td>
+            <td>Deterministic replay against fixtures — the full pipeline's output, not one stage in isolation</td>
           </tr>
           <tr>
             <td><span class="strat-tag strat-det">deterministic</span></td>
             <td>Stage-attribution</td>
             <td>Same labels as above</td>
-            <td>Stage-of-death histogram — count of missed gold visits per stage (Stage 1 rule miss / Stage 2 scored low / Stage 3 budget cutoff)</td>
-            <td>Log which stage discarded each gold visit — turns "recall is 70%" into a root cause</td>
+            <td>Which stage discarded each gold visit — rule miss, low score, or budget cutoff</td>
+            <td>Turns "recall is 70%" into a root cause instead of a single number</td>
           </tr>
           <tr>
             <td><span class="strat-tag strat-hybrid">local llm ± judge</span></td>
-            <td>Stage 2 calibration</td>
+            <td>Relevance-scoring calibration</td>
             <td>Borderline visits with human relevance labels</td>
-            <td>Score distribution (1-10) for true-relevant vs. true-irrelevant — catches a badly-calibrated <code>llama3.2</code> before it silently degrades recall</td>
-            <td>Offline scoring against real Ollama, or a stronger model (Claude) re-scoring the same visits as a cheap proxy without full human labels</td>
+            <td>Score distribution for true-relevant vs. true-irrelevant — catches a badly-calibrated local model before it silently degrades recall</td>
+            <td>Offline scoring against the real local model, or a stronger model re-scoring the same visits as a cheap proxy without full human labels</td>
           </tr>
         </table>
       </section>
 
       <section class="block">
         <h2>Generation eval</h2>
-        <p>The system prompt (<code>SYSTEM_PROMPT_TEMPLATE</code>) specifies several independent correctness properties — scoring them as one "quality" number hides which one is actually breaking.</p>
+        <p>The generation prompt specifies several independent correctness properties — scoring them as one "quality" number hides which one is actually breaking.</p>
         <table class="mini-table">
           <tr><th>Judge?</th><th>Dimension</th><th>Ground truth</th><th>Metric</th><th>Method</th></tr>
           <tr>
             <td><span class="strat-tag strat-hybrid">det ± judge</span></td>
             <td>Groundedness</td>
-            <td>The anonymized context actually sent (logged verbatim in <code>ConversationLog</code>) — the safety-critical dimension</td>
+            <td>The anonymized context actually sent — the safety-critical dimension</td>
             <td>Unsupported-claim rate (unsupported facts / total factual claims)</td>
-            <td>Cheap pass: extract entities (drug/date/lab names, reusing <code>anonymization.py</code>'s regex/NER), verify each appears in the logged context. Deeper pass: NLI-style LLM judge (supported/contradicted/unsupported) for softer inferential claims, scored by a <em>different</em> model than generated it to avoid self-grading bias.</td>
+            <td>Cheap pass: extract entities (drug/date/lab names), verify each appears in the logged context. Deeper pass: an LLM judge for softer inferential claims, scored by a <em>different</em> model than generated it to avoid self-grading bias.</td>
           </tr>
           <tr>
             <td><span class="strat-tag strat-det">deterministic</span></td>
             <td>Specialty scope</td>
             <td>The target appointment's specialty vs. each referenced condition/med's tagged specialty</td>
             <td>Violation rate (out-of-scope questions / total)</td>
-            <td>Fully programmatic, no judge needed — reuses <code>med_specialty_map</code>/ICD-10 tags and <code>are_specialties_related()</code> already computed in code</td>
+            <td>Fully programmatic, no judge needed — reuses the specialty-tagging logic already computed elsewhere in the app</td>
           </tr>
           <tr>
             <td><span class="strat-tag strat-llm">llm judge</span></td>
@@ -1335,20 +1345,8 @@
       </section>
 
       <section class="block">
-        <h2>Harness shape — as built (v1)</h2>
-        <pre class="snippet">eval/
-  fixtures.py           # synthetic doctors/conditions/medications/labs + GENERATION_CASES
-  db.py                 # builds a real in-memory-equivalent DB row set per case
-  scorers.py            # score_format, score_groundedness, score_scope,
-                         # score_tool_result_scope, score_tool_call_necessity,
-                         # score_retrieval_redundancy, expected_min_questions
-  retrieval_stage1.py    # Stage 1 rule assertions — no LLM call needed
-  run.py                 # CLI entrypoint: runs the real pipeline against
-                         # whichever backend Settings has configured,
-                         # temperature=0.0, writes a timestamped JSON report
-  results/               # gitignored — timestamped run output, diffed
-                         # against the most recent prior run</pre>
-        <p>Runs the real pipeline end-to-end (real DB rows via <code>build_case()</code>, real <code>VisitPrepAgent</code>, real <code>ContextSelector</code>) against whichever backend <code>Settings</code> has configured — not a mock. Diagnostics (<code>agent.last_context_selection</code>, <code>agent.last_tool_calls</code>) are exposed on <code>VisitPrepAgent</code> after <code>prepare_visit()</code> returns so the harness can inspect Phase 1/Phase 2 retrieval without duplicating pipeline logic. Regression gate is comparative, not a fixed bar: each run's JSON report is diffed against the most recent prior result, since "better or worse than last time" is the operative question for a prompt-change review — see a real example of that loop in <code>docs/notes/PROMPT_CHANGELOG.md</code>'s v3 entry. Sampling real <code>ConversationLog</code> entries through a judge pass, described in the original plan below, stays part of the not-yet-built tier 3.</p>
+        <h2>How the harness runs</h2>
+        <p>The harness runs the real pipeline end-to-end — real database rows, the real visit-prep agent, the real context selector — against whichever backend is actually configured, not a mock. Each run's report is diffed against the most recent prior run, since "better or worse than last time" is the operative question for a prompt-change review, rather than a fixed pass/fail bar.</p>
       </section>
 
       <section class="block">
@@ -1362,72 +1360,15 @@
           </div>
           <div class="boundary">
             <div class="eyebrow">Passive, on real usage</div>
-            <h4>"Online" — ConversationLog monitoring</h4>
-            <p>Currently write-only. Add: <strong>fallback rate</strong> (% of calls hitting single-shot instead of completing the agentic loop — see <a href="https://github.com/nidhi-menon/HealthSteward/issues/30">issue #30</a>), <strong>retroactive judge sampling</strong> on real logged conversations, and a <strong>human-in-the-loop signal</strong> — noting a wrong/off-scope/fabricated question and feeding it back as a new regression fixture. The realistic substitute for population-scale online eval at single-user scale.</p>
+            <h4>"Online" — conversation log monitoring</h4>
+            <p>Currently write-only. Planned: a fallback-rate metric (how often the agentic loop hits single-shot instead of completing), retroactive judge sampling on real logged conversations, and a human-in-the-loop signal — noting a wrong/off-scope/fabricated question and feeding it back as a new regression fixture. The realistic substitute for population-scale online eval at single-user scale.</p>
           </div>
         </div>
       </section>
 
       <section class="block">
-        <h2>Build order</h2>
-        <p>One ranked list across all four components, not four separate ones — by value/effort, cheapest and most deterministic first.</p>
-
-        <div class="loop-box">
-          <div class="loop-box-label">tier 1 — deterministic, no judge model — partially shipped (DEC-018): #1-3 built, #4-5 not yet</div>
-          <div class="loop-steps">
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>1. Scope checker</div>
-              <div class="loop-step-desc"><strong>generation</strong> — flags a question referencing a medication tagged for an unrelated specialty</div>
-            </div>
-            <div class="loop-arrow">→</div>
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>2. Format validation</div>
-              <div class="loop-step-desc"><strong>generation</strong> — checks valid JSON shape, 8-15 questions, known non-empty categories</div>
-            </div>
-            <div class="loop-arrow">→</div>
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>3. Stage 1 unit tests</div>
-              <div class="loop-step-desc"><strong>retrieval</strong> — asserts the rules filter includes/excludes the right visits by exact id</div>
-            </div>
-            <div class="loop-arrow">→</div>
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>4. PII span-overlap</div>
-              <div class="loop-step-desc"><strong>anonymize</strong> — not built; would diff anonymized output against known PII spans in a fixture</div>
-            </div>
-            <div class="loop-arrow">→</div>
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>5. AVS golden-set diff</div>
-              <div class="loop-step-desc"><strong>ingest</strong> — not built; would diff parser output against a hand-verified reference PDF</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="loop-box">
-          <div class="loop-box-label">tier 2 — cheap, no judge, but not a pure assertion — shipped (DEC-018)</div>
-          <div class="loop-steps">
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-check"></use></svg>6. Groundedness entity-match</div>
-              <div class="loop-step-desc"><strong>generation</strong> — flags a question that names no real condition/medication/lab from the input (string match, not semantic)</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="loop-box">
-          <div class="loop-box-label">tier 3 — needs fixtures and/or a judge model — proposed, not yet built</div>
-          <div class="loop-steps">
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>7. Retrieval recall/precision</div>
-              <div class="loop-step-desc"><strong>retrieval</strong> — not built; would score whether context selection picked the actually-relevant past visits, not just the rule-eligible ones</div>
-            </div>
-            <div class="loop-arrow">→</div>
-            <div class="loop-step loop-step--desc">
-              <div class="loop-step-head"><svg aria-hidden="true"><use href="#icon-chip"></use></svg>8. LLM-judge relevance</div>
-              <div class="loop-step-desc"><strong>generation</strong> — not built; would use a second model to judge whether each question is actually useful, not just non-hallucinated</div>
-            </div>
-          </div>
-        </div>
-
-        <p style="margin-top:14px;"><strong>Two items shipped beyond the original plan</strong> when scoping DEC-018 in detail: a tool-call-necessity check (did the agentic loop's on-demand retrieval call the tool a case was designed to exercise) and a Phase 1/Phase 2 retrieval-redundancy check (did a <code>lookup_past_visits</code> call re-surface a visit Stage 1 already selected) — both observational, not pass/fail, since neither is a hard requirement of correct behavior. <strong>#4 (PII span-overlap) and #5 (AVS golden-set)</strong> remain not yet built — DEC-018 scoped to visit-prep's retrieval/generation surfaces only, tracked separately from the harness described here.</p>
+        <h2>What's built vs. proposed</h2>
+        <p>Deterministic checks — format validity, specialty-scope violations, retrieval rule assertions, and a cheap groundedness pass via entity matching — are implemented and run today. What's proposed but not yet built is the harder tier: an LLM-judge pass for relevance and usefulness (properties with no cheap deterministic proxy), deeper inferential groundedness, and formal retrieval recall/precision scoring against a larger labeled fixture set.</p>
       </section>
     </section>
 
@@ -1520,32 +1461,32 @@ Lab Orders:
         </div>
         <div class="callout risk">
           <span class="callout-label">External dependency risk</span>
-          <p>Ollama model tags (<code>qwen2.5:7b</code>, <code>llama3.2</code>) are referenced by tag, not pinned digest — a silent upstream re-tag could change parsing/scoring/visit-prep behavior with no code change to explain why, and this now affects the default agentic backend directly, not just an opt-in path. Anthropic API and any custom provider's pricing/availability changes only matter to whoever has opted into them from Settings. <a href="https://github.com/nidhi-menon/HealthSteward/issues/31">Tracked in issue #31.</a></p>
+          <p>Local model versions are referenced by tag, not pinned digest — a silent upstream update could change parsing/scoring/visit-prep behavior with no code change to explain why, and this now affects the default agentic backend directly, not just an opt-in path. Anthropic API and any custom provider's pricing/availability changes only matter to whoever has opted into them from Settings.</p>
         </div>
         <div class="callout risk">
-          <span class="callout-label">Prompt-change management — resolved (DEC-018)</span>
-          <p>Every prompt in the codebase is now versioned, with content changes logged in <code>docs/notes/PROMPT_CHANGELOG.md</code> — what changed, why, and eval evidence where the harness's fixtures cover the change. <code>visit_prep.py</code>'s two prompts additionally log their version per-run via <code>ConversationLog.extra_data["prompt_version"]</code>. Residual gap: the eval harness only covers <code>visit_prep.py</code>'s generation prompts today — the Stage 2 relevance-scoring prompt and the AVS parser's five extraction prompts are versioned for traceability but have no before/after quality signal yet.</p>
+          <span class="callout-label">Prompt-change management — resolved</span>
+          <p>Every prompt in the codebase is versioned, with content changes logged alongside eval evidence where the harness's fixtures cover the change. The two visit-prep generation prompts additionally log their version per-run for traceability. Residual gap: the eval harness only covers those generation prompts today — the relevance-scoring prompt and the AVS parser's extraction prompts are versioned for traceability but have no before/after quality signal yet.</p>
         </div>
       </section>
 
       <section class="block">
         <h2>Known gaps</h2>
         <div class="callout gap">
-          <span class="callout-label">No quality evaluation of generated output — partially resolved (DEC-018)</span>
-          <p>A deterministic v1 eval harness (<code>eval/</code>, tiers 1-2 of the Evaluation Plan above) now runs the real pipeline against a real backend and catches format/scope/groundedness/retrieval-rule regressions — it already caught and fixed one real prompt regression on its first run. What it still can't measure: relevance/usefulness, non-redundancy, and deeper inferential groundedness a simple entity-match can't verify (e.g. a question referencing a trend or prior visit without repeating the entity name — <a href="https://github.com/nidhi-menon/HealthSteward/issues/76">issue #76</a>) — that's the named tier-3 LLM-judge work, still not built. Original gap tracked in <a href="https://github.com/nidhi-menon/HealthSteward/issues/29">issue #29</a>.</p>
+          <span class="callout-label">No quality evaluation of generated output — partially resolved</span>
+          <p>A deterministic eval harness now runs the real pipeline against a real backend and catches format/scope/groundedness/retrieval-rule regressions — it already caught and fixed one real prompt regression on its first run. What it still can't measure: relevance/usefulness, non-redundancy, and deeper inferential groundedness a simple entity-match can't verify (e.g. a question referencing a trend or prior visit without repeating the entity name) — that's the proposed LLM-judge work, still not built.</p>
         </div>
         <div class="callout gap">
           <span class="callout-label">No visibility into agentic-loop fallback rate</span>
-          <p><code>ConversationLog</code> stores the data, but nothing surfaces how often the loop actually falls back to single-shot in production usage (outside of an eval run, which forces the real pipeline path). A silently degrading backend would be invisible. <a href="https://github.com/nidhi-menon/HealthSteward/issues/30">Tracked in issue #30.</a></p>
+          <p>The data needed to compute it is logged, but nothing surfaces how often the loop actually falls back to single-shot in production usage. A silently degrading backend would be invisible today.</p>
         </div>
         <div class="callout gap">
           <span class="callout-label">No frontend test coverage</span>
-          <p>Backend has 119+ tests; frontend has zero — no framework installed, no test files. <a href="https://github.com/nidhi-menon/HealthSteward/issues/27">Tracked in issue #27.</a></p>
+          <p>Backend has 119+ tests; frontend has zero — no framework installed, no test files.</p>
         </div>
       </section>
 
       <p style="font-size:13px; max-width:102ch; margin-top:8px;">
-        See all <a href="https://github.com/nidhi-menon/HealthSteward/issues">open issues</a> for the full backlog, or start a <a href="https://github.com/nidhi-menon/HealthSteward/discussions">Discussion</a> if something here isn't clearly a bug or a scoped feature yet.
+        See the <a href="https://github.com/nidhi-menon/HealthSteward">GitHub repository</a> for the full open-issue backlog and to start a discussion.
       </p>
     </section>
 
@@ -1555,14 +1496,13 @@ Lab Orders:
       <h1>Glossary</h1>
       <p class="dek">Terms as used specifically in this codebase — some have a more specific meaning here than the general ML/LLM usage.</p>
       <dl>
-        <div class="gterm"><dt>Agentic loop</dt><dd>The bounded tool-use conversation loop in <code>visit_prep.py</code> — the model can call tools before producing a final answer, up to <code>agent_max_turns</code>, with automatic fallback to single-shot generation if it doesn't converge.</dd></div>
+        <div class="gterm"><dt>Agentic loop</dt><dd>The bounded tool-use conversation loop that drives visit prep — the model can call tools before producing a final answer, up to a fixed turn budget, with automatic fallback to single-shot generation if it doesn't converge.</dd></div>
         <div class="gterm"><dt>AVS</dt><dd>After-Visit Summary — the PDF a patient is typically handed at the end of a doctor's visit, containing vitals, orders, diagnoses, and notes.</dd></div>
-        <div class="gterm"><dt>Anonymization boundary</dt><dd>The point in the pipeline (after context selection, before the agentic loop starts) past which no unredacted PII should exist — a hard constraint (DEC-006), not a best-effort nicety.</dd></div>
-        <div class="gterm"><dt>Specialty-aware prompting</dt><dd>System prompts that constrain generated questions to what's relevant to the specific doctor's specialty, using ICD-10 → specialty mapping and medication → prescriber tagging (DEC-011).</dd></div>
+        <div class="gterm"><dt>Anonymization boundary</dt><dd>The point in the pipeline (after context selection, before the agentic loop starts) past which no unredacted PII should exist — a hard constraint, not a best-effort nicety.</dd></div>
+        <div class="gterm"><dt>Specialty-aware prompting</dt><dd>System prompts that constrain generated questions to what's relevant to the specific doctor's specialty, using ICD-10 → specialty mapping and medication → prescriber tagging.</dd></div>
         <div class="gterm"><dt>Section-routing</dt><dd>The AVS parser's architecture: deterministic parsers handle structured PDF sections, local LLM calls handle unstructured ones — routed by section type, not one monolithic LLM call over the whole document.</dd></div>
-        <div class="gterm"><dt>Pluggable backend</dt><dd><code>LLMBackend</code> abstraction (<code>src/agents/llm_backend.py</code>) that normalizes Ollama, Claude API, and any custom OpenAI-compatible provider's tool-calling into one interface, so the agentic loop code doesn't branch on provider (DEC-013, DEC-016).</dd></div>
-        <div class="gterm"><dt>NudgeState</dt><dd>DB table persisting snooze/dismiss state for computed action items that have no natural row of their own to attach state to (e.g. "appointment is past-due").</dd></div>
-        <div class="gterm"><dt>DEC-XXX</dt><dd>An entry in <code>docs/notes/DECISIONS.md</code>'s architectural decision log — Date / Topic / Context / Options Considered / Decision / Reasoning / Status.</dd></div>
+        <div class="gterm"><dt>Pluggable backend</dt><dd>An abstraction that normalizes Ollama, Claude API, and any custom OpenAI-compatible provider's tool-calling into one interface, so the agentic loop code doesn't branch on provider.</dd></div>
+        <div class="gterm"><dt>Nudge state</dt><dd>Persisted snooze/dismiss state for computed action items that have no natural record of their own to attach state to (e.g. "appointment is past-due").</dd></div>
       </dl>
     </section>
 
@@ -1584,16 +1524,16 @@ Lab Orders:
       </div>
       <div class="faq-item">
         <div class="q">Why two different local models (Ollama for parsing vs. relevance scoring) instead of one shared path?</div>
-        <p class="a">Same local Ollama server, different model tags: PDF parsing always uses <code>avs_parser_model</code> (<code>qwen2.5:7b</code>), while relevance scoring reuses whichever model <code>ollama_model</code> is set to (<code>llama3.2</code> by default — the same one the agentic loop uses). Not a deliberate "pick the best model per job" choice so much as parsing having its own dedicated setting and scoring never getting one — see <a href="https://github.com/nidhi-menon/HealthSteward/issues/59">issue #59</a>. They're kept as distinct call sites because they have different failure-handling needs regardless: parsing failure surfaces to the user for review; scoring failure silently falls back to rules-based selection.</p>
+        <p class="a">Same local Ollama server, different model tags: PDF parsing always uses <code>qwen2.5:7b</code>, chosen for structured extraction, while relevance scoring reuses whichever model the agentic loop is already configured with (<code>llama3.2</code> by default). They're kept as distinct call sites because they have different failure-handling needs: parsing failure surfaces to the user for review; scoring failure silently falls back to rules-based selection.</p>
       </div>
       <div class="faq-item">
         <div class="q">What happens if Ollama isn't running at all?</div>
-        <p class="a">PDF parsing simply can't proceed (surfaced to the user). Context-selection relevance scoring skips stage 2 and falls back to rules-based filtering plus truncation. Visit prep — Ollama by default as of DEC-016 — falls back to its own single-shot path per DEC-013's convergence handling; switching to Claude or a custom provider in Settings avoids the dependency on Ollama for visit prep specifically.</p>
+        <p class="a">PDF parsing simply can't proceed (surfaced to the user). Context-selection relevance scoring skips that stage and falls back to rules-based filtering plus truncation. Visit prep — Ollama by default — falls back to its own single-shot path; switching to Claude or a custom provider in Settings avoids the dependency on Ollama for visit prep specifically.</p>
       </div>
     </section>
 
     <footer class="doc-footer">
-      <p>This is a point-in-time snapshot, re-written when a decision represents a genuine architectural shift — not on every change. Full decision-by-decision detail: <code>docs/notes/DECISIONS.md</code>. Narrative build history: <code>docs/notes/DEVELOPMENT_LOG.md</code>. Source: <a href="https://github.com/nidhi-menon/HealthSteward">github.com/nidhi-menon/HealthSteward</a>.</p>
+      <p>This is a point-in-time snapshot, re-written when a decision represents a genuine architectural shift — not on every change. Full decision-by-decision detail: <a href="https://github.com/nidhi-menon/HealthSteward/blob/main/docs/notes/DECISIONS.md"><code>docs/notes/DECISIONS.md</code></a>. Narrative build history: <a href="https://github.com/nidhi-menon/HealthSteward/blob/main/docs/notes/DEVELOPMENT_LOG.md"><code>docs/notes/DEVELOPMENT_LOG.md</code></a>. Source: <a href="https://github.com/nidhi-menon/HealthSteward">github.com/nidhi-menon/HealthSteward</a>.</p>
     </footer>
 
   </main>

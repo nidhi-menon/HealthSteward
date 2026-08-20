@@ -172,3 +172,8 @@ Desktop.ini
 linkedin-posts/
 medium-posts/
 content/
+
+# Internal dev-reference notes not meant for the public repo (docs/tdd.html is
+# the public-facing version; this houses the file-path/issue-number/DEC-id
+# level detail trimmed out of it)
+docs/notes/DESIGN_INTERNAL.html
