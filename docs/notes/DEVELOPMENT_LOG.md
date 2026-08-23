@@ -1902,6 +1902,30 @@ Related: issue #27, issue #44 (the snooze/undo behaviour now under test), CONTRI
 
 ---
 
+## 63. The Visit Being Prepared Was the One Visit Whose Prep Notes the Model Couldn't See (#43, part)
+
+**Date:** 2026-08-10
+
+**Context:** #43 describes `Appointment.prep_notes` as never reaching the agent at all. That premise is out of date — entry 38 wired it through `AnonymizedAppointment`, and entry 39's v4 prompt teaches the model to reason about it. What's left is narrower and considerably odder than the issue suggests: `_build_anonymized_context`'s **"## Upcoming Appointment"** block emits provider, specialty, clinic, date, purpose and provider notes, and drops `prep_notes`. The past-visits section renders it (`- Planned to discuss: …`), and `lookup_past_visits` renders it (`src/agents/tools.py`). So the model could read what the patient planned to discuss at every visit *except the one it was generating questions for* — the field a patient fills in specifically to steer this generation was the one input the generation couldn't see.
+
+**What was built:** two lines in the "## Upcoming Appointment" block, using the same `- Planned to discuss:` label the past-visits section already uses. Nothing needed plumbing — `appointment` is already an `AnonymizedAppointment` carrying the anonymized value, so this reads a field that was sitting there unused.
+
+**Reusing the past-visit label rather than coining a new one** keeps one phrasing for one concept across the two places it appears, which matters more than usual here because v4's carryover rule names the label in prompt text ("If a past visit's 'Planned to discuss' notes…"). That rule is explicitly scoped to *past* visits and the upcoming appointment sits under its own heading with no accompanying "Notes:" line, so the two shouldn't collide — but the interaction is worth knowing about, and it's the one part of this change that can only really be judged against real model output rather than in source.
+
+**No double-counting of redaction events.** The value comes from `anonymize_appointment`, which already ran once and already logged its events; re-anonymizing at render time would double every `appointment:{id}:prep_notes` event against #16's per-request aggregation. That's the same trap entry 42 had to back out of for `condition.notes`, so the test pins the count at exactly one rather than trusting the comment.
+
+**Tests:** two in `tests/test_visit_prep.py` — the line present under the upcoming-appointment heading with the raw phone number absent from the whole context (anonymized value, not the raw field) and exactly one redaction event for the field; and the counterpart asserting the label appears nowhere when prep notes are blank, so an empty line can't creep in. Both were confirmed to fail against the unmodified source before the fix went in. Suite: 392 passed, 28 skipped. No frontend changes, no schema change, no migration.
+
+**No prompt version bump and no `PROMPT_CHANGELOG.md` entry**, following the precedent this exact block already set twice: entry 31 added `- Provider Notes:` to this same section and entry 38 added `Planned to discuss:` to the past-visits section, neither bumping a version. Entry 38 draws the line explicitly — it scoped itself to *exposure* and left the prompt wording to entry 39 precisely because wording is what the versioning discipline governs. What data gets assembled into the user message is not prompt surface; `SYSTEM_PROMPT_TEMPLATE`'s text is, and it is untouched at `v4-2026-07-22`. **No DEC entry**, matching entry 31's reasoning for the same kind of gap-fill.
+
+**Deliberately not in scope:** the rest of #43 — the `VisitPrep.tsx` → `Appointment.tsx` rename, persisting the ephemeral "Additional Concerns" textarea into `prep_notes`, the before/after section split, and stripping both notes fields from the Edit Appointment modal. The rename collides with PR #153, which is open and modifies that page in eight places; the textarea question turns on whether `additional_concerns` (`src/api/visits.py`) should be deprecated or kept as a deliberately separate non-persisted channel, which changes what the control should say. Both left on #43 with recommendations rather than decided here.
+
+**Files changed:** `src/agents/visit_prep.py`, `tests/test_visit_prep.py`, `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: issue #43, entry 38, entry 39, entry 31, issue #16, PROMPT_CHANGELOG.md v4 entry.
+
+---
+
 ## 62. Per-Entity Tokens in Free-Text Anonymization (#17, DEC-036)
 
 **Date:** 2026-08-09
