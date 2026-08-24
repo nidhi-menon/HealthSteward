@@ -1,0 +1,525 @@
+{
+  "AVS-1.pdf": {
+    "scalar": {
+      "patient.name": {
+        "match": true,
+        "parsed": "firstname lastname",
+        "truth": "firstname lastname"
+      },
+      "provider.name": {
+        "match": true,
+        "parsed": "eliana krulig, md",
+        "truth": "eliana krulig, md"
+      },
+      "provider.phone": {
+        "match": true,
+        "parsed": "650-934-7676",
+        "truth": "650-934-7676"
+      },
+      "patient.visit_date": {
+        "match": true,
+        "parsed": "12/2/2025",
+        "truth": "12/2/2025"
+      },
+      "provider.facility": {
+        "match": true,
+        "parsed": "sutter dermatology - mountain view",
+        "truth": "sutter dermatology - mountain view"
+      }
+    },
+    "list_counts": {
+      "medication_changes": {
+        "parsed_count": 2,
+        "truth_count": 2,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "name": "fluocinonide (LIDEX)",
+            "action": "start",
+            "strength": "0.05% Topical Soln",
+            "instructions": "Apply to affected areas on scalp twice daily up to 2 weeks at a time for itchy rash.",
+            "date": "12/2/2025"
+          },
+          {
+            "name": "ketoconazole (NIZORAL)",
+            "action": "start",
+            "strength": "2% Shampoo",
+            "instructions": "Nizoral shampoo every other day, lather, leave on 3-5 min then rinse",
+            "date": "12/2/2025"
+          }
+        ],
+        "truth_items": [
+          {
+            "name": "fluocinonide (LIDEX)",
+            "action": "start",
+            "strength": "0.05% Topical Soln",
+            "instructions": "Apply to affected areas on scalp twice daily up to 2 weeks at a time for itchy rash.",
+            "date": "12/2/2025"
+          },
+          {
+            "name": "ketoconazole (NIZORAL)",
+            "action": "start",
+            "strength": "2% Shampoo",
+            "instructions": "Nizoral shampoo every other day, lather, leave on 3-5 min then rinse",
+            "date": "12/2/2025"
+          }
+        ]
+      },
+      "diagnoses": {
+        "parsed_count": 2,
+        "truth_count": 2,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "condition": "Acne vulgaris",
+            "icd_10": "L70.0"
+          },
+          {
+            "condition": "Seborrheic dermatitis",
+            "icd_10": "L21.9"
+          }
+        ],
+        "truth_items": [
+          {
+            "condition": "Acne vulgaris",
+            "icd_10": "L70.0"
+          },
+          {
+            "condition": "Seborrheic dermatitis",
+            "icd_10": "L21.9"
+          }
+        ]
+      },
+      "upcoming_appointments": {
+        "parsed_count": 1,
+        "truth_count": 1,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "description": "FEB Lab Scheduling MHO Sutter Laboratory Medicine - Sunnyvale",
+            "date": "February 27, 2026",
+            "time": "8:30 AM",
+            "location": "301 Old San Francisco Road, Sunnyvale CA 94086",
+            "phone": "408-730-4377"
+          }
+        ],
+        "truth_items": [
+          {
+            "description": "FEB Lab Scheduling MHO Sutter Laboratory Medicine - Sunnyvale",
+            "date": "February 27, 2026",
+            "time": "8:30 AM",
+            "location": "301 Old San Francisco Road, Sunnyvale CA 94086",
+            "phone": "408-730-4377"
+          }
+        ]
+      },
+      "follow_up_recommended": {
+        "parsed_count": 0,
+        "truth_count": 0,
+        "count_match": true,
+        "parsed_items": [],
+        "truth_items": []
+      },
+      "lab_orders": {
+        "parsed_count": 0,
+        "truth_count": 0,
+        "count_match": true,
+        "parsed_items": [],
+        "truth_items": []
+      },
+      "referrals": {
+        "parsed_count": 0,
+        "truth_count": 0,
+        "count_match": true,
+        "parsed_items": [],
+        "truth_items": []
+      }
+    },
+    "notes": {
+      "parsed_count": 10,
+      "truth_count": 8,
+      "count_match": false,
+      "present": true,
+      "parsed_items": [
+        "Seborrheic Dermatitis",
+        "What is seborrheic dermatitis?",
+        "Seborrheic dermatitis is a common, benign, scaling rash that commonly occurs on the scalp, eyebrows, sides of nose, and ear. Dandruff falls into this diagnosis. There is no cure for this condition, however treatments can help to keep symptoms and disease activity under control.",
+        "Possible treatments",
+        "- Medicated shampoos (over the counter and prescription): Selsun Blue (selenium sulfide), Head and Shoulders (zinc pyrithione), and T-sal (salicylic acid) can all help this rash. You can rotate weekly between 2-3 different shampoos for optimal effect. Ketoconazole 2% shampoo is a prescription-based shampoo that works very well.",
+        "- Topical Steroids: Topical steroids are very safe when used on skin with active disease. Solutions work well on the scalp and creams work well on the face.",
+        "Skin products: 1. Cleanse 2. Medication ( clinda and /or azelaic acid) 3. Moisturizer and/or spf 50+ 4. Makeup",
+        "If the blackheads persistent despite clinda and azelaic acid, you can add a cleanser otc for acne with Salicylic acid (such as Neutrogena acne wash, cerave acne wash). We can also add tretinoin in the future.",
+        "Apply a moisturizer and/or SPF 50+ after cleansing.",
+        "Use makeup as needed."
+      ],
+      "truth_items": [
+        "Seborrheic Dermatitis",
+        "What is seborrheic dermatitis?",
+        "Seborrheic dermatitis is a common, benign, scaling rash that commonly occurs on the scalp, eyebrows, sides of nose, and ear. Dandruff falls into this diagnosis. There is no cure for this condition, however treatments can help to keep symptoms and disease activity under control.",
+        "Possible treatments",
+        "- Medicated shampoos (over the counter and prescription): Selsun Blue (selenium sulfide), Head and Shoulders (zinc pyrithione), and T-sal (salicylic acid) can all help this rash. You can rotate weekly between 2-3 different shampoos for optimal effect. Ketoconazole 2% shampoo is a prescription-based shampoo that works very well.",
+        "- Topical Steroids: Topical steroids are very safe when used on skin with active disease. Solutions work well on the scalp and creams work well on the face.",
+        "Skin products: 1. Cleanse 2. Medication ( clinda and /or azelaic acid) 3. Moisturizer and/or spf 50+ 4. Makeup",
+        "If the blackheads persistent despite clinda and azelaic acid, you can add a cleanser otc for acne with Salicylic acid (such as Neutrogena acne wash, cerave acne wash). We can also add tretinoin in the future."
+      ]
+    }
+  },
+  "AVS-2.pdf": {
+    "scalar": {
+      "patient.name": {
+        "match": true,
+        "parsed": "fname lname",
+        "truth": "fname lname"
+      },
+      "provider.name": {
+        "match": true,
+        "parsed": "d.m. antoniucci, md",
+        "truth": "d.m. antoniucci, md"
+      },
+      "provider.phone": {
+        "match": true,
+        "parsed": "415-600-0110",
+        "truth": "415-600-0110"
+      },
+      "patient.visit_date": {
+        "match": true,
+        "parsed": "1/8/2026",
+        "truth": "1/8/2026"
+      },
+      "provider.facility": {
+        "match": true,
+        "parsed": "sutter endocrinology - san francisco van ness",
+        "truth": "sutter endocrinology - san francisco van ness"
+      }
+    },
+    "list_counts": {
+      "medication_changes": {
+        "parsed_count": 2,
+        "truth_count": 2,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "name": "levothyroxine",
+            "action": "changed",
+            "strength": "100mcg Tab",
+            "instructions": "Take one Tab by mouth daily But take 2 tabs on Sundays and Thursdays",
+            "date": "1/8/2026"
+          },
+          {
+            "name": "lancet Lancets (LANCET 30G)",
+            "action": "stop",
+            "strength": null,
+            "instructions": null,
+            "date": "1/8/2026"
+          }
+        ],
+        "truth_items": [
+          {
+            "name": "levothyroxine",
+            "action": "changed",
+            "strength": "100mcg Tab",
+            "instructions": "Take one Tab by mouth daily But take 2 tabs on Sundays and Thursdays",
+            "date": "1/8/2026"
+          },
+          {
+            "name": "lancet Lancets (LANCET 30G)",
+            "action": "stop",
+            "strength": null,
+            "instructions": null,
+            "date": "1/8/2026"
+          }
+        ]
+      },
+      "diagnoses": {
+        "parsed_count": 1,
+        "truth_count": 1,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "condition": "Hypothyroidism due to Hashimoto's thyroiditis",
+            "icd_10": "E06.3"
+          }
+        ],
+        "truth_items": [
+          {
+            "condition": "Hypothyroidism due to Hashimoto's thyroiditis",
+            "icd_10": "E06.3"
+          }
+        ]
+      },
+      "upcoming_appointments": {
+        "parsed_count": 2,
+        "truth_count": 2,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "description": "FEB Lab Scheduling MHO Sutter Laboratory Medicine - Sunnyvale",
+            "date": "February 27, 2026",
+            "time": "8:30 AM",
+            "location": "301 Old San Francisco Road, Sunnyvale CA 94086",
+            "phone": "408-730-4377"
+          },
+          {
+            "description": "AUG Video Visit with D.M. Antoniucci, MD",
+            "date": "August 19, 2026",
+            "time": "9:00 AM",
+            "location": null,
+            "phone": null
+          }
+        ],
+        "truth_items": [
+          {
+            "description": "FEB Lab Scheduling MHO Sutter Laboratory Medicine - Sunnyvale",
+            "date": "February 27, 2026",
+            "time": "8:30 AM",
+            "location": "301 Old San Francisco Road, Sunnyvale CA 94086",
+            "phone": "408-730-4377"
+          },
+          {
+            "description": "AUG Video Visit with D.M. Antoniucci, MD",
+            "date": "August 19, 2026",
+            "time": "9:00 AM",
+            "location": null,
+            "phone": null
+          }
+        ]
+      },
+      "follow_up_recommended": {
+        "parsed_count": 3,
+        "truth_count": 3,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "description": "Recheck in 1 month",
+            "timeframe": "1 month",
+            "target_date": "2026-02-08"
+          },
+          {
+            "description": "See me back in 4 months",
+            "timeframe": "4 months",
+            "target_date": "2026-05-08"
+          },
+          {
+            "description": "Please Return in about 3 months",
+            "timeframe": "3 months",
+            "target_date": "2026-04-08"
+          }
+        ],
+        "truth_items": [
+          {
+            "description": "Recheck in 1 month",
+            "timeframe": "1 month",
+            "target_date": "2026-02-08"
+          },
+          {
+            "description": "See me back in 4 months",
+            "timeframe": "4 months",
+            "target_date": "2026-05-08"
+          },
+          {
+            "description": "Please Return in about 3 months",
+            "timeframe": "3 months",
+            "target_date": "2026-04-08"
+          }
+        ]
+      },
+      "lab_orders": {
+        "parsed_count": 1,
+        "truth_count": 1,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "test": "THYROID SCREEN (TSH) W/ REFLEX FREE T4",
+            "ordered_date": "1/8/2026"
+          }
+        ],
+        "truth_items": [
+          {
+            "test": "THYROID SCREEN (TSH) W/ REFLEX FREE T4",
+            "ordered_date": "1/8/2026"
+          }
+        ]
+      },
+      "referrals": {
+        "parsed_count": 0,
+        "truth_count": 0,
+        "count_match": true,
+        "parsed_items": [],
+        "truth_items": []
+      }
+    },
+    "notes": {
+      "parsed_count": 7,
+      "truth_count": 7,
+      "count_match": true,
+      "present": true,
+      "parsed_items": [
+        "Please increase your levothyroxine to 100 mcg/d",
+        "Make sure to not forget any doses 1. Use a pill box to ensure you are taking daily 2. If you forget a pill on one day, double your dose the following day",
+        "Do not take your iron without 4 hours of the levothyroxine (if you take levothyroxine in the AM, please move the iron to lunch)",
+        "Recheck in 1 month with MHO follow up",
+        "Continue working on increasing exercise and aim for a 30 min walk every day at minimum",
+        "Consider whether your sertraline needs adjustment if mood doesn't improve with increasing levothyroxine dose",
+        "See me back in 4 months"
+      ],
+      "truth_items": [
+        "Please increase your levothyroxine to 100 mcg/d",
+        "Make sure to not forget any doses 1. Use a pill box to ensure you are taking daily 2. If you forget a pill on one day, double your dose the following day",
+        "Do not take your iron without 4 hours of the levothyroxine (if you take levothyroxine in the AM, please move the iron to lunch)",
+        "Recheck in 1 month with MHO follow up",
+        "Continue working on increasing exercise and aim for a 30 min walk every day at minimum",
+        "Consider whether your sertraline needs adjustment if mood doesn't improve with increasing levothyroxine dose",
+        "See doctor back in 4 months"
+      ]
+    }
+  },
+  "AVS-3.pdf": {
+    "scalar": {
+      "patient.name": {
+        "match": true,
+        "parsed": "pfname plname",
+        "truth": "pfname plname"
+      },
+      "provider.name": {
+        "match": true,
+        "parsed": "dfname dlname, m.d.",
+        "truth": "dfname dlname, m.d."
+      },
+      "provider.phone": {
+        "match": true,
+        "parsed": "900-900-9000",
+        "truth": "900-900-9000"
+      },
+      "patient.visit_date": {
+        "match": true,
+        "parsed": "2025 sep 23",
+        "truth": "2025 sep 23"
+      },
+      "provider.facility": {
+        "match": true,
+        "parsed": "6680 alhambra ave pmb 436, martinez, ca 94553-6105",
+        "truth": "6680 alhambra ave pmb 436, martinez, ca 94553-6105"
+      }
+    },
+    "list_counts": {
+      "medication_changes": {
+        "parsed_count": 0,
+        "truth_count": 0,
+        "count_match": true,
+        "parsed_items": [],
+        "truth_items": []
+      },
+      "diagnoses": {
+        "parsed_count": 3,
+        "truth_count": 3,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "condition": "Adenomyosis",
+            "icd_10": "N80.03"
+          },
+          {
+            "condition": "Endometriosis of pelvis",
+            "icd_10": "N80.9"
+          },
+          {
+            "condition": "PCOS - Polycystic ovarian syndrome",
+            "icd_10": "E28.2"
+          }
+        ],
+        "truth_items": [
+          {
+            "condition": "Adenomyosis",
+            "icd_10": "N80.03"
+          },
+          {
+            "condition": "Endometriosis of pelvis",
+            "icd_10": "N80.9"
+          },
+          {
+            "condition": "PCOS - Polycystic ovarian syndrome",
+            "icd_10": "E28.2"
+          }
+        ]
+      },
+      "upcoming_appointments": {
+        "parsed_count": 0,
+        "truth_count": 0,
+        "count_match": true,
+        "parsed_items": [],
+        "truth_items": []
+      },
+      "follow_up_recommended": {
+        "parsed_count": 1,
+        "truth_count": 1,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "description": "Follow-up in 3 months",
+            "timeframe": "3 months",
+            "target_date": "2025-12-23"
+          }
+        ],
+        "truth_items": [
+          {
+            "description": "Follow-up in 3 months",
+            "timeframe": "3 months",
+            "target_date": "2025-12-23"
+          }
+        ]
+      },
+      "lab_orders": {
+        "parsed_count": 1,
+        "truth_count": 1,
+        "count_match": true,
+        "parsed_items": [
+          {
+            "test": "BASELINE LABS",
+            "ordered_date": "2025 Sep 23"
+          }
+        ],
+        "truth_items": [
+          {
+            "test": "BASELINE LABS",
+            "ordered_date": "2025 Sep 23"
+          }
+        ]
+      },
+      "referrals": {
+        "parsed_count": 0,
+        "truth_count": 0,
+        "count_match": true,
+        "parsed_items": [],
+        "truth_items": []
+      }
+    },
+    "notes": {
+      "parsed_count": 9,
+      "truth_count": 9,
+      "count_match": true,
+      "present": true,
+      "parsed_items": [
+        "Obtain baseline labs and ultrasound once menstruation resumes.",
+        "Follow up in 3 months for in-office examination and ultrasound.",
+        "If menstruation does not resume by 6 months postpartum, consider examination and ultrasound at that time.",
+        "Obtain baseline labs (including AMH) and ultrasound once menstruation resumes.",
+        "Follow up in 3 months for in-office examination and ultrasound.",
+        "Discuss hormonal suppression options after cessation of breastfeeding.",
+        "Continue breastfeeding as desired, noting potential benefits for endometriosis suppression.",
+        "Monitor for clitoral pain and possible vaginal infection postpartum, which has largely resolved.",
+        "Hemorrhoids persist despite over-the-counter treatments."
+      ],
+      "truth_items": [
+        "Obtain baseline labs and ultrasound once menstruation resumes.",
+        "Follow up in 3 months for in-office examination and ultrasound.",
+        "If menstruation does not resume by 6 months postpartum, consider examination and ultrasound at that time.",
+        "Obtain baseline labs (including AMH) and ultrasound once menstruation resumes.",
+        "Follow up in 3 months for in-office examination and ultrasound.",
+        "Discuss hormonal suppression options after cessation of breastfeeding.",
+        "Continue breastfeeding as desired, noting potential benefits for endometriosis suppression.",
+        "Patient is approximately 3 months postpartum following vaginal delivery. She reports improving sleep but continued fatigue.",
+        "Patient experienced clitoral pain and possible vaginal infection postpartum, which has largely resolved. Hemorrhoids persist despite over-the-counter treatments."
+      ]
+    }
+  }
+}
