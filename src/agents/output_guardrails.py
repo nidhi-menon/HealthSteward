@@ -53,7 +53,7 @@ _PRESUPPOSED_TEST_PATTERNS = [
         r"\bprevious results\b",
         r"\bcompare(d)?\s+to\s+(previous|prior|earlier)\b",
         r"\brecent lab trends?\b",
-        r"\b(most recent|last|recent)\s+\S+\s+(test|testing|labs?)\b",
+        r"\b(most recent|last|recent)\s+\S+\s+(tests?|testing|labs?)\b",
     ]
 ]
 
@@ -69,8 +69,8 @@ _OPEN_QUESTION_MARKERS = [
     re.compile(p, re.IGNORECASE)
     for p in [
         r"\bare there any\s+(tests?|labs?|screenings?)\b",
-        r"\bshould i\b.*\b(get|ask about|request)\s+(a\s+)?(test|lab|screening)\b",
-        r"\bdo i need\b.*\b(test|lab|screening)\b",
+        r"\bshould i\b.*\b(get|ask about|request)\s+(a\s+)?(tests?|labs?|screenings?)\b",
+        r"\bdo i need\b.*\b(tests?|labs?|screenings?)\b",
     ]
 ]
 
@@ -81,8 +81,14 @@ _OPEN_QUESTION_MARKERS = [
 _REFERRAL_RELATIONSHIP_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"\bspecialist\b",
-        r"\breferral\b",
+        # \bspecialist\b (no plural) silently failed to match "specialists" —
+        # \b requires a word boundary immediately after "specialist", but
+        # the plural's trailing "s" is itself a word character, so there's
+        # no boundary there. Found via a real recurring case this exact
+        # plural phrasing ("referrals or specialists... such as
+        # Pulmonology") that should have been stripped but wasn't.
+        r"\bspecialists?\b",
+        r"\breferrals?\b",
         r"\brefer(red)?\b",
         r"\bfollow-?up\s+(appointment\s+)?with\b",
         r"\bappointment with\b",

@@ -64,6 +64,17 @@ class TestPresupposesMissingReferral:
         )
         assert specialty == "Endocrinology"
 
+    def test_flags_real_found_case_plural_specialists_and_referrals(self):
+        """Regression guard for a real regex bug: \\bspecialist\\b and
+        \\breferral\\b (no plural) silently never matched "specialists"/
+        "referrals" — \\b requires a boundary immediately after the base
+        word, but the plural's trailing "s" is itself a word character, so
+        there's no boundary there. This exact real question (deterministic,
+        recurring every trial) went unstripped because of it."""
+        q = "Are there any referrals or specialists I should be seeing for my Seasonal Allergic Rhinitis, such as Pulmonology?"
+        specialty = _presupposes_missing_referral(q, known_specialty_names={"Pulmonology"}, referred_specialties=set())
+        assert specialty == "Pulmonology"
+
     def test_does_not_flag_when_referral_on_file(self):
         q = "Is there a need for a follow-up appointment with Endocrinology in the near future?"
         specialty = _presupposes_missing_referral(
