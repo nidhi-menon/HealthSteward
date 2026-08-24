@@ -1,0 +1,482 @@
+{
+  "issue": 122,
+  "prototype_only": true,
+  "rerun_of": "eval/prototypes/OPENMED_FINDINGS.md (PR #124)",
+  "platform": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.11.14"
+  },
+  "project_redact_labels": [
+    "ACCOUNT_NUMBER",
+    "API_KEY",
+    "BIC",
+    "BITCOIN_ADDRESS",
+    "BUILDING_NUMBER",
+    "CREDIT_CARD",
+    "CVV",
+    "DATE",
+    "DATE_OF_BIRTH",
+    "EMAIL",
+    "ETHEREUM_ADDRESS",
+    "ETHNICITY",
+    "FIRST_NAME",
+    "GPS_COORDINATES",
+    "IBAN",
+    "ID_NUM",
+    "IMEI",
+    "IP_ADDRESS",
+    "LAST_NAME",
+    "LITECOIN_ADDRESS",
+    "MAC_ADDRESS",
+    "MASKED_NUMBER",
+    "MIDDLE_NAME",
+    "PASSWORD",
+    "PERSON",
+    "PHONE",
+    "PIN",
+    "PREFIX",
+    "SSN",
+    "STREET_ADDRESS",
+    "URL",
+    "USERNAME",
+    "USER_AGENT",
+    "VEHICLE_REGISTRATION",
+    "VIN",
+    "ZIPCODE"
+  ],
+  "configs": [
+    {
+      "corpus": "v2",
+      "model_alias": "large",
+      "model_name": "OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1",
+      "confidence": 0.5,
+      "systems": [
+        {
+          "name": "openmed",
+          "available": true,
+          "unavailable_reason": null,
+          "detail": "openmed 2.2.0 via extract_pii(model_name='OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1', confidence_threshold=0.5), unfiltered (accepts every OpenMed label)",
+          "load_seconds": 14.298552249994827,
+          "mean_ms_per_text": 57.58572687217465,
+          "p95_ms_per_text": 62.86829098826274,
+          "peak_rss_mb_after": 603.1875,
+          "rss_delta_mb": 322.546875,
+          "positive_pass": 49,
+          "negative_pass": 41,
+          "categories": {
+            "person_name": {
+              "positive_total": 8,
+              "positive_pass": 8,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone_intl": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "email": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "ssn": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "address": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "zip": {
+              "positive_total": 2,
+              "positive_pass": 2,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "po_box": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "date": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mrn_labeled": {
+              "positive_total": 4,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "insurance_id": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mixed_note": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "vitals": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 6,
+              "negative_pass": 6
+            },
+            "labs": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 7,
+              "negative_pass": 6
+            },
+            "medication": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "dosage": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "condition": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "scheduling": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 3
+            },
+            "clinic_name": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 0
+            },
+            "duration": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "plan": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "procedure": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "allergy": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            }
+          },
+          "leaks": [
+            {
+              "text": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "category": "mrn_labeled",
+              "passed": false,
+              "survived": [
+                "9012384"
+              ],
+              "output": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "detected_labels": []
+            }
+          ],
+          "over_redactions": [
+            {
+              "text": "CBC shows mild leukocytosis at 11.2, otherwise unremarkable.",
+              "category": "labs",
+              "passed": false,
+              "survived": [],
+              "output": "CBC shows mild leukocytosis at [REDACTED], otherwise unremarkable.",
+              "detected_labels": [
+                "TIME"
+              ]
+            },
+            {
+              "text": "Recommend annual wellness visit be scheduled next spring.",
+              "category": "scheduling",
+              "passed": false,
+              "survived": [],
+              "output": "Recommend annual wellness visit be scheduled [REDACTED].",
+              "detected_labels": [
+                "DATE"
+              ]
+            },
+            {
+              "text": "Seen today at Riverside Family Medicine for a routine follow-up.",
+              "category": "clinic_name",
+              "passed": false,
+              "survived": [],
+              "output": "Seen today at [REDACTED] for a routine follow-up.",
+              "detected_labels": [
+                "OTHER"
+              ]
+            },
+            {
+              "text": "Referral placed to Lakeshore Cardiology Associates for further evaluation.",
+              "category": "clinic_name",
+              "passed": false,
+              "survived": [],
+              "output": "Referral placed to [REDACTED] for further evaluation.",
+              "detected_labels": [
+                "OTHER"
+              ]
+            },
+            {
+              "text": "Records requested from Northgate Internal Medicine's prior visit.",
+              "category": "clinic_name",
+              "passed": false,
+              "survived": [],
+              "output": "Records requested from [REDACTED]'s prior visit.",
+              "detected_labels": [
+                "OTHER"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "openmed-filtered",
+          "available": true,
+          "unavailable_reason": null,
+          "detail": "openmed 2.2.0 via extract_pii(model_name='OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1', confidence_threshold=0.5), filtered to 36 project-critical labels",
+          "load_seconds": 0.05485379102174193,
+          "mean_ms_per_text": 58.50914942402596,
+          "p95_ms_per_text": 65.52095801453106,
+          "peak_rss_mb_after": 603.1875,
+          "rss_delta_mb": 0.0,
+          "positive_pass": 46,
+          "negative_pass": 45,
+          "categories": {
+            "person_name": {
+              "positive_total": 8,
+              "positive_pass": 8,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone_intl": {
+              "positive_total": 4,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "email": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "ssn": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "address": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "zip": {
+              "positive_total": 2,
+              "positive_pass": 2,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "po_box": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "date": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mrn_labeled": {
+              "positive_total": 4,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "insurance_id": {
+              "positive_total": 4,
+              "positive_pass": 2,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mixed_note": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "vitals": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 6,
+              "negative_pass": 6
+            },
+            "labs": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 7,
+              "negative_pass": 7
+            },
+            "medication": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "dosage": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "condition": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "scheduling": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 3
+            },
+            "clinic_name": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "duration": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "plan": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "procedure": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "allergy": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            }
+          },
+          "leaks": [
+            {
+              "text": "Records request faxed to the overseas clinic, callback +61 2 9374 4000.",
+              "category": "phone_intl",
+              "passed": false,
+              "survived": [
+                "+61 2 9374 4000"
+              ],
+              "output": "Records request faxed to the overseas clinic, callback +61 2 9374 4000.",
+              "detected_labels": []
+            },
+            {
+              "text": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "category": "mrn_labeled",
+              "passed": false,
+              "survived": [
+                "9012384"
+              ],
+              "output": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "detected_labels": []
+            },
+            {
+              "text": "Policy #: BXQ-77419203; verified as active with a $30 copay for specialist visits.",
+              "category": "insurance_id",
+              "passed": false,
+              "survived": [
+                "BXQ-77419203"
+              ],
+              "output": "Policy #: BXQ-77419203; verified as active with a $30 copay for specialist visits.",
+              "detected_labels": []
+            },
+            {
+              "text": "Group Number: 331-CIGNA-9 was confirmed over the phone with the insurance carrier.",
+              "category": "insurance_id",
+              "passed": false,
+              "survived": [
+                "331-CIGNA-9"
+              ],
+              "output": "Group Number: 331-CIGNA-9 was confirmed over the phone with the insurance carrier.",
+              "detected_labels": []
+            }
+          ],
+          "over_redactions": [
+            {
+              "text": "Recommend annual wellness visit be scheduled next spring.",
+              "category": "scheduling",
+              "passed": false,
+              "survived": [],
+              "output": "Recommend annual wellness visit be scheduled [REDACTED].",
+              "detected_labels": [
+                "DATE"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

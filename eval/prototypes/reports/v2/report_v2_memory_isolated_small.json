@@ -1,0 +1,971 @@
+{
+  "issue": 122,
+  "prototype_only": true,
+  "rerun_of": "eval/prototypes/OPENMED_FINDINGS.md (PR #124)",
+  "platform": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.11.14"
+  },
+  "project_redact_labels": [
+    "ACCOUNT_NUMBER",
+    "API_KEY",
+    "BIC",
+    "BITCOIN_ADDRESS",
+    "BUILDING_NUMBER",
+    "CREDIT_CARD",
+    "CVV",
+    "DATE",
+    "DATE_OF_BIRTH",
+    "EMAIL",
+    "ETHEREUM_ADDRESS",
+    "ETHNICITY",
+    "FIRST_NAME",
+    "GPS_COORDINATES",
+    "IBAN",
+    "ID_NUM",
+    "IMEI",
+    "IP_ADDRESS",
+    "LAST_NAME",
+    "LITECOIN_ADDRESS",
+    "MAC_ADDRESS",
+    "MASKED_NUMBER",
+    "MIDDLE_NAME",
+    "PASSWORD",
+    "PERSON",
+    "PHONE",
+    "PIN",
+    "PREFIX",
+    "SSN",
+    "STREET_ADDRESS",
+    "URL",
+    "USERNAME",
+    "USER_AGENT",
+    "VEHICLE_REGISTRATION",
+    "VIN",
+    "ZIPCODE"
+  ],
+  "configs": [
+    {
+      "corpus": "v2",
+      "model_alias": "small",
+      "model_name": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+      "confidence": 0.5,
+      "systems": [
+        {
+          "name": "regex",
+          "available": true,
+          "unavailable_reason": null,
+          "detail": "Anonymizer(use_ner=False) \u2014 regex patterns only",
+          "load_seconds": 2.249988028779626e-06,
+          "mean_ms_per_text": 0.03581495922036185,
+          "p95_ms_per_text": 0.048707996029406786,
+          "peak_rss_mb_after": 280.953125,
+          "rss_delta_mb": 0.046875,
+          "positive_pass": 37,
+          "negative_pass": 46,
+          "categories": {
+            "person_name": {
+              "positive_total": 8,
+              "positive_pass": 0,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone_intl": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "email": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "ssn": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "address": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "zip": {
+              "positive_total": 2,
+              "positive_pass": 0,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "po_box": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "date": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mrn_labeled": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "insurance_id": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mixed_note": {
+              "positive_total": 3,
+              "positive_pass": 0,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "vitals": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 6,
+              "negative_pass": 6
+            },
+            "labs": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 7,
+              "negative_pass": 7
+            },
+            "medication": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "dosage": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "condition": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "scheduling": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "clinic_name": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "duration": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "plan": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "procedure": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "allergy": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            }
+          },
+          "leaks": [
+            {
+              "text": "Patient Maria Garcia was counseled on the importance of medication adherence during today's visit.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "Maria Garcia"
+              ],
+              "output": "Patient Maria Garcia was counseled on the importance of medication adherence during today's visit.",
+              "detected_labels": []
+            },
+            {
+              "text": "James Thompson reports the shoulder pain has improved since starting physical therapy.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "James Thompson"
+              ],
+              "output": "James Thompson reports the shoulder pain has improved since starting physical therapy.",
+              "detected_labels": []
+            },
+            {
+              "text": "Discussed lab results with Aisha Khan over the phone this afternoon.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "Aisha Khan"
+              ],
+              "output": "Discussed lab results with Aisha Khan over the phone this afternoon.",
+              "detected_labels": []
+            },
+            {
+              "text": "Wei Chen will follow up with the referring specialist in three weeks.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "Wei Chen"
+              ],
+              "output": "Wei Chen will follow up with the referring specialist in three weeks.",
+              "detected_labels": []
+            },
+            {
+              "text": "Chart reviewed for Robert Patel; no acute changes noted since the last encounter.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "Robert Patel"
+              ],
+              "output": "Chart reviewed for Robert Patel; no acute changes noted since the last encounter.",
+              "detected_labels": []
+            },
+            {
+              "text": "Priya Nguyen arrived on time and denied any new symptoms since discharge.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "Priya Nguyen"
+              ],
+              "output": "Priya Nguyen arrived on time and denied any new symptoms since discharge.",
+              "detected_labels": []
+            },
+            {
+              "text": "Nursing staff assisted Daniel Silva with the pre-visit intake questionnaire.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "Daniel Silva"
+              ],
+              "output": "Nursing staff assisted Daniel Silva with the pre-visit intake questionnaire.",
+              "detected_labels": []
+            },
+            {
+              "text": "Fatima Okafor was accompanied by a family member for today's appointment.",
+              "category": "person_name",
+              "passed": false,
+              "survived": [
+                "Fatima Okafor"
+              ],
+              "output": "Fatima Okafor was accompanied by a family member for today's appointment.",
+              "detected_labels": []
+            },
+            {
+              "text": "Billing address zip code updated to 62704 after the recent move.",
+              "category": "zip",
+              "passed": false,
+              "survived": [
+                "62704"
+              ],
+              "output": "Billing address zip code updated to 62704 after the recent move.",
+              "detected_labels": []
+            },
+            {
+              "text": "Patient's mailing zip is 97205; confirmed with front desk.",
+              "category": "zip",
+              "passed": false,
+              "survived": [
+                "97205"
+              ],
+              "output": "Patient's mailing zip is 97205; confirmed with front desk.",
+              "detected_labels": []
+            },
+            {
+              "text": "Called Maria Garcia at 555-201-4487 to reschedule; confirmed mailing address as 1420 Maple Avenue, Springfield, IL 62704.",
+              "category": "mixed_note",
+              "passed": false,
+              "survived": [
+                "Maria Garcia"
+              ],
+              "output": "Called Maria Garcia at [REDACTED] to reschedule; confirmed mailing address as [REDACTED], Springfield, [REDACTED].",
+              "detected_labels": []
+            },
+            {
+              "text": "James Thompson (Medical Record Number: 7734190) emailed j.thompson.med@outlook.com asking about the results discussed on November 2, 1985.",
+              "category": "mixed_note",
+              "passed": false,
+              "survived": [
+                "James Thompson"
+              ],
+              "output": "James Thompson (Medical Record Number: [REDACTED]) emailed [REDACTED] asking about the results discussed on [REDACTED].",
+              "detected_labels": []
+            },
+            {
+              "text": "Insurance for Aisha Khan, Group Number: 331-CIGNA-9, was verified after a callback to 555.772.6630.",
+              "category": "mixed_note",
+              "passed": false,
+              "survived": [
+                "Aisha Khan"
+              ],
+              "output": "Insurance for Aisha Khan, Group Number: [REDACTED], was verified after a callback to [REDACTED].",
+              "detected_labels": []
+            }
+          ],
+          "over_redactions": []
+        },
+        {
+          "name": "regex+ner",
+          "available": true,
+          "unavailable_reason": null,
+          "detail": "Anonymizer(use_ner=True) \u2014 regex + spaCy en_core_web_sm PERSON",
+          "load_seconds": 0.1826834579987917,
+          "mean_ms_per_text": 3.0658573262674813,
+          "p95_ms_per_text": 3.6539580032695085,
+          "peak_rss_mb_after": 346.359375,
+          "rss_delta_mb": 65.40625,
+          "positive_pass": 48,
+          "negative_pass": 44,
+          "categories": {
+            "person_name": {
+              "positive_total": 8,
+              "positive_pass": 8,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone_intl": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "email": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "ssn": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "address": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "zip": {
+              "positive_total": 2,
+              "positive_pass": 0,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "po_box": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "date": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mrn_labeled": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "insurance_id": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mixed_note": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "vitals": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 6,
+              "negative_pass": 6
+            },
+            "labs": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 7,
+              "negative_pass": 7
+            },
+            "medication": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 3
+            },
+            "dosage": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "condition": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "scheduling": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "clinic_name": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "duration": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "plan": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "procedure": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "allergy": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            }
+          },
+          "leaks": [
+            {
+              "text": "Billing address zip code updated to 62704 after the recent move.",
+              "category": "zip",
+              "passed": false,
+              "survived": [
+                "62704"
+              ],
+              "output": "Billing address zip code updated to 62704 after the recent move.",
+              "detected_labels": []
+            },
+            {
+              "text": "Patient's mailing zip is 97205; confirmed with front desk.",
+              "category": "zip",
+              "passed": false,
+              "survived": [
+                "97205"
+              ],
+              "output": "Patient's mailing zip is 97205; confirmed with front desk.",
+              "detected_labels": []
+            }
+          ],
+          "over_redactions": [
+            {
+              "text": "Continue Lisinopril 10 mg daily for blood pressure control.",
+              "category": "medication",
+              "passed": false,
+              "survived": [],
+              "output": "Continue [REDACTED] 10 mg daily for blood pressure control.",
+              "detected_labels": []
+            },
+            {
+              "text": "Started Atorvastatin 20 mg at bedtime for hyperlipidemia.",
+              "category": "medication",
+              "passed": false,
+              "survived": [],
+              "output": "[REDACTED] 20 mg at bedtime for hyperlipidemia.",
+              "detected_labels": []
+            }
+          ]
+        },
+        {
+          "name": "openmed",
+          "available": true,
+          "unavailable_reason": null,
+          "detail": "openmed 2.2.0 via extract_pii(model_name='OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1', confidence_threshold=0.5), unfiltered (accepts every OpenMed label)",
+          "load_seconds": 5.068904708023183,
+          "mean_ms_per_text": 14.540625562808096,
+          "p95_ms_per_text": 17.38629100145772,
+          "peak_rss_mb_after": 777.515625,
+          "rss_delta_mb": 431.15625,
+          "positive_pass": 49,
+          "negative_pass": 40,
+          "categories": {
+            "person_name": {
+              "positive_total": 8,
+              "positive_pass": 8,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone_intl": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "email": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "ssn": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "address": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "zip": {
+              "positive_total": 2,
+              "positive_pass": 2,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "po_box": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "date": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mrn_labeled": {
+              "positive_total": 4,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "insurance_id": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mixed_note": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "vitals": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 6,
+              "negative_pass": 5
+            },
+            "labs": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 7,
+              "negative_pass": 7
+            },
+            "medication": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 4
+            },
+            "dosage": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "condition": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "scheduling": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 3
+            },
+            "clinic_name": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 0
+            },
+            "duration": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "plan": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "procedure": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "allergy": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            }
+          },
+          "leaks": [
+            {
+              "text": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "category": "mrn_labeled",
+              "passed": false,
+              "survived": [
+                "9012384"
+              ],
+              "output": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "detected_labels": []
+            }
+          ],
+          "over_redactions": [
+            {
+              "text": "Repeat blood pressure after five minutes rest was 122/78.",
+              "category": "vitals",
+              "passed": false,
+              "survived": [],
+              "output": "Repeat blood pressure after [REDACTED] minutes rest was 122/78.",
+              "detected_labels": [
+                "TIME"
+              ]
+            },
+            {
+              "text": "Albuterol inhaler as needed for wheeze, up to every four hours.",
+              "category": "medication",
+              "passed": false,
+              "survived": [],
+              "output": "Albuterol inhaler as needed for wheeze, up to [REDACTED].",
+              "detected_labels": [
+                "TIME"
+              ]
+            },
+            {
+              "text": "Recommend annual wellness visit be scheduled next spring.",
+              "category": "scheduling",
+              "passed": false,
+              "survived": [],
+              "output": "Recommend annual wellness visit be scheduled [REDACTED] spring.",
+              "detected_labels": [
+                "DATE"
+              ]
+            },
+            {
+              "text": "Seen today at Riverside Family Medicine for a routine follow-up.",
+              "category": "clinic_name",
+              "passed": false,
+              "survived": [],
+              "output": "Seen today at [REDACTED] for a routine follow-up.",
+              "detected_labels": [
+                "OTHER"
+              ]
+            },
+            {
+              "text": "Referral placed to Lakeshore Cardiology Associates for further evaluation.",
+              "category": "clinic_name",
+              "passed": false,
+              "survived": [],
+              "output": "Referral placed to [REDACTED] for further evaluation.",
+              "detected_labels": [
+                "OTHER"
+              ]
+            },
+            {
+              "text": "Records requested from Northgate Internal Medicine's prior visit.",
+              "category": "clinic_name",
+              "passed": false,
+              "survived": [],
+              "output": "Records requested from [REDACTED]'s prior visit.",
+              "detected_labels": [
+                "OTHER"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "openmed-filtered",
+          "available": true,
+          "unavailable_reason": null,
+          "detail": "openmed 2.2.0 via extract_pii(model_name='OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1', confidence_threshold=0.5), filtered to 36 project-critical labels",
+          "load_seconds": 0.013925874984124675,
+          "mean_ms_per_text": 14.61241549370445,
+          "p95_ms_per_text": 17.775375017663464,
+          "peak_rss_mb_after": 777.515625,
+          "rss_delta_mb": 0.0,
+          "positive_pass": 46,
+          "negative_pass": 45,
+          "categories": {
+            "person_name": {
+              "positive_total": 8,
+              "positive_pass": 8,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "phone_intl": {
+              "positive_total": 4,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "email": {
+              "positive_total": 4,
+              "positive_pass": 4,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "ssn": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "address": {
+              "positive_total": 6,
+              "positive_pass": 6,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "zip": {
+              "positive_total": 2,
+              "positive_pass": 2,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "po_box": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "date": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mrn_labeled": {
+              "positive_total": 4,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "insurance_id": {
+              "positive_total": 4,
+              "positive_pass": 2,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "mixed_note": {
+              "positive_total": 3,
+              "positive_pass": 3,
+              "negative_total": 0,
+              "negative_pass": 0
+            },
+            "vitals": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 6,
+              "negative_pass": 6
+            },
+            "labs": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 7,
+              "negative_pass": 7
+            },
+            "medication": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "dosage": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 4
+            },
+            "condition": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 5,
+              "negative_pass": 5
+            },
+            "scheduling": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 4,
+              "negative_pass": 3
+            },
+            "clinic_name": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "duration": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "plan": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "procedure": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            },
+            "allergy": {
+              "positive_total": 0,
+              "positive_pass": 0,
+              "negative_total": 3,
+              "negative_pass": 3
+            }
+          },
+          "leaks": [
+            {
+              "text": "Records request faxed to the overseas clinic, callback +61 2 9374 4000.",
+              "category": "phone_intl",
+              "passed": false,
+              "survived": [
+                "+61 2 9374 4000"
+              ],
+              "output": "Records request faxed to the overseas clinic, callback +61 2 9374 4000.",
+              "detected_labels": []
+            },
+            {
+              "text": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "category": "mrn_labeled",
+              "passed": false,
+              "survived": [
+                "9012384"
+              ],
+              "output": "MR# 9012384 was used to cross-reference the outside hospital's imaging report.",
+              "detected_labels": []
+            },
+            {
+              "text": "Policy #: BXQ-77419203; verified as active with a $30 copay for specialist visits.",
+              "category": "insurance_id",
+              "passed": false,
+              "survived": [
+                "BXQ-77419203"
+              ],
+              "output": "Policy #: BXQ-77419203; verified as active with a $30 copay for specialist visits.",
+              "detected_labels": []
+            },
+            {
+              "text": "Group Number: 331-CIGNA-9 was confirmed over the phone with the insurance carrier.",
+              "category": "insurance_id",
+              "passed": false,
+              "survived": [
+                "331-CIGNA-9"
+              ],
+              "output": "Group Number: 331-CIGNA-9 was confirmed over the phone with the insurance carrier.",
+              "detected_labels": []
+            }
+          ],
+          "over_redactions": [
+            {
+              "text": "Recommend annual wellness visit be scheduled next spring.",
+              "category": "scheduling",
+              "passed": false,
+              "survived": [],
+              "output": "Recommend annual wellness visit be scheduled [REDACTED] spring.",
+              "detected_labels": [
+                "DATE"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
