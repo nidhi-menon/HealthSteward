@@ -4,9 +4,20 @@ This module provides functionality to anonymize personally identifiable informat
 before sending data to external LLM APIs (like Claude). It uses a combination of:
 - Deterministic replacement for structured fields
 - Regex patterns for common PII shapes (phone incl. international, email, SSN,
-  ZIP+4, numeric/ISO/written dates, PO boxes, street addresses, and
-  label-anchored medical-record and insurance identifiers)
+  ZIP+4, numeric/ISO/written dates, PO boxes, street addresses, URLs, IP
+  addresses, and label-anchored medical-record, insurance, license, account,
+  vehicle, and device identifiers)
 - spaCy NER for detecting names in free-text fields
+
+`PII_PATTERNS` was mapped against all 18 HIPAA Safe Harbor identifier
+categories (issue #122 follow-up): 16 are testable given this is a text-only
+document parser (biometric identifiers and full-face photographs are out of
+scope by construction — no image or biometric data is ingested); of those 16,
+this module covers 15 with a dedicated or incidental pattern. Fax numbers have
+no pattern of their own — they're caught by `phone`, since a fax number has no
+distinguishing format. The remaining category, #18's open-ended "any other
+unique identifying number or code," cannot be closed by a fixed pattern list
+by definition.
 
 Free-text anonymization is best-effort, not a guarantee — the pattern list is
 regex-based and cannot cover every real-world PII shape. See issue #92 for the
@@ -208,6 +219,17 @@ PII_PATTERNS = {
     'ssn': re.compile(
         r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b'
     ),
+    # HIPAA Safe Harbor #14: web URLs. A patient-portal or telehealth-room link
+    # is as identifying as the account it points to.
+    'url': re.compile(
+        r'https?://[^\s<>"]+', re.IGNORECASE
+    ),
+    # HIPAA Safe Harbor #15: IPv4 addresses (octet-bounded, not "any 4 dotted
+    # numbers", so this doesn't collide with anything dose/lab-shaped — nothing
+    # else in clinical text is written as three dots between 0-255 values).
+    'ip_address': re.compile(
+        r'\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b'
+    ),
     # Numeric dates. Widened from MM/DD/YYYY-only to also cover day-first
     # (DD/MM/YYYY) ordering and 2-digit years, since a birthdate written
     # "15/06/1985" or "06/15/85" is exactly as identifying as "06/15/1985".
@@ -258,6 +280,47 @@ PII_PATTERNS = {
         r'\s*(?:ID|No\.?|Number|#)?)\s*[:#]?\s*)'
         r'(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b'
     ),
+    # HIPAA Safe Harbor #11: certificate/license numbers. Label-anchored on
+    # "License"/"DEA" specifically — a bare "Certificate" trigger was tested
+    # and dropped: it also matches non-identifying document types ("Certificate
+    # of medical necessity") and insurance authorization numbers ("Prior
+    # authorization Certificate #: PA-991244"), which would over-redact
+    # clinical/billing content DEC-006 means to keep. "License"/"DEA" alone
+    # had zero false positives against an 88-case adversarial negative sweep.
+    'license_number': re.compile(
+        r'(?P<label>\b(?:Driver.?s?\s+License|License|DEA)'
+        r'\s*(?:Number|No\.?|#)?\s*[:#]?\s*)'
+        r'(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b',
+        re.IGNORECASE
+    ),
+    # HIPAA Safe Harbor #10: generic account numbers. Distinct from
+    # `insurance_id` because "Account" isn't in that pattern's label list —
+    # without this, only the pattern-length-collision with `mrn_unlabeled`
+    # incidentally caught an account number's digit portion, and only when it
+    # had no alphanumeric prefix ("Account #: AB-9284710" redacted to
+    # "Account #: AB-[REDACTED]", leaking "AB-").
+    'account_number': re.compile(
+        r'(?P<label>\bAccount\s*(?:Number|No\.?|#)?\s*[:#]?\s*)'
+        r'(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{3,}\b',
+        re.IGNORECASE
+    ),
+    # HIPAA Safe Harbor #12: vehicle identifiers. Narrow on purpose — only a
+    # VIN with an explicit "VIN" label, not a bare 11-17 char alnum run, which
+    # would be far too broad a net over ordinary clinical text.
+    'vehicle_id': re.compile(
+        r'(?P<label>\bVIN\s*[:#]?\s*)[A-HJ-NPR-Z0-9]{11,17}\b',
+        re.IGNORECASE
+    ),
+    # HIPAA Safe Harbor #13: device identifiers/serial numbers. The negative
+    # lookbehind on "Lot"/"Batch" is load-bearing: a medication/vaccine lot or
+    # batch number identifies a manufacturing run, not an individual, and
+    # "Batch Serial: LOT-88213" would otherwise over-redact it — found during
+    # adversarial testing, not anticipated up front.
+    'device_serial': re.compile(
+        r'(?P<label>\b(?<!Lot\s)(?<!Batch\s)(?:Device\s+)?Serial'
+        r'\s*(?:Number|No\.?|#)?\s*[:#]?\s*)[A-Z0-9-]{4,}\b',
+        re.IGNORECASE
+    ),
     # Bare digit runs of MRN-typical length (7-10 digits) with no adjacent
     # label. Deliberately narrower than "any long digit run": most clinical
     # values that could collide (dosages, A1C, LDL/HDL, ratios) fall outside
@@ -281,6 +344,10 @@ PII_PATTERNS = {
 PII_REPLACEMENTS = {
     'mrn': r'\g<label>[REDACTED]',
     'insurance_id': r'\g<label>[REDACTED]',
+    'license_number': r'\g<label>[REDACTED]',
+    'account_number': r'\g<label>[REDACTED]',
+    'vehicle_id': r'\g<label>[REDACTED]',
+    'device_serial': r'\g<label>[REDACTED]',
 }
 
 DEFAULT_REDACTION = '[REDACTED]'
@@ -295,6 +362,8 @@ TOKEN_TYPES = {
     'phone': 'PHONE',
     'email': 'EMAIL',
     'ssn': 'SSN',
+    'url': 'URL',
+    'ip_address': 'IP_ADDRESS',
     'date': 'DATE',
     'date_iso': 'DATE',
     'date_written': 'DATE',
@@ -302,6 +371,10 @@ TOKEN_TYPES = {
     'address': 'ADDRESS',
     'mrn': 'MRN',
     'insurance_id': 'INSURANCE_ID',
+    'license_number': 'LICENSE_NUMBER',
+    'account_number': 'ACCOUNT_NUMBER',
+    'vehicle_id': 'VEHICLE_ID',
+    'device_serial': 'DEVICE_SERIAL',
     'mrn_unlabeled': 'MRN',
     'PERSON': 'PERSON',
 }
