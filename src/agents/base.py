@@ -12,6 +12,54 @@ from src.data.models import ConversationLog
 from src.utils.anonymization import RedactionEvent
 
 
+def _repair_truncated_json(text: str) -> Optional[str]:
+    """Best-effort repair for JSON text that looks cut off mid-generation —
+    an unterminated string and/or unclosed braces/brackets at the point
+    generation stopped, everything before that point otherwise well-formed.
+
+    Not a general JSON fixer: it only appends what's still open when the
+    text ends (closing quote, then closing brackets/braces in the order
+    they'd need to close), it doesn't correct malformed content earlier in
+    the string. Found via eval/run.py's tool_call_necessity_dosing case —
+    a small local model (llama3.2, agentic loop with several tool round-
+    trips) hit its own end-of-turn stop token after finishing its last
+    string value but before emitting the JSON's closing punctuation, giving
+    otherwise-complete, well-grounded content that every prior parse
+    strategy rejected outright as invalid.
+
+    Returns the repaired text, or None if nothing looked open (repair
+    wouldn't change anything, so let the caller's normal parse handle it).
+    """
+    open_stack: list[str] = []
+    in_string = False
+    escape = False
+    for ch in text:
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            open_stack.append(ch)
+        elif ch in "}]":
+            expected = "{" if ch == "}" else "["
+            if open_stack and open_stack[-1] == expected:
+                open_stack.pop()
+
+    if not in_string and not open_stack:
+        return None
+
+    closers = {"{": "}", "[": "]"}
+    repaired = text + ('"' if in_string else "")
+    repaired += "".join(closers[opener] for opener in reversed(open_stack))
+    return repaired
+
+
 class BaseAgent:
     """Base agent class providing Claude API access and conversation logging."""
 
@@ -195,5 +243,18 @@ class BaseAgent:
                 return json.loads(match)
             except json.JSONDecodeError:
                 continue
+
+        # Try repairing an apparently-truncated response — see
+        # _repair_truncated_json's docstring. Only reachable once every
+        # exact-parse strategy above has failed, so this never masks a
+        # response that was already well-formed.
+        start = response.find("{")
+        if start != -1:
+            repaired = _repair_truncated_json(response[start:])
+            if repaired:
+                try:
+                    return json.loads(repaired)
+                except json.JSONDecodeError:
+                    pass
 
         return None

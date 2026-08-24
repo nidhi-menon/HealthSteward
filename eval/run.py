@@ -7,17 +7,23 @@ Settings, at temperature=0.0 so repeated runs are comparable.
 
 Usage:
     python -m eval.run
+    python -m eval.run --trials 5   # repeat each case N times for a more
+                                     # statistically meaningful tool-call
+                                     # convergence rate (see score_tool_call_
+                                     # convergence in eval/scorers.py)
 
 Writes a timestamped JSON report to eval/results/ and prints a summary,
 diffed against the most recent prior result file if one exists.
 """
 
+import argparse
 import asyncio
 import json
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -92,6 +98,41 @@ async def run_generation_case(db: AsyncSession, case) -> dict:
         "tool_call_necessity": scorers.score_tool_call_necessity(case, tool_calls),
         "retrieval_redundancy": scorers.score_retrieval_redundancy(phase1_dates, tool_calls),
         "tool_calls_made": [c["name"] for c in tool_calls],
+        "convergence": scorers.score_tool_call_convergence(result),
+    }
+
+
+def _model_name_for_provider(settings) -> str:
+    """Mirrors VisitPrepAgent._model_name_for_provider — duplicated here (not
+    imported) because that method is an instance method requiring a live
+    agent/db session, and the report header needs this before any case runs.
+    """
+    if settings.llm_provider == "ollama":
+        return settings.ollama_model
+    if settings.llm_provider == "custom":
+        return settings.custom_llm_model or "custom"
+    return settings.anthropic_model
+
+
+def _summarize_convergence(case_reports: list[dict]) -> dict[str, Any]:
+    """Aggregate per-run convergence results into a rate + failure-reason
+    breakdown, for item #1 of the tool-calling reliability workstream:
+    is small-model tool-calling actually reliable, not just gracefully
+    degraded. `runs` excludes timed-out attempts — a timeout is a harness-
+    level failure (CASE_TIMEOUT_SECONDS), not a tool-calling result.
+    """
+    runs = [r["convergence"] for r in case_reports if not r.get("timed_out") and "convergence" in r]
+    converged = sum(1 for c in runs if c["converged"])
+    reasons: dict[str, int] = {}
+    for c in runs:
+        if not c["converged"]:
+            reason = c["fallback_reason"] or "unknown"
+            reasons[reason] = reasons.get(reason, 0) + 1
+    return {
+        "total_runs": len(runs),
+        "converged": converged,
+        "convergence_rate": (converged / len(runs)) if runs else None,
+        "fallback_reason_counts": reasons,
     }
 
 
@@ -126,6 +167,17 @@ def _diff_summary(previous: dict, current: dict) -> list[str]:
 
 
 async def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--trials", type=int, default=1,
+        help="Repeat each generation case this many times (default 1). Tool-call "
+             "convergence is a reliability signal, not a per-case correctness check "
+             "(EVAL_TEMPERATURE=0.0 means repeats of the same case are not guaranteed "
+             "identical on a real backend) — more trials narrows the convergence_rate "
+             "confidence interval at the cost of wall-clock time.",
+    )
+    args = parser.parse_args()
+
     print("=== Stage 1 retrieval checks (no LLM) ===")
     stage1_results = retrieval_stage1.run_all()
     stage1_failures = 0
@@ -136,47 +188,69 @@ async def main() -> int:
             stage1_failures += 1
     print(f"Stage 1: {len(stage1_results) - stage1_failures}/{len(stage1_results)} passed\n")
 
-    print(f"=== Generation cases (LLM provider: {get_settings().llm_provider}, temperature={EVAL_TEMPERATURE}) ===")
+    settings = get_settings()
+    model_name = _model_name_for_provider(settings)
+    print(
+        f"=== Generation cases (LLM provider: {settings.llm_provider}, model: {model_name}, "
+        f"temperature={EVAL_TEMPERATURE}, trials={args.trials}) ==="
+    )
     db, engine = await _make_session()
     try:
         case_reports = []
         for case in GENERATION_CASES:
-            print(f"  running {case.id}...")
-            try:
-                report = await asyncio.wait_for(
-                    run_generation_case(db, case), timeout=CASE_TIMEOUT_SECONDS
-                )
-                report["timed_out"] = False
-            except asyncio.TimeoutError:
-                print(f"    TIMED OUT after {CASE_TIMEOUT_SECONDS}s — recorded as a failure, continuing")
-                await db.rollback()  # reset session state before the next case's build_case
-                report = {
-                    "case_id": case.id,
-                    "description": case.description,
-                    "timed_out": True,
-                    "format": {"valid": False, "question_count": 0, "issues": ["case timed out"]},
-                }
-            case_reports.append(report)
-            if not report["timed_out"]:
-                fmt = report["format"]
-                scope = report["scope"]
-                grounded = report["groundedness"]["grounded_rate"]
-                print(
-                    f"    format_valid={fmt['valid']} questions={fmt['question_count']} "
-                    f"grounded_rate={grounded} scope_violations={scope['violation_count']} "
-                    f"tools_called={report['tool_calls_made']}"
-                )
+            for trial in range(args.trials):
+                trial_label = f"{case.id}" if args.trials == 1 else f"{case.id} (trial {trial + 1}/{args.trials})"
+                print(f"  running {trial_label}...")
+                try:
+                    report = await asyncio.wait_for(
+                        run_generation_case(db, case), timeout=CASE_TIMEOUT_SECONDS
+                    )
+                    report["timed_out"] = False
+                except asyncio.TimeoutError:
+                    print(f"    TIMED OUT after {CASE_TIMEOUT_SECONDS}s — recorded as a failure, continuing")
+                    await db.rollback()  # reset session state before the next case's build_case
+                    report = {
+                        "case_id": case.id,
+                        "description": case.description,
+                        "timed_out": True,
+                        "format": {"valid": False, "question_count": 0, "issues": ["case timed out"]},
+                    }
+                report["trial"] = trial
+                case_reports.append(report)
+                if not report["timed_out"]:
+                    fmt = report["format"]
+                    scope = report["scope"]
+                    grounded = report["groundedness"]["grounded_rate"]
+                    conv = report["convergence"]
+                    print(
+                        f"    format_valid={fmt['valid']} questions={fmt['question_count']} "
+                        f"grounded_rate={grounded} scope_violations={scope['violation_count']} "
+                        f"tools_called={report['tool_calls_made']} "
+                        f"converged={conv['converged']} fallback_reason={conv['fallback_reason']}"
+                    )
     finally:
         await db.close()
         await engine.dispose()
 
+    convergence_summary = _summarize_convergence(case_reports)
+    print(
+        f"\n=== Tool-call convergence: {convergence_summary['converged']}/{convergence_summary['total_runs']} "
+        f"({convergence_summary['convergence_rate']}) ==="
+    )
+    if convergence_summary["fallback_reason_counts"]:
+        for reason, count in sorted(convergence_summary["fallback_reason_counts"].items()):
+            print(f"  {reason}: {count}")
+
     current = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "git_sha": _git_sha(),
-        "llm_provider": get_settings().llm_provider,
+        "llm_provider": settings.llm_provider,
+        "model": model_name,
         "temperature": EVAL_TEMPERATURE,
+        "trials": args.trials,
         "stage1": [{"name": r.name, "passed": r.passed, "detail": r.detail} for r in stage1_results],
         "cases": case_reports,
+        "convergence_summary": convergence_summary,
     }
 
     RESULTS_DIR.mkdir(exist_ok=True)
