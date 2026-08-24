@@ -1238,4 +1238,34 @@ Two ideas of "stable id" now exist in this module and must not be conflated: `_m
 
 ---
 
-*Last updated: 2026-08-09*
+### DEC-040: `PII_PATTERNS` Extended to Close 7 HIPAA Safe Harbor Identifier Gaps (Fax, URL, IP, License, Account, Vehicle, Device)
+
+**Date:** 2026-08-23
+
+**Context:** issue #122's OpenMed re-run (entry #66) prompted mapping `PII_PATTERNS` against all 18 HIPAA Safe Harbor identifier categories rather than the informal "PII protection" framing used until now. 16 of 18 are testable given this project's text-only document ingestion (biometric identifiers and full-face photographs are out of scope by construction — no image or biometric data is ingested anywhere in the pipeline; the open-ended catch-all category, #18, can't be closed by any fixed pattern list). Of the 16, 8 were already covered (names via optional NER, geographic subdivisions, dates, phone, email, SSN, medical record numbers, health plan beneficiary numbers). This surfaced 7 categories with no dedicated pattern: fax numbers (#5), account numbers (#10), certificate/license numbers (#11), vehicle identifiers (#12), device identifiers (#13), URLs (#14), and IP addresses (#15).
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Ship all 7 as originally drafted | Fastest, closes the gap immediately | Two of the seven (`license_number`'s bare "Certificate" trigger, `device_serial`'s bare "Serial" trigger) were confirmed to over-redact real non-identifying clinical/billing content during adversarial testing — a `Certificate of medical necessity`, a `Prior authorization Certificate #`, and a vaccine `Lot Number`/`Batch Serial` all got wrongly caught before narrowing |
+| **Narrow the two risky patterns, ship all 7** | Closes the gap without the confirmed over-redaction; each narrowing is evidence-based (found by testing, not guessed) | More restrictive than the Safe Harbor category in principle — `license_number` only fires on "License"/"DEA", not the broader "Certificate"/"Cert", so some real certification numbers phrased only as "Certificate #" won't be caught |
+| Hold all 7 for a larger adversarial sweep before shipping any | Maximum caution | Leaves a documented, known gap live indefinitely for categories (URL, IP, VIN) that had zero false positives found on an 88-case sweep and no plausible false-positive mechanism identified |
+
+**Decision:** Implemented the narrowed version of all 7 (`url`, `ip_address`, `license_number`, `account_number`, `vehicle_id`, `device_serial` patterns added to `PII_PATTERNS`; fax numbers get an explicit test pinning the existing incidental `phone`-pattern catch, not a new pattern). Two patterns were narrowed after adversarial testing found real false positives on cases not in the original hand-authored test corpus:
+- `license_number`: dropped the bare `Certificate`/`Cert` trigger. It also matched non-identifying document types (`"Certificate of medical necessity CMN-4471"`) and insurance authorization numbers (`"Prior authorization Certificate #: PA-991244"`) — over-redacting billing/clinical content this module exists to keep. Label-anchored on `Driver's License`/`License`/`DEA` only.
+- `device_serial`: added a negative lookbehind excluding `Lot`/`Batch` immediately before `Serial`. A medication/vaccine lot or batch number identifies a manufacturing run, not an individual — not a HIPAA identifier at all, and losing it degrades the clinical usefulness of a note (which lot was administered matters for recalls/adverse events) for no privacy benefit.
+
+`account_number` and `vehicle_id` shipped without narrowing — no false positive found for either across an 88-case combined negative sweep (v1's 24 + v2's 46 existing corpus cases + an 18-case adversarial set targeting exactly this kind of confusion: lot numbers, batch numbers, prior-authorization numbers, order numbers, prescription numbers, referral numbers).
+
+**Reasoning:** the two narrowings follow the same pattern DEC-025's `mrn_unlabeled` amendment already established for this module — widen coverage, but only after negative test cases prove the wider net doesn't catch clinical content. The alternative (ship broad, narrow later if someone complains) inverts DEC-006's trust boundary in the wrong direction for the *precision* side: DEC-006 exists to stop leaks, but an anonymizer that also destroys clinically load-bearing content on a false trigger is its own failure mode, and this project already has one open, unresolved instance of exactly that shape (`regex+ner`'s drug-name-as-`PERSON` bug, issue #125) — no reason to knowingly introduce a second one when the fix (narrow the trigger) costs nothing and was validated before merging, not after.
+
+**Status:** Implemented. `src/utils/anonymization.py` — `PII_PATTERNS` (6 new patterns), `PII_REPLACEMENTS` (4 new label-anchored entries), `TOKEN_TYPES` (6 new entries), module docstring updated with the 16-of-18 coverage statement. `tests/test_anonymization.py` — `TestSafeHarborGapPatterns` class, **26 test cases** (`pytest --collect-only`-verified, not hand-counted): the original 16 (10 positive across the 6 new categories plus fax, 6 adversarial negative), plus 10 more added after an explicit adversarial-rigor parity check — `account_number` and `vehicle_id` had shipped without narrowing because no false positive had been found, but hadn't been probed with the same intensity as `license_number`/`device_serial`, which were only narrowed *because* someone specifically went looking for label-trigger overlap. The parity check found none (0/10 on `Account`/`Registration`/valueless-`VIN` idioms plus 2 less-templated positive phrasings), but had initially run as a throwaway script rather than a committed test — now pinned as those same 10 cases, permanently, so a future change can't silently reintroduce the confusion the check was designed to catch. Full `tests/test_anonymization.py` run (real project env, `/opt/anaconda3/envs/healthsteward`): **153 passed, 28 skipped** (spaCy-dependent `TestNERPath`/`TestTokenScopeNER` cases, expected — spaCy isn't installed in every dev env), zero failures. Also spot-checked against the 3 real (gitignored, local-only) AVS PDFs in `data/avs/` via the project's actual `pdfplumber` extractor — not a formal metric, a sanity check that nothing synthetic-corpus testing wouldn't catch shows up in genuine clinical-document text. Result: `AVS-2.pdf` contained 2 real URLs that the new `url` pattern correctly caught — a concrete, non-hypothetical before/after finding on real user data, not just the synthetic corpora — and zero leftover unredacted 7+ digit identifier-shaped runs across all three documents. `license_number`/`device_serial`/`account_number`/`vehicle_id`/`ip_address` didn't fire on any of the three documents, so this doesn't add real-world validation for those five specifically — those categories simply aren't present in these three notes.
+
+**Files changed:** `src/utils/anonymization.py`, `tests/test_anonymization.py`, `docs/notes/DECISIONS.md` (this entry).
+
+Related: issue #122, entry #66, DEC-006, DEC-025, DEC-009.
+
+---
+
+*Last updated: 2026-08-23*

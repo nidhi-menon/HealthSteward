@@ -329,6 +329,179 @@ class TestHardenedPIIPatterns:
         assert "fatigue" in result
 
 
+class TestSafeHarborGapPatterns:
+    """Coverage for the HIPAA Safe Harbor identifier categories that had no
+    dedicated pattern before this class existed (issue #122 follow-up).
+
+    Mapping `PII_PATTERNS` against all 18 Safe Harbor categories found 7 with
+    no pattern of their own: fax numbers (caught incidentally by `phone`, but
+    previously untested), URLs, IP addresses, certificate/license numbers,
+    account numbers, vehicle identifiers, and device serial numbers. Every
+    positive case here is paired with an adversarial negative case found
+    during testing — the `license_number` and `device_serial` patterns were
+    narrowed after an early draft over-redacted a vaccine lot number and a
+    prior-authorization certificate, so those two negative cases guard a real
+    regression, not a hypothetical one.
+    """
+
+    @pytest.fixture
+    def anonymizer(self):
+        return Anonymizer(use_ner=False)
+
+    def _redacted(self, anonymizer, text):
+        result, _ = anonymizer.anonymize_text(text)
+        return result
+
+    # --- Fax (#5) — no dedicated pattern; caught by `phone`, now pinned ---
+
+    def test_fax_number_redacted_via_phone_pattern(self, anonymizer):
+        """Fax numbers have no distinguishing format of their own, so `phone`
+        catches them by format coincidence. Previously asserted in prose only
+        (module docstring), not pinned by a test."""
+        result = self._redacted(anonymizer, "Records were sent to Fax: 555-201-4487 per the referral.")
+        assert "555-201-4487" not in result
+        assert "[REDACTED]" in result
+
+    # --- URLs (#14) ---
+
+    @pytest.mark.parametrize("text,leaked", [
+        ("See the patient portal at https://portal.healthsteward.example/records/8823.",
+         "https://portal.healthsteward.example/records/8823"),
+        ("Telehealth link: http://meet.clinicvideo.example/room/nm-4471",
+         "http://meet.clinicvideo.example/room/nm-4471"),
+    ])
+    def test_url_redacted(self, anonymizer, text, leaked):
+        result = self._redacted(anonymizer, text)
+        assert leaked not in result
+
+    # --- IP addresses (#15) ---
+
+    @pytest.mark.parametrize("text,leaked", [
+        ("Login attempt was logged from IP 192.168.1.42 during the session.", "192.168.1.42"),
+        ("Session originated from 203.0.113.77, flagged for review.", "203.0.113.77"),
+    ])
+    def test_ip_address_redacted(self, anonymizer, text, leaked):
+        result = self._redacted(anonymizer, text)
+        assert leaked not in result
+
+    # --- Certificate/license numbers (#11) ---
+
+    @pytest.mark.parametrize("text,label", [
+        ("Driver's License Number: D1234567 was used to verify identity.", "Driver's License Number:"),
+        ("License No. RN-4471029 was recorded for the visiting nurse.", "License No."),
+    ])
+    def test_license_number_redacted_label_kept(self, anonymizer, text, label):
+        result = self._redacted(anonymizer, text)
+        assert result.startswith(label)
+        assert "[REDACTED]" in result
+
+    @pytest.mark.parametrize("text", [
+        "Certificate of medical necessity CMN-4471 was filed with the DME order.",
+        "Prior authorization Certificate #: PA-991244 approved for six months.",
+    ])
+    def test_certificate_document_types_not_redacted(self, anonymizer, text):
+        """A bare "Certificate"/"Cert" trigger was tested and dropped: it also
+        matches non-identifying document types and insurance authorization
+        numbers, which would over-redact billing/clinical content this
+        module means to keep. Only "License"/"DEA" are label-anchored."""
+        result = self._redacted(anonymizer, text)
+        assert result == text
+
+    # --- Account numbers (#10) ---
+
+    @pytest.mark.parametrize("text,label", [
+        ("Billing account number AB-9284710 was updated after the payment.", "Billing account number"),
+        ("Account Number: 7734190552 going forward.", "Account Number:"),
+    ])
+    def test_account_number_redacted_label_kept(self, anonymizer, text, label):
+        """Distinct from `insurance_id` — "Account" isn't in that pattern's
+        label list. Before this pattern existed, an alphanumeric-prefixed
+        account number only had its digit portion caught by the unlabeled-MRN
+        fallback ("Account #: AB-9284710" -> "Account #: AB-[REDACTED]")."""
+        result = self._redacted(anonymizer, text)
+        assert result.startswith(label)
+        assert "[REDACTED]" in result
+        assert "AB-9284710" not in result
+        assert "7734190552" not in result
+
+    def test_account_number_less_templated_phrasing_redacted(self, anonymizer):
+        """A parity check against the adversarial rigor applied to
+        `license_number`/`device_serial`: `license_number`/`device_serial` were
+        narrowed only after adversarial testing found real false positives —
+        `account_number` and `vehicle_id` shipped without narrowing because
+        none was found, but hadn't been checked with the same intensity. This
+        and the negative cases below close that gap; run once as a throwaway
+        script during development, now pinned as a permanent regression guard."""
+        result = self._redacted(anonymizer, "Please reference account no 88213047 when calling billing.")
+        assert "88213047" not in result
+
+    @pytest.mark.parametrize("text", [
+        "Account of the patient's fall was documented in the nursing note.",
+        "On account of the recent surgery, activity is restricted for two weeks.",
+        "Taking into account the patient's allergy history, avoid penicillin.",
+        "Account balance after insurance adjustment is $42.10.",
+    ])
+    def test_account_word_in_non_identifying_context_not_redacted(self, anonymizer, text):
+        """"Account" appears in ordinary clinical/billing prose too — these
+        guard against the label trigger firing on the word alone without an
+        actual account-number-shaped value following it."""
+        result = self._redacted(anonymizer, text)
+        assert result == text
+
+    # --- Vehicle identifiers (#12) ---
+
+    def test_vin_redacted_label_kept(self, anonymizer):
+        result = self._redacted(anonymizer, "Transport service logged VIN: 1HGCM82633A123456 for the pickup.")
+        assert result.startswith("Transport service logged VIN:")
+        assert "1HGCM82633A123456" not in result
+
+    def test_vin_hash_label_variant_redacted(self, anonymizer):
+        """Less-templated label punctuation ("VIN#" vs. "VIN:")."""
+        result = self._redacted(
+            anonymizer, "VIN# 5YJSA1E14FF101002 was logged for the non-emergency transport van."
+        )
+        assert "5YJSA1E14FF101002" not in result
+
+    @pytest.mark.parametrize("text", [
+        "Registration for the diabetes education class opens next Monday.",
+        "Appointment registration number was not required for the walk-in visit.",
+        "Waitlist registration closed for the November wellness screening.",
+        "Vehicle transport was arranged but no VIN was recorded in the chart.",
+    ])
+    def test_vehicle_adjacent_words_in_non_identifying_context_not_redacted(self, anonymizer, text):
+        """"Registration" and a bare, valueless "VIN" mention both appear in
+        ordinary scheduling/transport prose — neither should trigger this
+        pattern, which requires an explicit "VIN" label immediately followed
+        by an 11-17 character alphanumeric value."""
+        result = self._redacted(anonymizer, text)
+        assert result == text
+
+    # --- Device serial numbers (#13) ---
+
+    @pytest.mark.parametrize("text,label", [
+        ("Device Serial Number: SN-88213047 was replaced during the check.", "Device Serial Number:"),
+        ("Serial No: CGM-771402 identifies the continuous glucose monitor.", "Serial No:"),
+    ])
+    def test_device_serial_redacted_label_kept(self, anonymizer, text, label):
+        result = self._redacted(anonymizer, text)
+        assert result.startswith(label)
+        assert "[REDACTED]" in result
+
+    @pytest.mark.parametrize("text", [
+        "Vaccine Lot Number: XJ4471 was administered per protocol.",
+        "Batch Serial: LOT-88213 confirmed against the vial label.",
+    ])
+    def test_lot_and_batch_numbers_not_redacted_as_device_serial(self, anonymizer, text):
+        """A medication/vaccine lot or batch number identifies a manufacturing
+        run, not an individual — not a HIPAA identifier, and over-redacting it
+        destroys clinically useful content (which lot was administered matters
+        for recalls/adverse events). The negative lookbehind on "Lot"/"Batch"
+        immediately before "Serial" is what this test guards; found during
+        adversarial testing, not anticipated when the pattern was first written."""
+        result = self._redacted(anonymizer, text)
+        assert result == text
+
+
 @requires_ner
 class TestNERPath:
     """Coverage for the spaCy NER branch of `anonymize_text` (issue #125).
