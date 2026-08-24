@@ -156,6 +156,17 @@ def _presupposes_missing_medication(question: str, known_medication_count: int) 
     return False
 
 
+# "since my last visit" / "at my last visit" presupposes a prior visit
+# occurred at all — found via a real, deterministic recurring case
+# (cold_start, zero past visits surfaced in context) where this phrasing
+# survived every other check untouched.
+_PAST_VISIT_PATTERN = re.compile(r"\b(since|at|during)\s+my\s+(last|previous)\s+visit\b", re.IGNORECASE)
+
+
+def _presupposes_missing_past_visit(question: str, known_past_visit_count: int) -> bool:
+    return bool(_PAST_VISIT_PATTERN.search(question)) and known_past_visit_count == 0
+
+
 def _presupposes_missing_referral(
     question: str, known_specialty_names: set[str], referred_specialties: set[str]
 ) -> str | None:
@@ -248,6 +259,7 @@ def apply_output_guardrails(
     referred_specialties: set[str],
     known_medication_count: int = 0,
     context_summary: str = "",
+    known_past_visit_count: int = 0,
 ) -> tuple[dict[str, list[str]], str, list[dict[str, Any]]]:
     """Strips questions presupposing a test/result, referral relationship, or
     additional medication not actually on file, plus a specialty-management-
@@ -275,6 +287,9 @@ def apply_output_guardrails(
                 continue
             if _presupposes_missing_medication(q, known_medication_count):
                 events.append({"category": category, "question": q, "reason": "presupposed_medication"})
+                continue
+            if _presupposes_missing_past_visit(q, known_past_visit_count):
+                events.append({"category": category, "question": q, "reason": "presupposed_past_visit"})
                 continue
             reason = _presupposes_specialty_convention_or_named_authority(q)
             if reason:

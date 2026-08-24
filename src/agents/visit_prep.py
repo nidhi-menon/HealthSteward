@@ -508,9 +508,11 @@ Before finalizing your response, count your questions. You must have between 8 a
         if self.last_target_specialty:
             known_specialty_names.add(self.last_target_specialty)
 
+        known_past_visit_count = len(self.last_context_selection.selected_visits) if self.last_context_selection else 0
         filtered_questions, filtered_summary, events = apply_output_guardrails(
             questions, known_lab_names, known_specialty_names, referred_specialties,
             self.last_medication_count, context_summary=result.get("context_summary") or "",
+            known_past_visit_count=known_past_visit_count,
         )
         self.last_guardrail_events = events
         if events:
