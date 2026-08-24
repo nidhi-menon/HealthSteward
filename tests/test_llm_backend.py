@@ -189,6 +189,113 @@ async def test_ollama_backend_no_warning_for_small_request():
 
 
 @pytest.mark.asyncio
+async def test_ollama_backend_warns_when_output_room_is_low_even_under_old_input_only_threshold():
+    """Regression test for DEC-037: the old version of this warning checked
+    only input size against a flat 75% of ollama_num_ctx, silently assuming
+    the remaining 25% covered the response — and never fired during the
+    real investigation that found a genuine truncation. This message (13000
+    chars at num_ctx=6000) is sized to land below that old 75%-of-input
+    threshold (estimated ~4355 input tokens vs. a 4500 old threshold) while
+    still leaving less than _RESERVED_OUTPUT_TOKENS_ESTIMATE (2000) tokens
+    of room for the response — exactly the gap the old check missed.
+    """
+    mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
+
+    async def fake_post(self, url, json, headers=None):
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post), patch(
+        "src.agents.llm_backend.logger"
+    ) as mock_logger:
+        backend = OllamaBackend(_settings(llm_provider="ollama", ollama_num_ctx=6000))
+        await backend.call(messages=[{"role": "user", "content": "x" * 13000}], system="sys")
+
+    assert mock_logger.warning.called
+    warning_text = mock_logger.warning.call_args[0][0]
+    assert "for the response" in warning_text
+
+
+@pytest.mark.asyncio
+async def test_ollama_backend_applies_response_schema_when_no_tools():
+    mock_json = {"message": {"role": "assistant", "content": "{}", "tool_calls": None}}
+    captured_payload = {}
+
+    async def fake_post(self, url, json, headers=None):
+        captured_payload.update(json)
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    schema = {"type": "object", "properties": {"a": {"type": "string"}}}
+    with patch.object(httpx.AsyncClient, "post", fake_post):
+        backend = OllamaBackend(_settings(llm_provider="ollama"))
+        await backend.call(
+            messages=[{"role": "user", "content": "hi"}], system="sys", response_schema=schema,
+        )
+
+    assert captured_payload["format"] == schema
+
+
+@pytest.mark.asyncio
+async def test_ollama_backend_ignores_response_schema_when_tools_present():
+    """DEC-039's core safety property: response_schema must never be sent
+    alongside tools — mixing Ollama's schema-constrained decoding with
+    tool-calling is untested and risks the tool-calling reliability
+    DEC-037/DEC-038 spent this whole review stabilizing.
+    """
+    mock_json = {"message": {"role": "assistant", "content": "", "tool_calls": None}}
+    captured_payload = {}
+
+    async def fake_post(self, url, json, headers=None):
+        captured_payload.update(json)
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    schema = {"type": "object", "properties": {"a": {"type": "string"}}}
+    with patch.object(httpx.AsyncClient, "post", fake_post):
+        backend = OllamaBackend(_settings(llm_provider="ollama"))
+        await backend.call(
+            messages=[{"role": "user", "content": "hi"}], system="sys",
+            tools=[{"type": "function", "function": {"name": "x"}}],
+            response_schema=schema,
+        )
+
+    assert "format" not in captured_payload
+
+
+@pytest.mark.asyncio
+async def test_ollama_backend_no_format_key_when_response_schema_not_given():
+    mock_json = {"message": {"role": "assistant", "content": "hello", "tool_calls": None}}
+    captured_payload = {}
+
+    async def fake_post(self, url, json, headers=None):
+        captured_payload.update(json)
+        return httpx.Response(200, json=mock_json, request=httpx.Request("POST", "http://test"))
+
+    with patch.object(httpx.AsyncClient, "post", fake_post):
+        backend = OllamaBackend(_settings(llm_provider="ollama"))
+        await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys")
+
+    assert "format" not in captured_payload
+
+
+@pytest.mark.asyncio
+async def test_claude_backend_ignores_response_schema():
+    """Claude backend accepts response_schema (interface parity) but does
+    nothing with it — see LLMBackend.call's docstring."""
+    mock_message = MagicMock()
+    mock_message.content = [SimpleNamespace(type="text", text="hello")]
+    mock_message.usage = MagicMock(input_tokens=10, output_tokens=5)
+
+    backend = ClaudeBackend(_settings(llm_provider="claude"))
+    with patch.object(backend.client.messages, "create", AsyncMock(return_value=mock_message)) as mock_create:
+        await backend.call(
+            messages=[{"role": "user", "content": "hi"}], system="sys",
+            response_schema={"type": "object"},
+        )
+
+    assert "response_format" not in mock_create.call_args.kwargs
+    assert "format" not in mock_create.call_args.kwargs
+
+
+@pytest.mark.asyncio
 async def test_custom_backend_requests_non_streaming_with_top_level_temperature():
     """CustomOpenAICompatibleBackend hits /chat/completions, where top-level
     `temperature` (OpenAI's convention) is correct — unlike Ollama's native

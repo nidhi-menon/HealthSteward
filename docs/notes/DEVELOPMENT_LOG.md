@@ -1928,6 +1928,91 @@ Related: issue #17, DEC-036, DEC-006, DEC-029 (the other "stable id"), #151 (pro
 
 ---
 
+## 65. Constrained Decoding for Non-Tool Calls, Scoped to Avoid Touching Tool-Calling (DEC-039)
+
+**Date:** 2026-08-21
+
+**Context:** the last item from the original reliability-review list — "make small-model tool-calling actually reliable, not just gracefully degraded" — flagged constrained decoding via Ollama's `format` field as the highest-leverage lever, back before the harness existed to test it against anything real. Picked back up now that entries #62-#64 established a working harness and a confirmed-reliable default model.
+
+**Scoping mattered more than implementing it.** Ollama's `format` constrains `message.content` to a JSON Schema at the decoding level — but this app's agentic loop always sends `tools` alongside every turn, and there's no tested guarantee for how `format` and `tools` interact in the same request (a tool-calling turn needs to emit `tool_calls`, not schema-conforming content). Rather than guess, scoped this to exactly the two calls that already don't request tools — the single-shot fallback (`_call_backend`) and the JSON-repair retry (`_repair_response_via_model`, added in entry #62) — where the entire job of the call already is "produce this JSON shape," so there's nothing to interfere with.
+
+**Implementation:** `LLMBackend.call` gained an optional `response_schema` param, silently ignored by any backend that doesn't implement it (Claude; a `CustomOpenAICompatibleBackend`'s no-op default, since `response_format` support varies too much across arbitrary OpenAI-compatible endpoints to assume safely). `OllamaBackend` applies it as `format` only when no `tools` are present that turn. `RESPONSE_SCHEMA` (`src/agents/visit_prep.py`) constrains only the shape both prompts already ask for in prose — an object of string arrays plus a string summary — not category names or question count, keeping those governed by prompt text and eval scorers rather than a second schema that could drift from them.
+
+**Verified safe, not yet verified necessary.** Re-ran both `llama3.2:latest` and `granite4:3b` through `eval/run.py`: both produced output byte-identical to their pre-change baselines, including `granite4:3b`'s `cold_start` case, which actually exercises the newly-constrained fallback path (and still correctly shows no placeholder hallucination, confirming the schema sits cleanly underneath entry #63's fallback fix). No case in the current fixture set was failing to parse before this change, so there's no before/after "this prevented a malformed response" data point yet — the real test comes the next time a model/case combination would otherwise have needed the repair chain.
+
+**Not a prompt change** — no `PROMPT_CHANGELOG.md` entry. Neither system prompt's wording changed; this is a request-level decoding constraint layered under prompts that already describe this shape, not a change to what the model is asked to do.
+
+**Files changed:** `src/agents/llm_backend.py`, `src/agents/visit_prep.py`, `docs/notes/DECISIONS.md` (DEC-039), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: DEC-039, DEC-037 (the repair chain this sits underneath), DEC-038 (the model comparison this was validated against), entry #62, entry #63, entry #64.
+
+---
+
+## 64. `llama3.2:latest` Set as the Default Local Model, Confirmed via `--trials 3` (DEC-038 addendum)
+
+**Date:** 2026-08-21
+
+**Context:** entry #63 left `llama3.2:latest` vs. `granite4:3b` as a single-trial-per-case comparison — enough to lean on, not enough to commit a default to. Re-ran both at `eval/run.py --trials 3` to see whether the gap (and `granite4:3b`'s `tool_call_necessity_dosing` groundedness edge) held up or was noise.
+
+**Both models turned out fully deterministic across all 3 trials each** at `EVAL_TEMPERATURE=0.0` — byte-identical output trial to trial, on both models. That's the actual finding worth recording: this wasn't an average narrowing toward a truer number, it was confirmation that the single-trial numbers already *were* the truth for this harness. `llama3.2:latest`: 15/15 convergence. `granite4:3b`: 12/15 — `cold_start` failed the exact same way on every one of its 3 trials, meaning its non-convergence is a stable behavioral trait (it doesn't accept "no medications found" from `get_medication_details` and keeps re-probing until `agent_max_turns` runs out), not a bad roll. `granite4:3b`'s one real advantage — `tool_call_necessity_dosing` grounded_rate 0.7 vs. `llama3.2:latest`'s 0.5 — held up too, equally reproducible.
+
+**Decision (full detail in DEC-038's addendum):** `llama3.2:latest` is the default. A `cold_start`-shaped case — a patient with little data entered yet — isn't a rare edge case for a new HealthSteward user, so a deterministic 20% non-convergence rate on that shape outweighs one other case's groundedness edge. `granite4:3b` stays available via the existing runtime Settings toggle (DEC-016), not discarded.
+
+**Three places actually set this, and two were already stale — fixed all three to agree:** `src/config.py`'s `ollama_model` field default (`"llama3.2"` → `"llama3.2:latest"`, made explicit rather than relying on Ollama's bare-tag-means-latest convention); `.env`'s `OLLAMA_MODEL` (was `llama3.1:latest` — leftover 2026-07-10 test data, the same stale value that produced DEC-037's initial false 20%-convergence reading before that was traced to config rather than reliability); and the live DB's `app_settings.ollama_model`, which had drifted to `llama3.2:3b`, a tag that no longer exists locally (auto-pruned when other models were pulled during this review) — cleared to `NULL` instead of being set to a duplicate value, so there's one source of truth (the env default) rather than two that can silently diverge again the way this one already had, twice.
+
+**Files changed:** `src/config.py`, `.env` (not tracked in git — local dev config), `data/healthsteward.db` (not tracked — local dev DB), `docs/notes/DECISIONS.md` (DEC-038 addendum), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: DEC-038, DEC-037, DEC-016 (runtime settings toggle), entry #62, entry #63.
+
+---
+
+## 63. Reliability Review Part 2: A Prompt Nudge That Didn't Work, Two Confirmed Model-Level Dead Ends, and `granite4:3b` Adopted (DEC-038)
+
+**Date:** 2026-08-20
+
+**Context:** direct continuation of entry #62's review. The A/B/C comparison there found `qwen3:4b` and `phi4-mini` converging cleanly on every eval case while never calling any tool, including the one case designed to require one — silent, ungrounded output that looks identical to a clean success unless you check `tool_call_necessity`'s `was_called` field specifically. The planned next step (per that review's own sequencing) was cheapest-first: try a prompt nudge before assuming either model is a dead end.
+
+**The nudge didn't work, and that turned out to be informative rather than a wasted step.** Added an explicit tool-use paragraph to both system prompts (PROMPT_CHANGELOG.md v5) — concrete trigger examples per tool, plus "don't skip an available tool just because you can produce some answer without it," aimed directly at the observed pattern. Re-ran both models against `tool_call_necessity_dosing`: zero change, `was_called: False` on both. Rather than stop at "the prompt didn't work," root-caused each separately:
+
+- **`qwen3:4b`:** confirmed a real, currently-unresolved upstream Ollama bug. Ollama's `/api/chat` accepts a `think: false` parameter for hybrid-reasoning models, but a direct test (a trivial "say hi" prompt with `think: false` set) still produced a full `<think>...</think>` block in the response. Multiple open Ollama GitHub issues (#12917, #12907, #12234) confirm this is a known, unfixed limitation — Ollama replaces the model's own chat template with a generic one, and the reasoning-effort setting lives in the template it discards. No supported workaround short of running outside Ollama entirely (`llama-server` directly with `--jinja`), which wasn't worth adopting to test one model. Separately, and more decisively: a same-day eval re-run at the app's real default timeouts (after an earlier diagnostic bump had been reverted per this session's own request) failed `qwen3:4b` outright — 0/5, every case `backend_unavailable`. Its thinking-mode latency doesn't fit inside the timeouts the app would actually ship with, independent of the tool-use question entirely.
+- **`phi4-mini`:** a more interesting failure. A minimal, isolated `curl` request against `/api/chat` (bypassing this app's own prompt/context entirely) showed the model *attempting* tool use — it names `get_medication_details` correctly and writes plausible-looking arguments — but as prose inside its text response, wrapped in a markdown code fence, never through Ollama's structured `tool_calls` field. `result.tool_calls` is empty either way, so from the agentic loop's perspective this is indistinguishable from "chose not to." The model isn't failing to decide to use the tool; it's failing to route that decision through the wire protocol its own advertised `tools` capability implies it supports. No prompt wording reaches this — it's a template/packaging gap in how this quantization was built for Ollama.
+
+**`granite4:3b` pulled as the next candidate — the first other model to actually clear the tool-use bar.** IBM's Granite 4, specifically trained for reliable function-calling from 3B up rather than general-purpose-plus-tools. First run: 4/5 convergence, and — the thing that actually mattered — `was_called: True` on both cases requiring a tool, through the real protocol. Two new problems alongside that success, each investigated rather than just noted:
+
+- **Over-generation:** `groundedness_labs_vitals` produced 19 questions against the prompt's 8-15 ceiling. Traced to an asymmetry in the prompt itself — the *lower* bound had real primacy/recency reinforcement from PROMPT_CHANGELOG.md's v2-2026-07-19 fix, the upper bound was a bare mention. Fixed symmetrically (PROMPT_CHANGELOG.md v6): same reinforcement pattern, both directions. Re-run: 19→12 questions, `format_valid` False→True, and all 5 cases passed format validity for the first time in this whole model-comparison exercise.
+- **A genuine hallucination bug, generalizable beyond this model:** `cold_start` (a deliberately medication-free fixture) hit `non_convergence` after 6 tool calls — 4 of them `get_medication_details`, every one correctly returning "No matching medications found," the model apparently unwilling to accept that answer and move on. Per DEC-013's existing design, non-convergence discards everything the loop found and falls back to a single-shot call with only the *base* context — no medication data either way. Told to reference real medication names and given none, the model invented a literal unfilled template placeholder: `"I currently take [list any known medications here] for my seasonal allergic rhinitis."` This isn't a `granite4:3b`-specific defect — any model landing on this fallback path for a data-sparse case is exposed to the same gap, since the loop's real, already-confirmed findings are thrown away rather than passed forward.
+
+**Fix: the fallback now reuses what the agentic loop already learned.** `_render_gathered_tool_results` (`src/agents/visit_prep.py`) renders `self.last_tool_calls` — already populated in place at the point of failure, since it's the same list object bound in `__init__`, not a fresh one lost when the loop raises — as plain text, skipping the two placeholder markers (duplicate-call, budget-exceeded) that add nothing. When non-empty, it's appended to the fallback's messages with an explicit instruction not to invent content for anything already answered, including a confirmed absence. Re-run: no more placeholder — `cold_start`'s fallback correctly omits "Medication Review" entirely instead of inventing one. The `non_convergence` itself is still open (the model still burns its full turn budget re-querying an empty result before giving up); this fix addresses the *consequence*, not that root cause, which is a smaller, separate optimization left for later.
+
+**Net position after this round:** `llama3.2:latest` and `granite4:3b` are both confirmed viable for the agentic tool-use path, each with known and now-smaller rough edges. `qwen3:4b` and `phi4-mini` are discarded — not for lack of trying, but because each hit a genuine model/runtime-level wall a prompt can't reach. The distinction between "tried and failed" and "structurally blocked" mattered here specifically because it stopped further prompt-iteration effort from being spent against problems no prompt could fix.
+
+**Files changed:** `src/agents/visit_prep.py`, `docs/notes/DECISIONS.md` (DEC-038), `docs/notes/PROMPT_CHANGELOG.md` (v5, v6), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: DEC-037, DEC-038, DEC-013 (fallback design), DEC-009 (original small-model caveat), entry #62, PROMPT_CHANGELOG.md v2-2026-07-19 (the lower-bound fix v6's upper-bound fix mirrors).
+
+---
+
+## 62. Small-Model Tool-Calling Reliability Review: Convergence Metric, and a Truncation Bug Found and Fixed (DEC-037)
+
+**Date:** 2026-08-20
+
+**Context:** a conversation-driven review of whether local (Ollama) tool-calling is actually reliable, or just gracefully degraded, per DEC-009's original caveat. First step: extend `eval/run.py` with a tool-call convergence metric (`eval/scorers.py::score_tool_call_convergence`, reading the existing `agentic_path`/`fallback_reason` fields) and a `--trials` flag, so convergence rate could be measured rather than guessed. First real run (against `llama3.1:latest`, an 8B model) came back at 20% convergence with mostly `backend_unavailable` failures — which turned out to be a stale DB row from 2026-07-10 test data overriding the intended `.env` default model, plus every call hitting a 120s connect timeout regardless. Neither was a code bug in the reliability sense; both were environment/config issues the investigation had to clear before the real question (is small-model tool-calling reliable) could be answered at all.
+
+**A/B/C comparison across three models fitting the 8GB M3** (`llama3.2:latest` 3B, `qwen3:4b`, `phi4-mini` 3.8B), using the harness's existing five synthetic `GENERATION_CASES` (no real patient data — see `eval/db.py::build_case`). All three converged 5/5 in the harness's shallow sense (no parse error, no non-convergence), but `tool_call_necessity_dosing` — a case designed to require `get_medication_details` — exposed two different failure modes underneath that identical-looking convergence number:
+
+- **`qwen3:4b` and `phi4-mini` never called any tool, on any case, including this one** — `score_tool_call_necessity`'s `was_called: False` on both. The model answered confidently anyway, with 3-6 of its questions per case scoring ungrounded (fabricated against data it never retrieved). This is the more dangerous failure mode for a health app: it's silent, and nothing in the harness or the app itself currently flags it as anything other than a clean success.
+- **`llama3.2:latest` did call the right tool** (`was_called: True`, grounded_rate 1.0 on that case) but over-called — 9 total tool calls in one case, several near-duplicate `lookup_past_visits` lookups — and its final response came back as JSON that failed to parse, silently repackaged by the existing raw-text fallback into a fake `"General Questions"` category.
+
+**The `llama3.2:latest` truncation bug got its own full investigation and fix, written up in detail in DEC-037** — three hypotheses (turn-count cap, tool-result content budget, `ollama_num_ctx` size) were each tested against the harness and disproved in turn before the actual cause (the model hitting its own end-of-turn stop token one token before closing its JSON, not a truncation-by-limit) was isolated. The fix: a content-size tool-result budget (not a call-count cap, which was rejected for throttling legitimate multi-lookup turns as hard as redundant ones) plus a two-layer JSON repair — a code-level bracket-closer (`src/agents/base.py::_repair_truncated_json`) for the common case, and a single model-side "finish your own output" retry (`VisitPrepAgent._repair_response_via_model`) for the harder case where content itself, not just closing punctuation, went missing. Also fixed in passing: `llm_backend.py`'s context-budget warning never fired during any of this despite real truncation — it only checked input size against a flat threshold, not remaining room for the response — now corrected to reserve output tokens explicitly.
+
+**Result:** `llama3.2:latest` went from 4/5 to 5/5 cases passing format validation, confirmed reproducibly. `qwen3:4b`/`phi4-mini`'s silent-non-tool-use failure is a different problem, untouched by this fix, and is the next step in the same review — a tool-use prompt nudge first, `granite4:3b` as a fallback candidate if that doesn't resolve it, discard both otherwise (silent hallucination is judged worse than `llama3.2`'s noisier but self-correcting failure mode).
+
+**Files changed:** `eval/run.py`, `eval/scorers.py`, `src/agents/visit_prep.py`, `src/agents/base.py`, `src/agents/llm_backend.py`, `docs/notes/DECISIONS.md` (DEC-037), `docs/notes/DEVELOPMENT_LOG.md`.
+
+Related: DEC-037, DEC-009 (original small-model tool-calling caveat), DEC-013 (fallback design), DEC-016 (Ollama default).
+
+---
+
 ## 61. A Medication Stop No Longer Reports Success Without Stopping Anything (#149, DEC-035)
 
 **Date:** 2026-08-09

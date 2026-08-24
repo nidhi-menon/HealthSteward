@@ -253,6 +253,32 @@ def test_score_tool_call_necessity_not_applicable_when_case_has_no_expectation()
     assert scored["applicable"] is False
 
 
+def test_score_tool_call_convergence_true_when_agentic_path_succeeded():
+    scored = scorers.score_tool_call_convergence(
+        {"agentic_path": True, "fallback_reason": None}
+    )
+    assert scored == {"converged": True, "fallback_reason": None}
+
+
+def test_score_tool_call_convergence_false_reports_fallback_reason():
+    """converged must be False whenever agentic_path is, regardless of which
+    FALLBACK_* reason fired — the reason is what --trials aggregation groups
+    by (DEC-037's non_convergence vs. parse_error vs. unknown_tool split)."""
+    scored = scorers.score_tool_call_convergence(
+        {"agentic_path": False, "fallback_reason": "non_convergence"}
+    )
+    assert scored == {"converged": False, "fallback_reason": "non_convergence"}
+
+
+def test_score_tool_call_convergence_missing_fields_default_to_not_converged():
+    """A raw_result that never got as far as setting these keys (e.g. the
+    outer hard-failure fallback response) must read as non-converged, not
+    raise — score_tool_call_convergence is called on every case's result,
+    including ones that failed before agentic_path was ever set."""
+    scored = scorers.score_tool_call_convergence({})
+    assert scored == {"converged": False, "fallback_reason": None}
+
+
 @pytest.mark.asyncio
 async def test_run_generation_case_end_to_end_with_scope_violation(eval_db):
     """Full plumbing check with a mocked model that deliberately asks an

@@ -64,6 +64,7 @@ class LLMBackend(ABC):
         system: str,
         tools: Optional[list[dict[str, Any]]] = None,
         temperature: float = 0.7,
+        response_schema: Optional[dict[str, Any]] = None,
     ) -> LLMTurnResult:
         """Send messages (+ optional tool specs) and get back one turn's result.
 
@@ -71,6 +72,19 @@ class LLMBackend(ABC):
         (issue #29) passes 0.0 explicitly to make eval runs reproducible
         across repeats, since the loop's own non-determinism otherwise makes
         a single eval run's pass/fail meaningless.
+
+        response_schema: a JSON Schema the response's text content must
+        conform to (constrained decoding — the model literally cannot emit
+        text that doesn't match, rather than being asked nicely to). Only
+        meaningful — and only implemented — for a call made *without* tools;
+        combining schema-constrained content with tool-calling in the same
+        request is untested and risks interfering with tool-call reliability
+        this codebase has separately, carefully tuned (see DEC-037/DEC-038).
+        Backends that don't support this (Claude; any OpenAI-compatible
+        custom provider, since support varies too much per-provider to
+        assume) silently ignore it rather than erroring — this is a
+        best-effort reliability improvement, not a contract callers depend
+        on for correctness.
         """
         ...
 
@@ -98,7 +112,12 @@ class ClaudeBackend(LLMBackend):
         system: str,
         tools: Optional[list[dict[str, Any]]] = None,
         temperature: float = 0.7,
+        response_schema: Optional[dict[str, Any]] = None,
     ) -> LLMTurnResult:
+        # response_schema intentionally unused — see LLMBackend.call's
+        # docstring. Claude's own JSON reliability hasn't shown this class of
+        # problem in this codebase's usage, and forcing it through tool_choice
+        # gymnastics isn't worth doing without evidence it's needed here.
         kwargs: dict[str, Any] = {
             "model": self.settings.anthropic_model,
             "max_tokens": self.settings.anthropic_max_tokens,
@@ -200,18 +219,28 @@ class _OpenAIStyleHTTPBackend(LLMBackend):
         """
         return None
 
+    def _response_format_payload(
+        self, response_schema: Optional[dict[str, Any]], tools: Optional[list[dict[str, Any]]]
+    ) -> dict[str, Any]:
+        """Hook for a subclass to apply response_schema — default no-op
+        (see LLMBackend.call's docstring on why this isn't universal).
+        """
+        return {}
+
     async def call(
         self,
         messages: list[dict[str, Any]],
         system: str,
         tools: Optional[list[dict[str, Any]]] = None,
         temperature: float = 0.7,
+        response_schema: Optional[dict[str, Any]] = None,
     ) -> LLMTurnResult:
         chat_messages = [{"role": "system", "content": system}, *messages]
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": chat_messages,
             **self._sampling_payload(temperature),
+            **self._response_format_payload(response_schema, tools),
         }
         if tools:
             payload["tools"] = tools
@@ -287,14 +316,26 @@ class _OpenAIStyleHTTPBackend(LLMBackend):
 
 
 # Rough chars-per-token ratio for estimating request size against `num_ctx`
-# without a real tokenizer per model. English text is commonly ~4 chars/token;
-# this is a heuristic early-warning signal, not a precise count — it exists to
-# make an already-likely-truncated request visible in logs (issue #71's
-# "fails loudly" requirement), not to gate/block the request.
-_CHARS_PER_TOKEN_ESTIMATE = 4
-# Warn once the estimate crosses this fraction of num_ctx, leaving headroom
-# for the model's own response tokens within the same context window.
-_CONTEXT_BUDGET_WARNING_THRESHOLD = 0.75
+# without a real tokenizer per model. English prose is commonly ~4 chars/
+# token, but this codebase's tool-call payloads are punctuation/JSON-heavy
+# (quoted keys, braces, structured medical text), which tokenizes denser
+# than prose — empirically, a 4:1 estimate under-counted real usage enough
+# to miss an actual truncation (eval/run.py's tool_call_necessity_dosing
+# case). 3:1 is still a heuristic, not a precise count, but errs toward
+# over- rather than under-estimating request size.
+_CHARS_PER_TOKEN_ESTIMATE = 3
+# num_ctx bounds *input + output combined* — the old version of this warning
+# only checked input size against a flat 75% of num_ctx, silently assuming
+# the remaining 25% covered the response. Found not to hold in practice
+# (eval/run.py's tool_call_necessity_dosing case: input estimate stayed
+# under that 75% line on every run, yet the actual response was still cut
+# off mid-JSON) — punctuation/JSON-heavy tool-call content tokenizes denser
+# than the ~4 chars/token average this estimate assumes, so real usage can
+# exceed the estimate by enough to blow through the assumed output headroom
+# without ever crossing the input-only threshold. Reserving an explicit
+# token count for the response, and warning whenever less than that remains
+# after the input, catches this directly instead of via a proxy threshold.
+_RESERVED_OUTPUT_TOKENS_ESTIMATE = 2000
 
 
 class OllamaBackend(_OpenAIStyleHTTPBackend):
@@ -319,21 +360,35 @@ class OllamaBackend(_OpenAIStyleHTTPBackend):
             "options": {"temperature": temperature, "num_ctx": self.settings.ollama_num_ctx},
         }
 
+    def _response_format_payload(
+        self, response_schema: Optional[dict[str, Any]], tools: Optional[list[dict[str, Any]]]
+    ) -> dict[str, Any]:
+        # Deliberately not applied when tools are present — see
+        # LLMBackend.call's docstring. Ollama's `format` constrains
+        # message.content to the given JSON Schema at the token-sampling
+        # level (constrained decoding, not a prompted request the model can
+        # ignore); combined with `tools` it's untested territory this
+        # codebase doesn't rely on, since a tool-calling turn needs to be
+        # able to emit tool_calls instead of schema-conforming content.
+        if response_schema and not tools:
+            return {"format": response_schema}
+        return {}
+
     def _context_budget_warning(
         self, chat_messages: list[dict[str, Any]], tools: Optional[list[dict[str, Any]]]
     ) -> Optional[str]:
         char_count = sum(len(json.dumps(m)) for m in chat_messages)
         if tools:
             char_count += sum(len(json.dumps(t)) for t in tools)
-        estimated_tokens = char_count // _CHARS_PER_TOKEN_ESTIMATE
-        threshold = int(self.settings.ollama_num_ctx * _CONTEXT_BUDGET_WARNING_THRESHOLD)
-        if estimated_tokens > threshold:
+        estimated_input_tokens = char_count // _CHARS_PER_TOKEN_ESTIMATE
+        available_for_output = self.settings.ollama_num_ctx - estimated_input_tokens
+        if available_for_output < _RESERVED_OUTPUT_TOKENS_ESTIMATE:
             return (
-                f"Ollama request estimated at ~{estimated_tokens} tokens, over "
-                f"{int(_CONTEXT_BUDGET_WARNING_THRESHOLD * 100)}% of ollama_num_ctx "
-                f"({self.settings.ollama_num_ctx}) — response quality may silently "
-                f"degrade from context truncation. Consider raising ollama_num_ctx "
-                f"or reducing context_max_tokens/agent_max_turns."
+                f"Ollama request estimated at ~{estimated_input_tokens} input tokens, leaving "
+                f"only ~{available_for_output} of ollama_num_ctx ({self.settings.ollama_num_ctx}) "
+                f"for the response — below the ~{_RESERVED_OUTPUT_TOKENS_ESTIMATE}-token reserve "
+                f"this needs to avoid truncation. Response is likely to be cut off mid-generation. "
+                f"Consider raising ollama_num_ctx or reducing context_max_tokens/agent_max_turns."
             )
         return None
 
