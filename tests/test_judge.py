@@ -10,6 +10,7 @@ import pytest
 
 from eval.fixtures import (
     ConditionFixture,
+    DoctorFixture,
     EvalCase,
     LabOrderFixture,
     MedicationFixture,
@@ -100,6 +101,28 @@ class TestCaseContextText:
         case = _make_case(appointment_purpose="Diabetes follow-up")
         text = _case_context_text(case)
         assert "Diabetes follow-up" in text
+
+    def test_includes_appointment_date_and_target_doctor(self):
+        """Regression guard for a real false-positive found via DEC-042: the
+        judge previously never saw the appointment date or target doctor's
+        specialty at all, so it flagged cold_start's genuinely-true "Family
+        Medicine specialist" and "August 3rd, 2026" claims as unsupported —
+        they were true, the judge just couldn't see the fixture data that
+        proved it."""
+        case = _make_case(
+            appointment_scheduled_date="2026-08-03T09:00:00",
+            doctors=[DoctorFixture(key="target", name="Dr. Alex Kim", specialty="Family Medicine", clinic="Riverside Family Practice")],
+        )
+        text = _case_context_text(case)
+        assert "2026-08-03T09:00:00" in text
+        assert "Dr. Alex Kim" in text
+        assert "Family Medicine" in text
+        assert "Riverside Family Practice" in text
+
+    def test_omits_doctor_line_when_target_doctor_not_found(self):
+        case = _make_case(doctors=[], target_doctor_key="missing")
+        text = _case_context_text(case)
+        assert "Appointment doctor" not in text
 
     def test_includes_condition_detail(self):
         case = _make_case(conditions=[ConditionFixture(name="Hashimoto's Thyroiditis", icd_10="E06.3", status="active")])
