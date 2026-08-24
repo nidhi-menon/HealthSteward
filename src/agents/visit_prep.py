@@ -23,6 +23,7 @@ from src.agents.llm_backend import (
     get_llm_backend,
 )
 from src.agents.ollama_client import get_ollama_client
+from src.agents.output_guardrails import apply_output_guardrails
 from src.agents.tools import UnknownToolError, VisitPrepTools, get_tools_for_provider
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
@@ -210,6 +211,34 @@ def _icd10_to_specialties(icd_10: Optional[str]) -> list[str]:
     return []
 
 
+# Canonical specialty name list — module-level so both clinic-name inference
+# below and output_guardrails.py's referral-presupposition check (DEC-042)
+# can share one source of truth instead of drifting apart.
+SPECIALTY_KEYWORDS: dict[str, str] = {
+    "endocrinology": "Endocrinology",
+    "dermatology": "Dermatology",
+    "cardiology": "Cardiology",
+    "gynecology": "Gynecology",
+    "ob-gyn": "Obstetrics and Gynecology",
+    "obstetrics": "Obstetrics and Gynecology",
+    "neurology": "Neurology",
+    "orthopedic": "Orthopedics",
+    "oncology": "Oncology",
+    "gastroenterology": "Gastroenterology",
+    "pulmonology": "Pulmonology",
+    "rheumatology": "Rheumatology",
+    "nephrology": "Nephrology",
+    "urology": "Urology",
+    "psychiatry": "Psychiatry",
+    "ophthalmology": "Ophthalmology",
+    "pain management": "Pain Management",
+    "physical therapy": "Physical Therapy",
+    "family medicine": "Family Medicine",
+    "internal medicine": "Internal Medicine",
+    "primary care": "Primary Care",
+}
+
+
 def _infer_specialty_from_clinic(clinic: Optional[str]) -> Optional[str]:
     """Infer doctor specialty from clinic name as a fallback.
 
@@ -218,30 +247,7 @@ def _infer_specialty_from_clinic(clinic: Optional[str]) -> Optional[str]:
     if not clinic:
         return None
     clinic_lower = clinic.lower()
-    specialty_keywords = {
-        "endocrinology": "Endocrinology",
-        "dermatology": "Dermatology",
-        "cardiology": "Cardiology",
-        "gynecology": "Gynecology",
-        "ob-gyn": "Obstetrics and Gynecology",
-        "obstetrics": "Obstetrics and Gynecology",
-        "neurology": "Neurology",
-        "orthopedic": "Orthopedics",
-        "oncology": "Oncology",
-        "gastroenterology": "Gastroenterology",
-        "pulmonology": "Pulmonology",
-        "rheumatology": "Rheumatology",
-        "nephrology": "Nephrology",
-        "urology": "Urology",
-        "psychiatry": "Psychiatry",
-        "ophthalmology": "Ophthalmology",
-        "pain management": "Pain Management",
-        "physical therapy": "Physical Therapy",
-        "family medicine": "Family Medicine",
-        "internal medicine": "Internal Medicine",
-        "primary care": "Primary Care",
-    }
-    for keyword, specialty in specialty_keywords.items():
+    for keyword, specialty in SPECIALTY_KEYWORDS.items():
         if keyword in clinic_lower:
             return specialty
     return None
@@ -282,7 +288,7 @@ class VisitPrepAgent(BaseAgent):
     # See docs/notes/PROMPT_CHANGELOG.md for version history/rationale —
     # bump the version and add an entry there whenever either prompt below
     # changes, per the project-wide prompt-versioning convention.
-    SYSTEM_PROMPT_TEMPLATE_VERSION = "v6-2026-08-20"
+    SYSTEM_PROMPT_TEMPLATE_VERSION = "v10-2026-08-24"
     SYSTEM_PROMPT_TEMPLATE = """You are a healthcare assistant preparing a patient for a visit with their {specialty}.
 
 Your task: generate 8-15 focused, actionable questions the patient should ask THIS doctor based on the patient data provided. This count is a hard requirement, not a suggestion, at BOTH ends — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early; if you find yourself with more than 15, cut down to the 15 most clinically useful ones rather than including every question you can think of — the goal is a focused, prioritized list a patient can actually use in a visit, not an exhaustive one.
@@ -323,7 +329,7 @@ Use these categories (omit any that have no relevant questions — do not includ
 Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one; if you're over 15, cut down to the 15 most clinically useful ones, not just the first 15 you generated. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     # Fallback when no specialty is known
-    SYSTEM_PROMPT_GENERIC_VERSION = "v6-2026-08-20"
+    SYSTEM_PROMPT_GENERIC_VERSION = "v10-2026-08-24"
     SYSTEM_PROMPT_GENERIC = """You are a healthcare assistant preparing a patient for an upcoming doctor visit.
 
 Your task: generate 8-15 focused, actionable questions the patient should ask their doctor based on the patient data provided. This count is a hard requirement, not a suggestion, at BOTH ends — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early; if you find yourself with more than 15, cut down to the 15 most clinically useful ones rather than including every question you can think of — the goal is a focused, prioritized list a patient can actually use in a visit, not an exhaustive one.
@@ -372,6 +378,15 @@ Before finalizing your response, count your questions. You must have between 8 a
         # method's docstring. None/empty until a run has actually happened.
         self.last_context_selection: Optional[ContextSelectionResult] = None
         self.last_tool_calls: list[dict[str, Any]] = []
+        # Structured patient data + guardrail events from the most recent
+        # call, set in _prepare_visit_in_scope and consumed by prepare_visit
+        # to apply output_guardrails.py centrally at the one return point
+        # every path (agentic success, fallback) already converges through —
+        # see prepare_visit's docstring. Empty until a run has happened.
+        self.last_clinical_data: dict[str, Any] = {}
+        self.last_target_specialty: Optional[str] = None
+        self.last_medication_count: int = 0
+        self.last_guardrail_events: list[dict[str, Any]] = []
         # Redaction events (issue #16) aggregated across this whole
         # prepare_visit() call — profile/appointment anonymization, Stage 4
         # context selection, and any tool-result anonymization from the
@@ -469,7 +484,41 @@ Before finalizing your response, count your questions. You must have between 8 a
                 additional_concerns=additional_concerns,
                 temperature=temperature,
             )
+        result = self._apply_output_guardrails(result)
         return _scrub_generated_output(result)
+
+    def _apply_output_guardrails(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Strips questions and context_summary sentences presupposing a
+        test/lab, referral relationship, or medication not actually on file,
+        or asserting a specialty-management convention/named external
+        authority this app has no source for (DEC-042) — see
+        output_guardrails.py. Applied here, prepare_visit's one convergence
+        point for every return path (agentic success, single-shot fallback,
+        generic fallback), using the structured data _prepare_visit_in_scope
+        already loaded and stashed on self.last_clinical_data/
+        self.last_target_specialty.
+        """
+        questions = result.get("questions")
+        if not isinstance(questions, dict):
+            return result
+
+        known_lab_names = {lab.test_name.lower() for lab in self.last_clinical_data.get("lab_orders", [])}
+        referred_specialties = {r.specialty.lower() for r in self.last_clinical_data.get("referrals", [])}
+        known_specialty_names = set(SPECIALTY_KEYWORDS.values())
+        if self.last_target_specialty:
+            known_specialty_names.add(self.last_target_specialty)
+
+        known_past_visit_count = len(self.last_context_selection.selected_visits) if self.last_context_selection else 0
+        filtered_questions, filtered_summary, events = apply_output_guardrails(
+            questions, known_lab_names, known_specialty_names, referred_specialties,
+            self.last_medication_count, context_summary=result.get("context_summary") or "",
+            known_past_visit_count=known_past_visit_count,
+        )
+        self.last_guardrail_events = events
+        if events:
+            logger.warning(f"Output guardrails stripped {len(events)} item(s): {events}")
+
+        return {**result, "questions": filtered_questions, "context_summary": filtered_summary}
 
     async def _prepare_visit_in_scope(
         self,
@@ -537,6 +586,7 @@ Before finalizing your response, count your questions. You must have between 8 a
 
         # Step 3: Load clinical data (labs, vitals, follow-ups, referrals)
         clinical_data = await self._get_clinical_data(appointment.profile_id)
+        self.last_clinical_data = clinical_data
 
         # Step 4: Anonymize current profile and appointment
         anonymized_profile, profile_events = self.anonymizer.anonymize_profile(appointment.profile)
@@ -546,11 +596,13 @@ Before finalizing your response, count your questions. You must have between 8 a
 
         # Step 5: Resolve medication → doctor specialty for tagging
         med_specialty_map = self._build_med_specialty_map(appointment.profile)
+        self.last_medication_count = len(list(getattr(appointment.profile, "medications", []) or []))
 
         # Step 6: Build context message
         target_specialty = None
         if appointment.doctor:
             target_specialty = appointment.doctor.specialty or _infer_specialty_from_clinic(appointment.doctor.clinic)
+        self.last_target_specialty = target_specialty
         anonymized_concerns, concerns_events = self.anonymizer.anonymize_text(
             additional_concerns,
             profile_id=appointment.profile_id,
