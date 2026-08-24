@@ -30,7 +30,7 @@ from src.agents.llm_backend import ClaudeBackend
 
 # Bumped whenever this prompt's wording changes in a way that could affect
 # judgments — see docs/notes/PROMPT_CHANGELOG.md.
-FACTUAL_GROUNDEDNESS_JUDGE_PROMPT_VERSION = "v2"
+FACTUAL_GROUNDEDNESS_JUDGE_PROMPT_VERSION = "v3"
 
 _JUDGE_SYSTEM_PROMPT = """You are an independent fact-checking judge for an AI health-coordination \
 tool. You will be shown a patient's actual medical record data and a set of \
@@ -100,7 +100,19 @@ def _case_context_text(case: EvalCase) -> str:
     given the patient's real record", not "is this in scope for this visit"
     (that's score_scope's job, a separate deterministic check).
     """
-    lines = [f"Appointment purpose: {case.appointment_purpose}"]
+    lines = [
+        f"Appointment purpose: {case.appointment_purpose}",
+        f"Appointment date: {case.appointment_scheduled_date}",
+    ]
+
+    target_doctor = next((d for d in case.doctors if d.key == case.target_doctor_key), None)
+    if target_doctor:
+        detail = f"Appointment doctor: {target_doctor.name}"
+        if target_doctor.specialty:
+            detail += f" ({target_doctor.specialty})"
+        if target_doctor.clinic:
+            detail += f", {target_doctor.clinic}"
+        lines.append(detail)
 
     if case.conditions:
         lines.append("\nConditions:")
