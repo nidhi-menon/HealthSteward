@@ -100,6 +100,26 @@ class TestPresupposesMissingReferral:
         assert specialty is None
 
 
+class TestPresupposesMissingPastVisit:
+    def test_flags_real_found_case_since_my_last_visit_zero_past_visits(self):
+        from src.agents.output_guardrails import _presupposes_missing_past_visit
+
+        q = "What is the current management plan for my Seasonal Allergic Rhinitis, and are there any changes or updates since my last visit?"
+        assert _presupposes_missing_past_visit(q, known_past_visit_count=0) is True
+
+    def test_does_not_flag_when_past_visits_exist(self):
+        from src.agents.output_guardrails import _presupposes_missing_past_visit
+
+        q = "Any changes since my last visit?"
+        assert _presupposes_missing_past_visit(q, known_past_visit_count=2) is False
+
+    def test_does_not_flag_unrelated_question(self):
+        from src.agents.output_guardrails import _presupposes_missing_past_visit
+
+        q = "What lifestyle changes can I make to manage my condition?"
+        assert _presupposes_missing_past_visit(q, known_past_visit_count=0) is False
+
+
 class TestPresupposesMissingMedication:
     def test_flags_real_found_case_other_medications_single_med_on_file(self):
         q = "Are there any potential interactions between Levothyroxine and other medications I am taking?"
