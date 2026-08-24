@@ -340,6 +340,36 @@ async def test_run_generation_case_end_to_end_with_scope_violation(eval_db):
 
 
 @pytest.mark.asyncio
+async def test_run_generation_case_survives_a_judge_failure(eval_db):
+    """A judge call that fails after its own retries (eval/judge.py) must
+    not crash the whole multi-case, multi-trial run — recorded as
+    factual_groundedness_error instead, same posture as CASE_TIMEOUT_SECONDS's
+    timeout handling: surfaced, not swallowed, but not fatal either."""
+    case = next(c for c in GENERATION_CASES if c.id == "cold_start")
+
+    mock_message = _mock_text_response({
+        "questions": {"Lifestyle & Prevention": ["Any general tips for allergy season?"]},
+        "context_summary": "Patient has Seasonal Allergic Rhinitis.",
+    })
+
+    class AlwaysFailingJudgeBackend:
+        model = "claude-opus-4-8"
+
+        async def call(self, *args, **kwargs):
+            return SimpleNamespace(text="", input_tokens=10, output_tokens=5)
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic.return_value = mock_client
+        report = await run_generation_case(eval_db, case, judge_backend=AlwaysFailingJudgeBackend())
+
+    assert "factual_groundedness" not in report
+    assert "factual_groundedness_error" in report
+    assert report["format"]["question_count"] == 1  # rest of the report is unaffected, computed normally
+
+
+@pytest.mark.asyncio
 async def test_run_generation_case_cold_start_has_no_medications_to_flag(eval_db):
     case = next(c for c in GENERATION_CASES if c.id == "cold_start")
 

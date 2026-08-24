@@ -108,7 +108,16 @@ async def run_generation_case(db: AsyncSession, case, judge_backend: ClaudeBacke
     }
 
     if judge_backend is not None:
-        report["factual_groundedness"] = await score_factual_groundedness(case, result, judge_backend)
+        try:
+            report["factual_groundedness"] = await score_factual_groundedness(case, result, judge_backend)
+        except ValueError as e:
+            # A judge call failing (including after score_factual_groundedness's
+            # own retries) shouldn't abort the whole multi-minute run over one
+            # case — recorded as a valid, reportable failure for this case's
+            # judge score, same posture as CASE_TIMEOUT_SECONDS's timeout
+            # handling above: surfaced, not swallowed, but not fatal either.
+            print(f"    [judge] FAILED for {case.id}: {e}")
+            report["factual_groundedness_error"] = str(e)
 
     return report
 
@@ -171,8 +180,9 @@ def _summarize_judge(case_reports: list[dict]) -> dict[str, Any]:
     total judge cost/latency for the run (cheapest-version tracking per
     DEC-042 — no dashboard, just the raw numbers in the report JSON)."""
     fg_reports = [r["factual_groundedness"] for r in case_reports if "factual_groundedness" in r]
+    n_failed = sum(1 for r in case_reports if "factual_groundedness_error" in r)
     if not fg_reports:
-        return {"n_cases": 0}
+        return {"n_cases": 0, "n_failed": n_failed}
 
     all_claims = [c for fg in fg_reports for c in fg["claims"]]
     scored = [c for c in all_claims if c.get("verdict") in ("grounded", "unsupported")]
@@ -180,6 +190,7 @@ def _summarize_judge(case_reports: list[dict]) -> dict[str, Any]:
 
     return {
         "n_cases": len(fg_reports),
+        "n_failed": n_failed,
         "total_claims": len(all_claims),
         "scored_claims": len(scored),
         "unsupported_claims": len(unsupported),
@@ -336,6 +347,8 @@ async def main() -> int:
             f"across {judge_summary['n_cases']} cases): unsupported_rate={judge_summary['unsupported_rate']} "
             f"({judge_summary['unsupported_claims']}/{judge_summary['scored_claims']}) ==="
         )
+        if judge_summary["n_failed"]:
+            print(f"  WARNING: {judge_summary['n_failed']} case(s) had a judge failure — excluded from the rate above")
         print(
             f"  judge cost/latency: {judge_summary['total_input_tokens']} input tokens, "
             f"{judge_summary['total_output_tokens']} output tokens, "
