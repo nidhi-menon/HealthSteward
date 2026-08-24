@@ -385,6 +385,7 @@ Before finalizing your response, count your questions. You must have between 8 a
         # see prepare_visit's docstring. Empty until a run has happened.
         self.last_clinical_data: dict[str, Any] = {}
         self.last_target_specialty: Optional[str] = None
+        self.last_medication_count: int = 0
         self.last_guardrail_events: list[dict[str, Any]] = []
         # Redaction events (issue #16) aggregated across this whole
         # prepare_visit() call — profile/appointment anonymization, Stage 4
@@ -505,7 +506,7 @@ Before finalizing your response, count your questions. You must have between 8 a
             known_specialty_names.add(self.last_target_specialty)
 
         filtered_questions, events = apply_output_guardrails(
-            questions, known_lab_names, known_specialty_names, referred_specialties
+            questions, known_lab_names, known_specialty_names, referred_specialties, self.last_medication_count
         )
         self.last_guardrail_events = events
         if events:
@@ -589,6 +590,7 @@ Before finalizing your response, count your questions. You must have between 8 a
 
         # Step 5: Resolve medication → doctor specialty for tagging
         med_specialty_map = self._build_med_specialty_map(appointment.profile)
+        self.last_medication_count = len(list(getattr(appointment.profile, "medications", []) or []))
 
         # Step 6: Build context message
         target_specialty = None
