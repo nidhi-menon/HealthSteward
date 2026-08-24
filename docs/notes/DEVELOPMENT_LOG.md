@@ -2160,4 +2160,24 @@ Related: issue #122, entry #66, DEC-040, DEC-006, DEC-025, DEC-009, issue #125.
 
 ---
 
+## 68. Needs Attention Panel Detection-Accuracy Testing Surfaces and Fixes a Real Disengagement-Detection False Negative (DEC-041)
+
+**Date:** 2026-08-23
+
+**Context:** while building ground-truth-labeled boundary-case tests for the Needs Attention panel's four nudge types (`past_due`, `upcoming_without_prep`, `completed_without_avs`, `vitals_alert`) — the panel's existing test coverage (`tests/test_action_items.py`) validated snooze/unsnooze behavior only, never detection correctness — three of the four nudge types checked out cleanly at their boundaries (14-day-window edges, weight-alert threshold, single-reading-never-fires). The fourth, `completed_without_avs`, did not.
+
+`_doc_near_appointment` matched a document to an appointment by checking whether *any* parsed document for the profile fell within 14 days of that appointment's date — not whether a document was actually tied to that specific appointment (`Document.appointment_id` exists as a schema column but is never populated anywhere in the real upload flow, which is profile-level, not appointment-level). Two completed appointments within ~28 days of each other could therefore share a document that only truly belonged to one of them, silently clearing the missing-AVS nudge for the other. Confirmed concretely with a minimal repro: two completed appointments 2 days apart, one document uploaded for the first, and the panel cleared both — a false negative in exactly the disengagement-detection mechanism this feature exists to provide.
+
+**Fix (DEC-041):** match on exact `visit_date` equality instead of a 14-day proximity window — this alone resolves the confirmed bug, since appointments on different dates no longer compete for the same document. For the residual case a same-date collision (two specialists seen the same day) can't resolve by date alone, disambiguate by provider identity: the document's parsed `provider_name`/`facility_name` against the appointment's `Doctor.name`/`clinic`, reusing the existing bidirectional substring-match convention from `src/api/documents.py`'s doctor dedup logic rather than inventing a new one. If a same-date collision can't be resolved by provider either, neither appointment is marked covered — fails toward an extra nudge, not a silently missed one.
+
+**Why exact-date matching was preferred over widening/narrowing the proximity window:** no version of a proximity window fixes the underlying failure mode, since any nonzero tolerance lets appointments close enough together interfere with each other; the only question is how close is "close enough" to trigger it. Exact-date matching removes the ambiguity outright for the overwhelming majority of cases, and the provider-matching fallback handles the one case (same-date appointments) exact-date matching alone can't.
+
+**Testing:** rewrote the 14-day-boundary test for exact-date semantics (no tolerance window); flipped the test that had documented the bug (`test_completed_without_avs_cross_appointment_document_ambiguity`) into a regression test asserting the fix (`test_completed_without_avs_cross_appointment_false_negative_fixed`); added two new tests for the same-date collision case, one confirming provider-based disambiguation works (`test_completed_without_avs_same_day_disambiguated_by_provider`) and one confirming the fail-safe behavior when no provider match is possible (`test_completed_without_avs_same_day_no_provider_match_stays_ambiguous`). Full suite: 448 passed, 0 failed, 28 skipped — no regressions, including the original snooze/unsnooze behavior tests in `tests/test_action_items.py`.
+
+**Files changed:** `src/api/action_items.py` (`completed_appointments_without_avs` rewritten; `_doc_near_appointment` removed, no longer referenced anywhere; new `_provider_matches`/`_fuzzy_text_match` helpers), `tests/test_action_items_detection_accuracy.py`, `docs/notes/DECISIONS.md` (DEC-041).
+
+Related: DEC-041, DEC-040, `tests/test_action_items_detection_accuracy.py`.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*
