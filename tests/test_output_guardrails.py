@@ -198,3 +198,17 @@ class TestApplyOutputGuardrails:
         assert "American Thyroid Association" not in filtered_summary
         assert "Hashimoto's Thyroiditis" in filtered_summary
         assert any(e["reason"] == "named_authority" for e in events)
+
+    def test_flags_real_found_case_named_authority_with_parenthetical_acronym(self):
+        """Regression guard for a real regex gap: the bare pattern required
+        the capitalized name immediately before "guidelines" with nothing
+        in between, so "American Thyroid Association (ATA) guidelines" —
+        the exact real, deterministic, recurring question — was never
+        caught because of the parenthesized acronym."""
+        from src.agents.output_guardrails import _presupposes_specialty_convention_or_named_authority
+
+        q = (
+            "How does the patient's Hashimoto's Thyroiditis management plan "
+            "align with the latest American Thyroid Association (ATA) guidelines?"
+        )
+        assert _presupposes_specialty_convention_or_named_authority(q) == "named_authority"
