@@ -194,7 +194,13 @@ _SPECIALTY_CONVENTION_PATTERN = re.compile(
 _NAMED_AUTHORITY_PATTERNS = [
     re.compile(p)
     for p in [
-        r"\b(?:[A-Z][a-zA-Z]*\s+){2,4}(?:guidelines?|recommendations?)\b",
+        # Tolerates a parenthetical acronym between the full name and
+        # "guidelines" (e.g. "American Thyroid Association (ATA)
+        # guidelines") — found via a real recurring case where the bare
+        # version of this pattern required the capitalized name
+        # immediately before "guidelines" with nothing in between, so the
+        # parenthesized acronym broke the match entirely.
+        r"\b(?:[A-Z][a-zA-Z]*\s+){2,4}(?:\([A-Z]{2,6}\)\s+)?(?:guidelines?|recommendations?)\b",
         r"\b[A-Z]{2,6}\s+(?:guidelines?|recommendations?)\b",
     ]
 ]
