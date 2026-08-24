@@ -21,14 +21,25 @@ rewriting would require either another LLM call (defeats the point of a
 deterministic filter) or a templated rewrite risking its own wrongness;
 a stripped question just doesn't appear, which is a safe failure mode.
 
-NOT covered here (see DEC-042 for why): named-external-authority claims,
-fabricated numeric specifics, and unhedged "typically managed by X"
-clinical-generalization claims — the last of which likely isn't
-deterministically catchable at all.
+Checks both the generated questions AND context_summary (added after
+DEC-042's real-run breakdown showed the majority of remaining unsupported
+claims lived in context_summary, which earlier versions of this filter
+never touched at all) — a specialty-management-convention claim ("which is
+typically managed by Pulmonology") and a named-external-authority claim
+("the American Thyroid Association's guidelines") are both, per the LLM
+judge's own rubric (eval/judge.py), ALWAYS unsupported regardless of
+phrasing, since this app has no source anywhere for either — so both are
+safe to always strip, not just when a structured-data lookup says so.
+
+NOT covered here (see DEC-042 for why): fabricated numeric specifics
+(dosages/dates not on file) and a specific patient age/demographic claim
+(the schema supports date_of_birth but eval fixtures never populate one,
+same "needs new fixture plumbing + a policy decision" shape as the
+deferred medication-start_date/"starting point" check).
 """
 
 import re
-from typing import Any
+from typing import Any, Optional
 
 # Phrases that presuppose a specific test/lab already occurred and produced
 # results, as opposed to an open question ("are there any tests I should ask
@@ -152,15 +163,84 @@ def _presupposes_missing_referral(
     return None
 
 
+# A "typically/usually/commonly managed by X" claim asserts a general
+# clinical-specialty-assignment convention this app has no source for
+# anywhere (no clinical-knowledge database, nothing in the patient's own
+# record could ever state a general convention like this) — always
+# unsupported regardless of which specialty follows or whether the patient
+# happens to see that specialty for real. Matches the LLM judge's own
+# rubric (eval/judge.py), which names this exact claim type as always-
+# unsupported. Found via the original ad hoc manual review AND confirmed
+# still recurring in every live judge run since (DEC-042).
+_SPECIALTY_CONVENTION_PATTERN = re.compile(
+    r"\b(typically|usually|commonly|generally)\s+(managed|treated|handled)\s+by\b", re.IGNORECASE
+)
+
+# A named external authority/guideline reference ("American Thyroid
+# Association guidelines", "ATA guidelines") is unsupported the same way —
+# this app has no source for any external clinical guideline's content.
+# Two shapes: a multi-word capitalized organization name (2-4 title-case
+# words) immediately before "guidelines"/"recommendations", or a short
+# all-caps acronym (2-6 letters) in the same position. Requiring 2+
+# capitalized words (not 1) deliberately excludes a sentence-initial "The
+# guidelines..." — capitalized only because it starts the sentence, not
+# because it names anything specific.
+_NAMED_AUTHORITY_PATTERNS = [
+    re.compile(p)
+    for p in [
+        r"\b(?:[A-Z][a-zA-Z]*\s+){2,4}(?:guidelines?|recommendations?)\b",
+        r"\b[A-Z]{2,6}\s+(?:guidelines?|recommendations?)\b",
+    ]
+]
+
+
+def _presupposes_specialty_convention_or_named_authority(text: str) -> Optional[str]:
+    """Returns the matched reason ("specialty_convention" or
+    "named_authority") if text asserts either, else None."""
+    if _SPECIALTY_CONVENTION_PATTERN.search(text):
+        return "specialty_convention"
+    if any(p.search(text) for p in _NAMED_AUTHORITY_PATTERNS):
+        return "named_authority"
+    return None
+
+
+def _filter_free_text(text: str) -> tuple[str, list[dict[str, Any]]]:
+    """Applies the specialty-convention/named-authority check to context_summary
+    (free text, not a discrete list like questions) by splitting into
+    sentences and dropping only the offending ones — same "strip, don't
+    rewrite" posture as the question-level checks, at sentence granularity
+    since blanking the whole summary over one bad sentence would lose
+    otherwise-good content unnecessarily. Simple '. ' splitting, not
+    grammar-aware — same pragmatic-regex tradeoff as the rest of this
+    module; a mid-sentence period (an abbreviation) could split wrong, but
+    the failure mode is at worst an oddly-broken sentence, not lost safety.
+    """
+    if not text:
+        return text, []
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    kept = []
+    events = []
+    for s in sentences:
+        reason = _presupposes_specialty_convention_or_named_authority(s)
+        if reason:
+            events.append({"sentence": s, "reason": reason})
+            continue
+        kept.append(s)
+    return " ".join(kept), events
+
+
 def apply_output_guardrails(
     questions: dict[str, list[str]],
     known_lab_names: set[str],
     known_specialty_names: set[str],
     referred_specialties: set[str],
     known_medication_count: int = 0,
-) -> tuple[dict[str, list[str]], list[dict[str, Any]]]:
+    context_summary: str = "",
+) -> tuple[dict[str, list[str]], str, list[dict[str, Any]]]:
     """Strips questions presupposing a test/result, referral relationship, or
-    additional medication not actually on file. Returns (filtered_questions,
+    additional medication not actually on file, plus a specialty-management-
+    convention or named-external-authority claim anywhere (questions or
+    context_summary). Returns (filtered_questions, filtered_context_summary,
     guardrail_events) — events are for logging/testing traceability, not
     shown to the user. A category that becomes empty is dropped entirely,
     consistent with the system prompt's own "never include an empty
@@ -184,8 +264,16 @@ def apply_output_guardrails(
             if _presupposes_missing_medication(q, known_medication_count):
                 events.append({"category": category, "question": q, "reason": "presupposed_medication"})
                 continue
+            reason = _presupposes_specialty_convention_or_named_authority(q)
+            if reason:
+                events.append({"category": category, "question": q, "reason": reason})
+                continue
             kept.append(q)
         if kept:
             filtered[category] = kept
 
-    return filtered, events
+    filtered_summary, summary_events = _filter_free_text(context_summary)
+    for e in summary_events:
+        events.append({"category": "Context Summary", "question": e["sentence"], "reason": e["reason"]})
+
+    return filtered, filtered_summary, events
