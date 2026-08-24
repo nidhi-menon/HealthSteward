@@ -31,6 +31,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from eval import retrieval_stage1, scorers
 from eval.db import build_case
 from eval.fixtures import GENERATION_CASES
+from eval.judge import score_factual_groundedness
+from src.agents.llm_backend import ClaudeBackend
 from src.agents.visit_prep import VisitPrepAgent, _infer_specialty_from_clinic
 from src.config import get_settings
 from src.data.models import Base
@@ -72,7 +74,7 @@ async def _make_session() -> tuple[AsyncSession, AsyncEngine]:
     return async_session(), engine
 
 
-async def run_generation_case(db: AsyncSession, case) -> dict:
+async def run_generation_case(db: AsyncSession, case, judge_backend: ClaudeBackend | None = None) -> dict:
     appointment = await build_case(db, case)
     await db.commit()
 
@@ -90,7 +92,7 @@ async def run_generation_case(db: AsyncSession, case) -> dict:
     phase1_dates = [v.scheduled_date for v in (context_result.selected_visits if context_result else [])]
     min_questions = scorers.expected_min_questions(case)
 
-    return {
+    report = {
         "case_id": case.id,
         "description": case.description,
         "duration_s": duration_s,
@@ -104,6 +106,11 @@ async def run_generation_case(db: AsyncSession, case) -> dict:
         "tool_calls_made": [c["name"] for c in tool_calls],
         "convergence": scorers.score_tool_call_convergence(result),
     }
+
+    if judge_backend is not None:
+        report["factual_groundedness"] = await score_factual_groundedness(case, result, judge_backend)
+
+    return report
 
 
 def _model_name_for_provider(settings) -> str:
@@ -159,6 +166,30 @@ def _summarize_latency(case_reports: list[dict]) -> dict[str, Any]:
     }
 
 
+def _summarize_judge(case_reports: list[dict]) -> dict[str, Any]:
+    """Aggregate LLM-judge factual-groundedness results across cases, plus
+    total judge cost/latency for the run (cheapest-version tracking per
+    DEC-042 — no dashboard, just the raw numbers in the report JSON)."""
+    fg_reports = [r["factual_groundedness"] for r in case_reports if "factual_groundedness" in r]
+    if not fg_reports:
+        return {"n_cases": 0}
+
+    all_claims = [c for fg in fg_reports for c in fg["claims"]]
+    scored = [c for c in all_claims if c.get("verdict") in ("grounded", "unsupported")]
+    unsupported = [c for c in scored if c["verdict"] == "unsupported"]
+
+    return {
+        "n_cases": len(fg_reports),
+        "total_claims": len(all_claims),
+        "scored_claims": len(scored),
+        "unsupported_claims": len(unsupported),
+        "unsupported_rate": (len(unsupported) / len(scored)) if scored else None,
+        "total_input_tokens": sum(fg["input_tokens"] or 0 for fg in fg_reports),
+        "total_output_tokens": sum(fg["output_tokens"] or 0 for fg in fg_reports),
+        "total_duration_s": sum(fg["duration_s"] for fg in fg_reports),
+    }
+
+
 def _find_previous_result() -> Path | None:
     if not RESULTS_DIR.exists():
         return None
@@ -199,6 +230,14 @@ async def main() -> int:
              "identical on a real backend) — more trials narrows the convergence_rate "
              "confidence interval at the cost of wall-clock time.",
     )
+    parser.add_argument(
+        "--judge", action="store_true",
+        help="Also run the LLM-judge factual-groundedness check (eval/judge.py) on each "
+             "generation case, using settings.anthropic_judge_model. Off by default — it "
+             "adds a real Claude API call (cost + latency) per case, on top of whatever "
+             "backend generation itself uses. Requires ANTHROPIC_API_KEY to be set "
+             "regardless of the configured llm_provider.",
+    )
     args = parser.parse_args()
 
     print("=== Stage 1 retrieval checks (no LLM) ===")
@@ -213,6 +252,15 @@ async def main() -> int:
 
     settings = get_settings()
     model_name = _model_name_for_provider(settings)
+
+    judge_backend = None
+    if args.judge:
+        if not settings.anthropic_api_key:
+            print("ERROR: --judge requires ANTHROPIC_API_KEY to be set.", file=sys.stderr)
+            return 1
+        judge_backend = ClaudeBackend(settings, model=settings.anthropic_judge_model)
+        print(f"=== LLM judge enabled: {settings.anthropic_judge_model} ===")
+
     print(
         f"=== Generation cases (LLM provider: {settings.llm_provider}, model: {model_name}, "
         f"temperature={EVAL_TEMPERATURE}, trials={args.trials}) ==="
@@ -226,7 +274,7 @@ async def main() -> int:
                 print(f"  running {trial_label}...")
                 try:
                     report = await asyncio.wait_for(
-                        run_generation_case(db, case), timeout=CASE_TIMEOUT_SECONDS
+                        run_generation_case(db, case, judge_backend=judge_backend), timeout=CASE_TIMEOUT_SECONDS
                     )
                     report["timed_out"] = False
                 except asyncio.TimeoutError:
@@ -252,6 +300,13 @@ async def main() -> int:
                         f"converged={conv['converged']} fallback_reason={conv['fallback_reason']} "
                         f"duration_s={report['duration_s']:.2f}"
                     )
+                    if "factual_groundedness" in report:
+                        fg = report["factual_groundedness"]
+                        print(
+                            f"    [judge] unsupported_rate={fg['unsupported_rate']} "
+                            f"claims={len(fg['claims'])} judge_duration_s={fg['duration_s']:.2f} "
+                            f"judge_tokens_in={fg['input_tokens']} judge_tokens_out={fg['output_tokens']}"
+                        )
     finally:
         await db.close()
         await engine.dispose()
@@ -274,17 +329,32 @@ async def main() -> int:
             f"max={latency_summary['max_s']:.2f}s ==="
         )
 
+    judge_summary = _summarize_judge(case_reports)
+    if judge_summary["n_cases"]:
+        print(
+            f"\n=== LLM-judge factual groundedness (n={judge_summary['scored_claims']} scored claims "
+            f"across {judge_summary['n_cases']} cases): unsupported_rate={judge_summary['unsupported_rate']} "
+            f"({judge_summary['unsupported_claims']}/{judge_summary['scored_claims']}) ==="
+        )
+        print(
+            f"  judge cost/latency: {judge_summary['total_input_tokens']} input tokens, "
+            f"{judge_summary['total_output_tokens']} output tokens, "
+            f"{judge_summary['total_duration_s']:.2f}s total ==="
+        )
+
     current = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "git_sha": _git_sha(),
         "llm_provider": settings.llm_provider,
         "model": model_name,
+        "judge_model": settings.anthropic_judge_model if args.judge else None,
         "temperature": EVAL_TEMPERATURE,
         "trials": args.trials,
         "stage1": [{"name": r.name, "passed": r.passed, "detail": r.detail} for r in stage1_results],
         "cases": case_reports,
         "convergence_summary": convergence_summary,
         "latency_summary": latency_summary,
+        "judge_summary": judge_summary,
     }
 
     RESULTS_DIR.mkdir(exist_ok=True)

@@ -102,8 +102,9 @@ class LLMBackend(ABC):
 class ClaudeBackend(LLMBackend):
     """LLMBackend implementation wrapping the Anthropic Messages API."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, model: Optional[str] = None):
         self.settings = settings
+        self.model = model or settings.anthropic_model
         self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     async def call(
@@ -119,7 +120,7 @@ class ClaudeBackend(LLMBackend):
         # problem in this codebase's usage, and forcing it through tool_choice
         # gymnastics isn't worth doing without evidence it's needed here.
         kwargs: dict[str, Any] = {
-            "model": self.settings.anthropic_model,
+            "model": self.model,
             "max_tokens": self.settings.anthropic_max_tokens,
             "system": system,
             "messages": messages,

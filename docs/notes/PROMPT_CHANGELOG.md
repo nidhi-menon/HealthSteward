@@ -115,3 +115,14 @@ The `description` strings in `TOOL_SPECS` are model-facing prompt content: the m
 
 ### v1 (retroactive baseline, prior to 2026-08-03)
 The original `get_medication_details` and `lookup_past_visits` descriptions, as written when the tools were added under DEC-013/DEC-015. Recorded here for completeness — no version constant existed at the time.
+
+---
+
+## `eval/judge.py` — LLM-judge factual-groundedness prompt (`FACTUAL_GROUNDEDNESS_JUDGE_PROMPT_VERSION`)
+
+Eval-only, not a production prompt (never sent in a real user session, never touches real patient data — runs against the same 5 synthetic fixture cases as the rest of the generation eval). Included here anyway per this file's own scope note: every LLM prompt in the codebase gets a version tag, not just `visit_prep.py`'s.
+
+### v1 (2026-08-23)
+Baseline. Replaces `eval/scorers.py::score_groundedness`'s cheap entity-substring pass as the paper-citable hallucination metric — see DEC-042 for why that metric (56% "groundedness," really a 44% *non-entity-mention* rate) was misleading to report bare. Asks a judge model (`settings.anthropic_judge_model`, deliberately a different/stronger tier than any Claude model used for generation) to enumerate the distinct factual claims in each generated question and verdict each as `grounded`/`unsupported`/`not_applicable` against the patient's actual fixture data, allowing paraphrase/synonym/category reference rather than requiring a literal string match, with required reasoning on every claim including grounded ones (a forcing function against shortcut entity-pattern-matching, the same failure mode being replaced). Per-claim rather than per-question granularity, matching `docs/tdd.html`'s own metric definition ("unsupported facts / total factual claims") and the same rubric used for the parallel independent human pilot review (`visit_prep_review_packet.md`), enabling a human-vs-LLM-judge agreement comparison as calibration evidence for the judge itself.
+
+**Eval evidence:** not yet run — this version lands with the harness wiring (`eval/run.py --judge`) but no run has been executed yet. Update this entry once a real run exists, including the observed `unsupported_rate` and judge cost/latency (`judge_summary` in the report JSON).
