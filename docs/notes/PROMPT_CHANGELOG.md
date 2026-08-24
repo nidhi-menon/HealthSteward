@@ -11,6 +11,24 @@ Convention:
 
 ## `src/agents/visit_prep.py` — `SYSTEM_PROMPT_TEMPLATE` (specialty-aware) and `SYSTEM_PROMPT_GENERIC` (fallback)
 
+### v8-2026-08-24 — reverts v7 (measured regression)
+**Context:** v7's two added rules were re-evaluated properly before being trusted, per DEC-042's judge-noise-isolation method (re-judging the same fixed, already-generated output multiple times to separate real effect from the judge's own non-pinnable-temperature noise, rather than a single noisy before/after comparison). Result: v6's baseline unsupported-claim rate across 5 independent re-judges was 22.5%-25.6% (mean 24.4%); v7's was 26.5%-33.3% (mean 31.7%) — the two ranges do not overlap. v7 measurably made the rate worse, not better.
+
+**Change:** reverts both prompts' content to byte-identical with v6 (confirmed via diff) — removes v7's anti-presupposition rule and cross-specialty-referral rule entirely. Version bumped to v8 rather than reusing the v6 string, per this file's own convention that any content change gets a new version, revert included.
+
+**Reasoning:** small local models (this project's default, `llama3.2:latest`, ~3B-class) are known to be unreliable at following *added negative constraints* — they tend to follow positive instructions better than prohibitions, and stacking more rules onto an already-loaded prompt can crowd out earlier instructions rather than reinforce them. v7's non-overlapping regression is consistent with that mechanism, not attributable to noise (the judge-noise-isolation check specifically rules noise out). Continuing to iterate on prompt wording for this specific failure pattern (presupposing a test/lab/referral exists when it doesn't) is not expected to reliably help — the follow-up plan is a deterministic post-generation filter instead (checks structured patient data directly, doesn't depend on the small model's instruction-following at all), tracked as future work in DEC-042, not another prompt version.
+
+**Eval evidence:** `eval/results/9f22c89-20260824T065759Z.json` (v6 baseline generation) vs. `eval/results/065d5e7-20260824T071700Z.json` (v7 generation), each re-judged 5x via `eval/judge_noise_check.py` — see summary above. Full 10-pass output archived at `eval/results/judge_noise_check.json`.
+
+### v7-2026-08-24 — superseded by v8 above, kept for history
+**Context:** DEC-042's first live `--judge` run surfaced two concrete failure shapes not addressed by any existing rule: (1) 8/8 of the run's unsupported claims were the model presupposing a specific test/lab/referral already existed or occurred (e.g. "What were the results of my most recent blood sugar test?" when no such test was on file) — the existing "don't ask about data not provided" rule (v3) didn't stop this because the presupposition is embedded in the question's phrasing, not a bare mention of an absent entity; (2) the one `score_scope`-flagged violation across two runs was later found to be a scorer bug, not a real issue (see DEC-042's `score_scope` fix), but a separate, real pattern was visible in the raw output regardless — recommending a follow-up/referral with a specialist unrelated to the target visit.
+
+**Change:** added two rules — an explicit anti-presupposition instruction (don't phrase a question as if a specific test/lab/referral already happened unless it's listed; phrase it as an open question instead) to both prompts, and a cross-specialty-referral rule (don't recommend scheduling a follow-up with an unrelated specialist, though an interaction *question* about their medication is still fine) to the specialty-aware prompt only.
+
+**Reasoning at the time:** direct, targeted rules matching the exact two failure shapes just found, following this project's established pattern of adding a specific rule for a specific observed failure (e.g. v5/v6 above).
+
+**Eval evidence:** superseded — see v8 above. The single-trial before/after comparison run at the time this version shipped (21.6% → 25.7% unsupported-claim rate) was correctly not trusted as conclusive on its own (noted as such when it landed), and the proper noise-isolated re-check confirmed the regression was real, not noise.
+
 ### v6-2026-08-20
 **Context:** A model-comparison eval run (`llama3.2:latest`, `qwen3:4b`, `phi4-mini`, `granite4:3b` — see DEC-037's reliability review and DEC-038) surfaced `granite4:3b` producing 19 questions on `groundedness_labs_vitals` against the prompt's stated 8-15 ceiling (`format_valid: False`, `"question count 19 outside 6-15"`). The prompt's count instruction had real primacy/recency reinforcement for the *lower* bound (v2-2026-07-19's fix for under-generation) but none for the upper bound — the only mention of "15" was the bare range itself, stated once.
 
