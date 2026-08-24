@@ -239,7 +239,7 @@ class TestScoreFactualGroundedness:
         assert report["claims"] == []
 
     @pytest.mark.asyncio
-    async def test_raises_after_two_consecutive_failures(self):
+    async def test_raises_after_all_attempts_fail(self):
         backend = FakeJudgeBackend(text="")
         case = _make_case()
         result = {"questions": {}}

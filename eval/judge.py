@@ -201,16 +201,19 @@ async def score_factual_groundedness(
         f"Generated visit-prep questions:\n{_questions_text(result)}"
     )
 
-    # One bounded retry on a transient empty/malformed response — observed in
+    # Bounded retries on a transient empty/malformed response — observed in
     # practice (an occasional empty turn.text from the API, unrelated to
-    # prompt content). This retries the API call itself, not "repairs"
-    # malformed JSON content — _parse_judge_response's no-silent-repair
-    # principle for genuinely malformed non-empty content is unchanged; a
-    # second consecutive failure still raises loudly rather than being
-    # swallowed.
+    # prompt content or length: it has recurred on cases well under the
+    # token ceiling, and twice consecutively at least once, so 2 attempts
+    # wasn't always enough). This retries the API call itself, not
+    # "repairs" malformed JSON content — _parse_judge_response's
+    # no-silent-repair principle for genuinely malformed non-empty content
+    # is unchanged; exhausting every attempt still raises loudly rather
+    # than being swallowed.
+    _MAX_JUDGE_ATTEMPTS = 3
     start = time.perf_counter()
     last_error: Optional[Exception] = None
-    for attempt in range(2):
+    for attempt in range(_MAX_JUDGE_ATTEMPTS):
         turn = await judge_backend.call(
             messages=[{"role": "user", "content": user_message}],
             system=_JUDGE_SYSTEM_PROMPT,
