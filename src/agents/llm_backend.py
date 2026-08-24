@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import anthropic
 import httpx
 from anthropic import AsyncAnthropic
 from loguru import logger
@@ -102,8 +103,9 @@ class LLMBackend(ABC):
 class ClaudeBackend(LLMBackend):
     """LLMBackend implementation wrapping the Anthropic Messages API."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, model: Optional[str] = None):
         self.settings = settings
+        self.model = model or settings.anthropic_model
         self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     async def call(
@@ -119,7 +121,7 @@ class ClaudeBackend(LLMBackend):
         # problem in this codebase's usage, and forcing it through tool_choice
         # gymnastics isn't worth doing without evidence it's needed here.
         kwargs: dict[str, Any] = {
-            "model": self.settings.anthropic_model,
+            "model": self.model,
             "max_tokens": self.settings.anthropic_max_tokens,
             "system": system,
             "messages": messages,
@@ -128,7 +130,25 @@ class ClaudeBackend(LLMBackend):
         if tools:
             kwargs["tools"] = tools
 
-        response = await self.client.messages.create(**kwargs)
+        try:
+            response = await self.client.messages.create(**kwargs)
+        except anthropic.BadRequestError as e:
+            # Some model families (observed: claude-opus-4-8) reject the
+            # `temperature` param outright rather than just ignoring an
+            # out-of-range value — "temperature is deprecated for this
+            # model." Retrying without it is the only way to call those
+            # models at all; logged as a warning since it silently means
+            # this call can't be pinned to a specific temperature for
+            # reproducibility (relevant for eval callers, which pass 0.0).
+            if "temperature" in str(e).lower() and "deprecated" in str(e).lower():
+                logger.warning(
+                    f"Model {self.model} rejected temperature={temperature} as deprecated; "
+                    "retrying without it. This call is not reproducibly pinned to a temperature."
+                )
+                kwargs.pop("temperature")
+                response = await self.client.messages.create(**kwargs)
+            else:
+                raise
 
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []

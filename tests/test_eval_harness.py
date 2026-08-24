@@ -226,6 +226,35 @@ def test_score_scope_clean_when_no_off_scope_mentioned():
     assert scored["violation_count"] == 0
 
 
+def test_score_scope_permits_cross_specialty_interaction_question():
+    """The exact case found via DEC-042's judge work: a question asking
+    whether an in-scope and an off-scope medication interact is explicitly
+    required by the system prompt ("DO identify cross-condition
+    interactions"), not a scope violation — even though it names the
+    off-scope medication."""
+    off_scope = {"clobetasol cream"}
+    result = {
+        "questions": {
+            "Medication Review": [
+                "Are there any potential interactions between Metformin and Clobetasol Cream that I should be aware of?"
+            ]
+        }
+    }
+    scored = scorers.score_scope(result, off_scope)
+    assert scored["violation_count"] == 0
+
+
+def test_score_scope_still_flags_direct_management_of_off_scope_medication():
+    """The interaction-language exclusion must not swallow the real
+    violation case: a question that names the off-scope medication with no
+    interaction framing is still asking this doctor to discuss/manage a
+    medication that isn't theirs to manage."""
+    off_scope = {"clobetasol cream"}
+    result = {"questions": {"Medication Review": ["Should I adjust my Clobetasol Cream dosage?"]}}
+    scored = scorers.score_scope(result, off_scope)
+    assert scored["violation_count"] == 1
+
+
 def test_off_scope_medications_uses_specialty_relatedness():
     med_map = {"Metformin": "Endocrinology", "Clobetasol Cream": "Dermatology"}
     off_scope = scorers.off_scope_medications(med_map, target_specialty="Endocrinology")
@@ -308,6 +337,36 @@ async def test_run_generation_case_end_to_end_with_scope_violation(eval_db):
     assert report["scope"]["violation_count"] == 1
     assert report["scope"]["violations"][0]["medication"] == "clobetasol cream"
     assert report["groundedness"]["grounded_rate"] > 0
+
+
+@pytest.mark.asyncio
+async def test_run_generation_case_survives_a_judge_failure(eval_db):
+    """A judge call that fails after its own retries (eval/judge.py) must
+    not crash the whole multi-case, multi-trial run — recorded as
+    factual_groundedness_error instead, same posture as CASE_TIMEOUT_SECONDS's
+    timeout handling: surfaced, not swallowed, but not fatal either."""
+    case = next(c for c in GENERATION_CASES if c.id == "cold_start")
+
+    mock_message = _mock_text_response({
+        "questions": {"Lifestyle & Prevention": ["Any general tips for allergy season?"]},
+        "context_summary": "Patient has Seasonal Allergic Rhinitis.",
+    })
+
+    class AlwaysFailingJudgeBackend:
+        model = "claude-opus-4-8"
+
+        async def call(self, *args, **kwargs):
+            return SimpleNamespace(text="", input_tokens=10, output_tokens=5)
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_anthropic.return_value = mock_client
+        report = await run_generation_case(eval_db, case, judge_backend=AlwaysFailingJudgeBackend())
+
+    assert "factual_groundedness" not in report
+    assert "factual_groundedness_error" in report
+    assert report["format"]["question_count"] == 1  # rest of the report is unaffected, computed normally
 
 
 @pytest.mark.asyncio
