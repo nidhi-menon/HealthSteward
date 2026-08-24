@@ -23,27 +23,31 @@ either way.
 import json
 import re
 import time
-from typing import Any
+from typing import Any, Optional
 
 from eval.fixtures import EvalCase
 from src.agents.llm_backend import ClaudeBackend
 
 # Bumped whenever this prompt's wording changes in a way that could affect
 # judgments — see docs/notes/PROMPT_CHANGELOG.md.
-FACTUAL_GROUNDEDNESS_JUDGE_PROMPT_VERSION = "v1"
+FACTUAL_GROUNDEDNESS_JUDGE_PROMPT_VERSION = "v2"
 
 _JUDGE_SYSTEM_PROMPT = """You are an independent fact-checking judge for an AI health-coordination \
 tool. You will be shown a patient's actual medical record data and a set of \
-"visit preparation" questions the tool generated for that patient's upcoming \
-appointment. Your job is to check each question for unsupported factual claims.
+"visit preparation" questions, and the short context summary shown alongside \
+them, the tool generated for that patient's upcoming appointment. Your job is \
+to check both for unsupported factual claims — the context summary is shown \
+to the patient exactly like the questions are, and must be checked with the \
+same rigor, not skimmed as a formality.
 
-For EACH generated question, first identify every distinct factual claim it \
-makes — a question can contain zero, one, or more than one claim. A claim is \
-any assertion presented as fact, including an assertion embedded in a \
-question's phrasing (e.g. "since my Levothyroxine dose was recently \
-increased" asserts a dose increase as fact, even though the sentence is a \
-question). Purely open-ended or logistical questions with no factual \
-assertion (e.g. "Do you have any other concerns?") have zero claims.
+For EACH generated question, and separately for the context summary, first \
+identify every distinct factual claim made — a question or the summary can \
+contain zero, one, or more than one claim. A claim is any assertion presented \
+as fact, including an assertion embedded in a question's phrasing (e.g. \
+"since my Levothyroxine dose was recently increased" asserts a dose increase \
+as fact, even though the sentence is a question). Purely open-ended or \
+logistical questions with no factual assertion (e.g. "Do you have any other \
+concerns?") have zero claims.
 
 For each claim, give a verdict:
 - "grounded": supported by the patient's provided data below. Paraphrase, \
@@ -52,12 +56,23 @@ literal string match. E.g. "your cholesterol medication" is grounded if the \
 patient's record lists a statin, even though "cholesterol" never appears in \
 the record.
 - "unsupported": asserts something as a specific fact — a patient-specific \
-detail, or a named external authority/guideline/specialty assignment — that \
-is not present in, or contradicts, the patient's provided data below, and is \
-not clearly framed as general/hedged knowledge not specific to this patient.
-- "not_applicable": no verifiable factual content (open-ended/logistical \
-questions, and general lifestyle guidance tied to a condition that isn't \
-presented as a specific fact about this patient).
+detail, OR a named external authority/guideline (e.g. "the American Thyroid \
+Association's guidelines", "per ADA recommendations"), OR an assertion of \
+which specialty typically manages a condition (e.g. "which is typically \
+managed by Pulmonology") — that is not present in, or contradicts, the \
+patient's provided data below. A named authority/guideline or a specialty-\
+management assertion is ALWAYS "unsupported", never "not_applicable", even \
+when it is phrased as a general/textbook-sounding statement rather than a \
+patient-specific one — being general in tone does not make it verifiable; \
+this codebase has no source for external clinical guidelines or specialty-\
+assignment conventions, so such a claim can never be "grounded" either \
+unless the patient's own record explicitly states it.
+- "not_applicable": no verifiable factual content at all (open-ended/\
+logistical questions), or lifestyle guidance that recommends an action \
+("try reducing sodium intake") without asserting any external authority, \
+guideline, or specialty-management fact. If the sentence names or invokes \
+any specific outside source, organization, or specialty-assignment \
+convention, it is NOT "not_applicable" — use "unsupported" per above.
 
 Every claim, of every verdict, MUST include a one-to-two sentence reasoning \
 field explaining why. Do not skip reasoning for "grounded" claims.
@@ -139,11 +154,22 @@ def _case_context_text(case: EvalCase) -> str:
 
 
 def _questions_text(result: dict[str, Any]) -> str:
+    """Renders the generated questions AND the context summary — the summary
+    is shown to the patient exactly like the questions are and has its own
+    real hallucination history (found via DEC-042's ad hoc manual review:
+    an unhedged "typically managed by Pulmonology" claim lived here, not in
+    any question, and earlier judge runs silently never scored it)."""
     lines = []
     for category, questions in (result.get("questions") or {}).items():
         lines.append(f"\n{category}:")
         for q in questions or []:
             lines.append(f"- {q}")
+
+    context_summary = result.get("context_summary")
+    if context_summary:
+        lines.append("\nContext Summary (shown to the patient alongside the questions above):")
+        lines.append(f"- {context_summary}")
+
     return "\n".join(lines)
 
 
@@ -175,15 +201,31 @@ async def score_factual_groundedness(
         f"Generated visit-prep questions:\n{_questions_text(result)}"
     )
 
+    # One bounded retry on a transient empty/malformed response — observed in
+    # practice (an occasional empty turn.text from the API, unrelated to
+    # prompt content). This retries the API call itself, not "repairs"
+    # malformed JSON content — _parse_judge_response's no-silent-repair
+    # principle for genuinely malformed non-empty content is unchanged; a
+    # second consecutive failure still raises loudly rather than being
+    # swallowed.
     start = time.perf_counter()
-    turn = await judge_backend.call(
-        messages=[{"role": "user", "content": user_message}],
-        system=_JUDGE_SYSTEM_PROMPT,
-        temperature=0.0,
-    )
+    last_error: Optional[Exception] = None
+    for attempt in range(2):
+        turn = await judge_backend.call(
+            messages=[{"role": "user", "content": user_message}],
+            system=_JUDGE_SYSTEM_PROMPT,
+            temperature=0.0,
+        )
+        try:
+            parsed = _parse_judge_response(turn.text or "")
+            last_error = None
+            break
+        except ValueError as e:
+            last_error = e
+    if last_error is not None:
+        raise last_error
     duration_s = time.perf_counter() - start
 
-    parsed = _parse_judge_response(turn.text or "")
     claims = parsed.get("claims", [])
 
     scored = [c for c in claims if c.get("verdict") in ("grounded", "unsupported")]

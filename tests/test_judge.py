@@ -59,6 +59,23 @@ class FakeJudgeBackend:
         )
 
 
+class FlakyThenGoodJudgeBackend:
+    """Returns an empty/malformed response on the first call, a valid one on
+    the second — for testing score_factual_groundedness's one-retry
+    tolerance of a transient bad response, distinct from a persistently
+    malformed one."""
+
+    def __init__(self, good_text: str, model: str = "claude-opus-4-8"):
+        self.model = model
+        self._good_text = good_text
+        self.call_count = 0
+
+    async def call(self, messages, system, tools=None, temperature=0.7, response_schema=None):
+        self.call_count += 1
+        text = "" if self.call_count == 1 else self._good_text
+        return LLMTurnResult(text=text, input_tokens=100, output_tokens=50)
+
+
 class TestParseJudgeResponse:
     def test_parses_clean_json(self):
         result = _parse_judge_response('{"claims": []}')
@@ -131,6 +148,21 @@ class TestQuestionsText:
     def test_handles_missing_questions_key(self):
         assert _questions_text({}) == ""
 
+    def test_includes_context_summary(self):
+        """Regression guard for the real gap found via DEC-042: an earlier
+        judge version never scored context_summary at all, silently missing
+        an unhedged 'typically managed by Pulmonology' claim that lived only
+        there, not in any question."""
+        result = {
+            "questions": {},
+            "context_summary": "Condition X, which is typically managed by Pulmonology.",
+        }
+        text = _questions_text(result)
+        assert "typically managed by Pulmonology" in text
+
+    def test_omits_context_summary_section_when_absent(self):
+        assert "Context Summary" not in _questions_text({"questions": {}})
+
 
 class TestScoreFactualGroundedness:
     @pytest.mark.asyncio
@@ -187,6 +219,28 @@ class TestScoreFactualGroundedness:
     @pytest.mark.asyncio
     async def test_raises_on_malformed_judge_response(self):
         backend = FakeJudgeBackend(text="not valid json")
+        case = _make_case()
+        result = {"questions": {}}
+
+        with pytest.raises(ValueError):
+            await score_factual_groundedness(case, result, backend)
+
+    @pytest.mark.asyncio
+    async def test_retries_once_on_transient_empty_response(self):
+        import json
+
+        backend = FlakyThenGoodJudgeBackend(good_text=json.dumps({"claims": []}))
+        case = _make_case()
+        result = {"questions": {}}
+
+        report = await score_factual_groundedness(case, result, backend)
+
+        assert backend.call_count == 2
+        assert report["claims"] == []
+
+    @pytest.mark.asyncio
+    async def test_raises_after_two_consecutive_failures(self):
+        backend = FakeJudgeBackend(text="")
         case = _make_case()
         result = {"questions": {}}
 
