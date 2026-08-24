@@ -488,12 +488,15 @@ Before finalizing your response, count your questions. You must have between 8 a
         return _scrub_generated_output(result)
 
     def _apply_output_guardrails(self, result: dict[str, Any]) -> dict[str, Any]:
-        """Strips questions presupposing a test/lab or referral relationship
-        not actually on file (DEC-042) — see output_guardrails.py. Applied
-        here, prepare_visit's one convergence point for every return path
-        (agentic success, single-shot fallback, generic fallback), using the
-        structured data _prepare_visit_in_scope already loaded and stashed
-        on self.last_clinical_data/self.last_target_specialty.
+        """Strips questions and context_summary sentences presupposing a
+        test/lab, referral relationship, or medication not actually on file,
+        or asserting a specialty-management convention/named external
+        authority this app has no source for (DEC-042) — see
+        output_guardrails.py. Applied here, prepare_visit's one convergence
+        point for every return path (agentic success, single-shot fallback,
+        generic fallback), using the structured data _prepare_visit_in_scope
+        already loaded and stashed on self.last_clinical_data/
+        self.last_target_specialty.
         """
         questions = result.get("questions")
         if not isinstance(questions, dict):
@@ -505,14 +508,15 @@ Before finalizing your response, count your questions. You must have between 8 a
         if self.last_target_specialty:
             known_specialty_names.add(self.last_target_specialty)
 
-        filtered_questions, events = apply_output_guardrails(
-            questions, known_lab_names, known_specialty_names, referred_specialties, self.last_medication_count
+        filtered_questions, filtered_summary, events = apply_output_guardrails(
+            questions, known_lab_names, known_specialty_names, referred_specialties,
+            self.last_medication_count, context_summary=result.get("context_summary") or "",
         )
         self.last_guardrail_events = events
         if events:
-            logger.warning(f"Output guardrails stripped {len(events)} question(s): {events}")
+            logger.warning(f"Output guardrails stripped {len(events)} item(s): {events}")
 
-        return {**result, "questions": filtered_questions}
+        return {**result, "questions": filtered_questions, "context_summary": filtered_summary}
 
     async def _prepare_visit_in_scope(
         self,

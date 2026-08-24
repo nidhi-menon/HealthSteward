@@ -122,7 +122,7 @@ class TestApplyOutputGuardrails:
                 "Is there a need for a follow-up appointment with Endocrinology in the near future?",
             ],
         }
-        filtered, events = apply_output_guardrails(
+        filtered, summary, events = apply_output_guardrails(
             questions,
             known_lab_names={"tsh"},
             known_specialty_names={"Endocrinology"},
@@ -131,12 +131,13 @@ class TestApplyOutputGuardrails:
         assert filtered == {
             "Lab Results & Monitoring": ["What were the results of the TSH test ordered on 2026-07-15?"],
         }
+        assert summary == ""
         assert len(events) == 2
         assert {e["reason"] for e in events} == {"presupposed_test", "presupposed_referral"}
 
     def test_drops_category_that_becomes_fully_empty(self):
         questions = {"Follow-up Planning": ["Is there a need for a follow-up appointment with Endocrinology?"]}
-        filtered, events = apply_output_guardrails(
+        filtered, summary, events = apply_output_guardrails(
             questions, known_lab_names=set(), known_specialty_names={"Endocrinology"}, referred_specialties=set()
         )
         assert filtered == {}
@@ -146,8 +147,43 @@ class TestApplyOutputGuardrails:
         questions = {
             "Condition Management": ["What are the current blood sugar targets for my Type 2 Diabetes Mellitus?"],
         }
-        filtered, events = apply_output_guardrails(
+        filtered, summary, events = apply_output_guardrails(
             questions, known_lab_names=set(), known_specialty_names=set(), referred_specialties=set()
         )
         assert filtered == questions
+        assert summary == ""
         assert events == []
+
+    def test_strips_specialty_convention_sentence_from_context_summary(self):
+        """Real found case (DEC-042): the model pads a sparse patient's
+        context_summary with an unhedged 'typically managed by X' claim —
+        this app has no source for specialty-management conventions
+        anywhere, so it's always unsupported regardless of specialty."""
+        summary = (
+            "The patient is 41 years old and has Seasonal Allergic Rhinitis, "
+            "which is typically managed by Pulmonology. The patient is "
+            "scheduled for an annual physical."
+        )
+        filtered, filtered_summary, events = apply_output_guardrails(
+            {}, known_lab_names=set(), known_specialty_names=set(), referred_specialties=set(),
+            context_summary=summary,
+        )
+        assert "typically managed by Pulmonology" not in filtered_summary
+        assert "scheduled for an annual physical" in filtered_summary
+        assert any(e["reason"] == "specialty_convention" for e in events)
+
+    def test_strips_named_authority_sentence_from_context_summary(self):
+        """Real found case (DEC-042): a named external authority/guideline
+        reference is always unsupported — this app has no source for any
+        external clinical guideline's content."""
+        summary = (
+            "The patient has Hashimoto's Thyroiditis. Management aligns with "
+            "the American Thyroid Association guidelines for dosing."
+        )
+        filtered, filtered_summary, events = apply_output_guardrails(
+            {}, known_lab_names=set(), known_specialty_names=set(), referred_specialties=set(),
+            context_summary=summary,
+        )
+        assert "American Thyroid Association" not in filtered_summary
+        assert "Hashimoto's Thyroiditis" in filtered_summary
+        assert any(e["reason"] == "named_authority" for e in events)
