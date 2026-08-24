@@ -7,6 +7,7 @@ DEC-040/DEC-041 applied to their own found-bug regression tests.
 """
 
 from src.agents.output_guardrails import (
+    _presupposes_missing_medication,
     _presupposes_missing_referral,
     _presupposes_missing_test,
     apply_output_guardrails,
@@ -37,6 +38,14 @@ class TestPresupposesMissingTest:
     def test_does_not_flag_unrelated_question(self):
         q = "What lifestyle changes can I make to better manage my Type 2 Diabetes Mellitus?"
         assert _presupposes_missing_test(q, known_lab_names=set()) is False
+
+    def test_flags_real_found_case_result_value_despite_known_test_name(self):
+        """The gap found in DEC-042's second addendum: 'TSH' is a real,
+        ordered test, but LabOrder has no result field at all — no TSH
+        *level* exists anywhere, so this must flag despite the name match
+        that would otherwise short-circuit _presupposes_missing_test."""
+        q = "Are there any changes to the dosage of Levothyroxine that need to be made based on the recent TSH levels?"
+        assert _presupposes_missing_test(q, known_lab_names={"tsh"}) is True
 
 
 class TestPresupposesMissingReferral:
@@ -70,6 +79,28 @@ class TestPresupposesMissingReferral:
             q, known_specialty_names={"Dermatology"}, referred_specialties=set()
         )
         assert specialty is None
+
+
+class TestPresupposesMissingMedication:
+    def test_flags_real_found_case_other_medications_single_med_on_file(self):
+        q = "Are there any potential interactions between Levothyroxine and other medications I am taking?"
+        assert _presupposes_missing_medication(q, known_medication_count=1) is True
+
+    def test_flags_real_found_case_other_medications_prescribed_by_pcp(self):
+        q = "Are there any potential interactions between Levothyroxine and other medications prescribed by the patient's primary care physician?"
+        assert _presupposes_missing_medication(q, known_medication_count=1) is True
+
+    def test_flags_real_found_case_medications_prescribed_zero_on_file(self):
+        q = "What medications are prescribed for my Seasonal Allergic Rhinitis, and are there any dosage adjustments or changes I should be aware of?"
+        assert _presupposes_missing_medication(q, known_medication_count=0) is True
+
+    def test_does_not_flag_other_medications_when_multiple_on_file(self):
+        q = "Are there any potential interactions between Levothyroxine and other medications I am taking?"
+        assert _presupposes_missing_medication(q, known_medication_count=2) is False
+
+    def test_does_not_flag_medications_prescribed_when_medications_exist(self):
+        q = "What medications are prescribed for my Type 2 Diabetes Mellitus?"
+        assert _presupposes_missing_medication(q, known_medication_count=1) is False
 
 
 class TestApplyOutputGuardrails:
