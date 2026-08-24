@@ -424,10 +424,24 @@ async def completed_appointments_without_avs(
     profile_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return completed appointments that have no parsed document near their visit date."""
+    """Return completed appointments that have no parsed document for their specific visit.
+
+    Matches a document to an appointment by exact visit-date equality, not
+    proximity — a 14-day proximity window previously let a document uploaded
+    for one appointment silently cover a different completed appointment
+    within ~28 days of it, a false negative in exactly this nudge (see
+    tests/test_action_items_detection_accuracy.py). When multiple completed
+    appointments share the same exact date, a document is only counted
+    toward one of them if provider identity (name/clinic) also matches —
+    an ambiguous same-day, same-provider collision counts as "no document"
+    for all candidates rather than guessing, since a false "still needs
+    attention" nudge is preferable to silently clearing a genuine gap.
+    """
     await get_live_profile_or_404(profile_id, db)
     appt_result = await db.execute(
-        select(Appointment).where(
+        select(Appointment)
+        .options(selectinload(Appointment.doctor))
+        .where(
             Appointment.profile_id == profile_id,
             Appointment.status == "completed",
         ).order_by(Appointment.scheduled_date.desc())
@@ -443,14 +457,45 @@ async def completed_appointments_without_avs(
     parsed_docs = doc_result.scalars().all()
     snoozed = await _snoozed_item_ids(db, profile_id, "completed_without_avs")
 
+    # Group completed appointments by exact date, so same-date collisions
+    # are only disambiguated by provider among candidates that actually
+    # share a date — appointments on different dates never compete for
+    # the same document in the first place.
+    by_date: dict = {}
+    for appt in completed:
+        appt_date = appt.scheduled_date.date() if appt.scheduled_date else None
+        if appt_date is None:
+            continue
+        by_date.setdefault(appt_date, []).append(appt)
+
+    docs_by_date: dict = {}
+    for doc in parsed_docs:
+        doc_date = _parse_date_flexible(doc.visit_date)
+        if doc_date is None:
+            continue
+        docs_by_date.setdefault(doc_date, []).append(doc)
+
     without_avs = []
     for appt in completed:
         if appt.id in snoozed:
             continue
         appt_date = appt.scheduled_date.date() if appt.scheduled_date else None
-        if not appt_date:
+        if appt_date is None:
             continue
-        has_doc = any(_doc_near_appointment(doc, appt_date) for doc in parsed_docs)
+
+        candidates = docs_by_date.get(appt_date, [])
+        same_date_appts = by_date[appt_date]
+
+        if not candidates:
+            has_doc = False
+        elif len(same_date_appts) == 1:
+            # No same-date sibling to disambiguate from — exact date match is sufficient.
+            has_doc = True
+        else:
+            # Multiple appointments share this date — only count a document
+            # as this appointment's if provider identity also matches.
+            has_doc = any(_provider_matches(doc, appt) for doc in candidates)
+
         if not has_doc:
             without_avs.append(appt)
 
@@ -469,12 +514,32 @@ def _parse_date_flexible(date_str: str | None):
     return None
 
 
-def _doc_near_appointment(doc: Document, appt_date) -> bool:
-    """True if the document's visit_date is within 14 days of the appointment date."""
-    doc_date = _parse_date_flexible(doc.visit_date)
-    if not doc_date:
+def _fuzzy_text_match(text_a: str, text_b: str) -> bool:
+    """Bidirectional substring match — the repo's standing rule for name dedup
+    (mirrors src/api/documents.py's _fuzzy_text_match / _find_or_create_doctor).
+    """
+    return text_a == text_b or text_a in text_b or text_b in text_a
+
+
+def _provider_matches(doc: Document, appt: Appointment) -> bool:
+    """True if a document's parsed provider/facility plausibly matches an
+    appointment's doctor. Used only to disambiguate same-date collisions —
+    an appointment with no linked doctor, or a document with no parsed
+    provider, cannot be matched this way and returns False (the fail-safe
+    direction: ambiguous stays ambiguous, not silently resolved).
+    """
+    if appt.doctor is None:
         return False
-    return abs((doc_date - appt_date).days) <= 14
+    doc_provider = (doc.provider_name or "").strip().lower()
+    doc_facility = (doc.facility_name or "").strip().lower()
+    doctor_name = (appt.doctor.name or "").strip().lower()
+    doctor_clinic = (appt.doctor.clinic or "").strip().lower()
+
+    if doc_provider and doctor_name and _fuzzy_text_match(doc_provider, doctor_name):
+        return True
+    if doc_facility and doctor_clinic and _fuzzy_text_match(doc_facility, doctor_clinic):
+        return True
+    return False
 
 
 # ── Currently-snoozed items (issue #44) ───────────────────────────────────────

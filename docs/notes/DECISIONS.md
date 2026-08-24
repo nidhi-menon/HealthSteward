@@ -1371,4 +1371,30 @@ Related: issue #122, entry #66, DEC-006, DEC-025, DEC-009.
 
 ---
 
+### DEC-041: `completed_without_avs` Matches Documents by Exact Date + Provider, Not a 14-Day Proximity Window
+
+**Date:** 2026-08-23
+
+**Context:** Ground-truth-labeled boundary-case testing of the Needs Attention panel's four nudge types (`tests/test_action_items_detection_accuracy.py`, added while evaluating the panel for the J-BHI paper) surfaced a real detection gap in `completed_appointments_without_avs`. `_doc_near_appointment` matched a document to an appointment if the document's parsed `visit_date` fell within 14 days of the appointment's `scheduled_date` — checked against *every* parsed document for the profile, not one tied to that specific appointment (`Document.appointment_id` exists as a column but is never populated anywhere in the upload flow; documents are uploaded per-profile, not per-appointment). When two completed appointments fell within ~28 days of each other, a document uploaded for one could satisfy the proximity check for both, silently suppressing the missing-AVS nudge for an appointment that truly had no document of its own — a false negative in exactly the disengagement-detection mechanism this feature exists to provide. Confirmed concretely: two completed appointments 2 days apart, one document uploaded for the first, and the panel cleared both.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Keep the 14-day window, narrow it (e.g., 3 days) | Small change | Doesn't fix the failure mode, only shrinks how often it triggers; still silently wrong for appointments that happen to fall inside whatever window is chosen |
+| Add `Document.appointment_id` linking at upload time (explicit patient selection) | Fully unambiguous | Requires new upload-flow UI; the upload flow is profile-level today with no appointment context anywhere, so this is real product work, not a query fix |
+| **Match by exact `visit_date` equality; disambiguate same-date collisions by provider identity** | Fixes the confirmed false negative with no upload-flow changes, using data the parser already extracts (`Document.provider_name`/`facility_name`, validated at 100% field-level accuracy against real documents in the AVS-parser eval); fails safe (ambiguous stays ambiguous) rather than guessing | Same-date, same-provider double-booking (rare) still can't be resolved and correctly stays flagged for both |
+
+**Decision:** Match on exact date equality, not proximity. When multiple completed appointments share the exact same date (the one case exact-date matching alone can't resolve — e.g., two specialists seen the same day), a document only counts toward a specific appointment if its parsed `provider_name`/`facility_name` also matches that appointment's `Doctor.name`/`clinic`, via the same bidirectional substring match already used for doctor dedup elsewhere in the codebase (`src/api/documents.py::_fuzzy_text_match`/`_find_or_create_doctor`). If a same-date collision can't be resolved by provider (no linked doctor, no parsed provider, or neither matches), no appointment in that collision is marked covered — a false "still needs attention" nudge is preferable to silently clearing a genuine gap, consistent with this project's general posture on the recall/precision tradeoff (see DEC-040's reasoning).
+
+**Reasoning:** the false negative was strictly worse than the corresponding false positive it was presumably trying to avoid (a document showing up a few days later than the exact visit date). Exact-date matching removes the tolerance window that caused the confirmed bug entirely, for the overwhelming majority of cases (appointments on different dates never compete for a document in the first place). Provider matching for the residual same-date case reuses an existing, already-validated matching convention rather than inventing a new one, and reuses data (parsed provider/facility) already shown accurate in this evaluation cycle rather than requiring new extraction work.
+
+**Status:** Implemented. `src/api/action_items.py` — `completed_appointments_without_avs` rewritten to group by exact date and disambiguate same-date collisions via a new `_provider_matches` helper; `_doc_near_appointment` removed (no longer used anywhere). `tests/test_action_items_detection_accuracy.py` — the 14-day boundary test rewritten for exact-date matching (no tolerance window); the cross-appointment ambiguity test flipped from documenting the bug to asserting the fix (`test_completed_without_avs_cross_appointment_false_negative_fixed`); two new tests added for the same-date collision case (`test_completed_without_avs_same_day_disambiguated_by_provider`, `test_completed_without_avs_same_day_no_provider_match_stays_ambiguous`). Full suite: 448 passed, 0 failed, 28 skipped.
+
+**Files changed:** `src/api/action_items.py`, `tests/test_action_items_detection_accuracy.py`, `docs/notes/DECISIONS.md` (this entry).
+
+Related: `tests/test_action_items_detection_accuracy.py`, DEC-040.
+
+---
+
 *Last updated: 2026-08-23*
