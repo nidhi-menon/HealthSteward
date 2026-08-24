@@ -47,6 +47,14 @@ class TestPresupposesMissingTest:
         q = "Are there any changes to the dosage of Levothyroxine that need to be made based on the recent TSH levels?"
         assert _presupposes_missing_test(q, known_lab_names={"tsh"}) is True
 
+    def test_flags_real_found_case_current_levels_no_temporal_qualifier(self):
+        """Found via DEC-042's judge-v2 re-run: 'current' (not 'recent'/'most
+        recent'/'last') wasn't covered by the original temporal-qualifier
+        check, so this slipped through despite tool_call_necessity_dosing
+        having zero lab_orders on file at all."""
+        q = "What are my current A1C and TSH levels, and when should I expect to see the next lab results?"
+        assert _presupposes_missing_test(q, known_lab_names=set()) is True
+
 
 class TestPresupposesMissingReferral:
     def test_flags_real_found_case_endocrinology_followup(self):

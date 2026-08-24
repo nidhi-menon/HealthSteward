@@ -96,6 +96,11 @@ _PRESUPPOSED_RESULT_VALUE_PATTERNS = [
         r"\blevels?\s+(are|show|indicate)\b",
         r"\bbased on\b.{0,40}\b(levels?|results?)\b",
         r"\bresults?\s+(show|indicate|suggest)\b",
+        # "What are my current A1C and TSH levels?" — found via DEC-042's
+        # judge-v2 re-run: presupposes a result value exists ("current...
+        # levels") without using "recent"/"most recent"/"last", which
+        # _PRESUPPOSED_TEST_PATTERNS's temporal-qualifier check requires.
+        r"\bcurrent\b.{0,40}\blevels?\b",
     ]
 ]
 
