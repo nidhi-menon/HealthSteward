@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import anthropic
 import httpx
 from anthropic import AsyncAnthropic
 from loguru import logger
@@ -129,7 +130,25 @@ class ClaudeBackend(LLMBackend):
         if tools:
             kwargs["tools"] = tools
 
-        response = await self.client.messages.create(**kwargs)
+        try:
+            response = await self.client.messages.create(**kwargs)
+        except anthropic.BadRequestError as e:
+            # Some model families (observed: claude-opus-4-8) reject the
+            # `temperature` param outright rather than just ignoring an
+            # out-of-range value — "temperature is deprecated for this
+            # model." Retrying without it is the only way to call those
+            # models at all; logged as a warning since it silently means
+            # this call can't be pinned to a specific temperature for
+            # reproducibility (relevant for eval callers, which pass 0.0).
+            if "temperature" in str(e).lower() and "deprecated" in str(e).lower():
+                logger.warning(
+                    f"Model {self.model} rejected temperature={temperature} as deprecated; "
+                    "retrying without it. This call is not reproducibly pinned to a temperature."
+                )
+                kwargs.pop("temperature")
+                response = await self.client.messages.create(**kwargs)
+            else:
+                raise
 
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []

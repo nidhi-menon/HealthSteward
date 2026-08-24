@@ -104,6 +104,57 @@ async def test_claude_backend_tool_use_response():
     assert tool_result_msg["content"][0]["tool_use_id"] == "call_1"
 
 
+def _bad_request_error(message: str) -> "anthropic.BadRequestError":
+    import anthropic
+
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx.Response(400, request=request, json={"error": {"message": message}})
+    return anthropic.BadRequestError(message, response=response, body=None)
+
+
+@pytest.mark.asyncio
+async def test_claude_backend_retries_without_temperature_when_deprecated():
+    """Some model families (observed: claude-opus-4-8) reject `temperature`
+    outright rather than clamping an out-of-range value. The backend must
+    retry once without it rather than fail the call entirely."""
+    mock_response = MagicMock()
+    mock_response.content = [SimpleNamespace(type="text", text="judged")]
+    mock_response.usage = SimpleNamespace(input_tokens=10, output_tokens=5)
+
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=[_bad_request_error("`temperature` is deprecated for this model."), mock_response]
+        )
+        mock_anthropic.return_value = mock_client
+
+        backend = ClaudeBackend(_settings(), model="claude-opus-4-8")
+        result = await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys", temperature=0.0)
+
+    assert result.text == "judged"
+    assert mock_client.messages.create.call_count == 2
+    first_call_kwargs = mock_client.messages.create.call_args_list[0].kwargs
+    second_call_kwargs = mock_client.messages.create.call_args_list[1].kwargs
+    assert first_call_kwargs["temperature"] == 0.0
+    assert "temperature" not in second_call_kwargs
+
+
+@pytest.mark.asyncio
+async def test_claude_backend_reraises_unrelated_bad_request_errors():
+    """Only the specific temperature-deprecation error should be retried —
+    any other 400 must propagate normally, not be silently swallowed."""
+    with patch("src.agents.llm_backend.AsyncAnthropic") as mock_anthropic:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=_bad_request_error("max_tokens is required"))
+        mock_anthropic.return_value = mock_client
+
+        backend = ClaudeBackend(_settings())
+        with pytest.raises(Exception, match="max_tokens is required"):
+            await backend.call(messages=[{"role": "user", "content": "hi"}], system="sys")
+
+    assert mock_client.messages.create.call_count == 1
+
+
 @pytest.mark.asyncio
 async def test_ollama_backend_requests_non_streaming_with_nested_temperature():
     """Regression test: Ollama's native /api/chat defaults to stream: true
