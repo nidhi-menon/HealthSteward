@@ -151,6 +151,22 @@ class TestCaseContextText:
         assert "165 lbs" in text and "26.1" in text
         assert "Annual checkup" in text
 
+    def test_includes_past_visit_notes(self):
+        """Regression guard for the real gap found via DEC-042: retrieval_
+        redundancy's past visits carry real clinical notes ("TSH trending
+        down, dose unchanged") that the judge never saw at all — any claim
+        correctly referencing them risked a false-positive unsupported flag."""
+        case = _make_case(
+            past_visits=[
+                PastVisitFixture(
+                    doctor_key="target", scheduled_date="2026-05-01T10:00:00",
+                    purpose="Thyroid follow-up", visit_notes="TSH trending down, dose unchanged.",
+                ),
+            ],
+        )
+        text = _case_context_text(case)
+        assert "TSH trending down, dose unchanged." in text
+
     def test_omits_empty_sections(self):
         case = _make_case()
         text = _case_context_text(case)

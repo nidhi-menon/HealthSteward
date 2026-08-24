@@ -160,6 +160,8 @@ def _case_context_text(case: EvalCase) -> str:
             detail = f"- {pv.scheduled_date}"
             if pv.purpose:
                 detail += f": {pv.purpose}"
+            if pv.visit_notes:
+                detail += f" — notes: {pv.visit_notes}"
             lines.append(detail)
 
     return "\n".join(lines)
