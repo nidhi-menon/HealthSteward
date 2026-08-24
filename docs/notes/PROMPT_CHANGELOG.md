@@ -11,6 +11,15 @@ Convention:
 
 ## `src/agents/visit_prep.py` — `SYSTEM_PROMPT_TEMPLATE` (specialty-aware) and `SYSTEM_PROMPT_GENERIC` (fallback)
 
+### v9-2026-08-24 — loosens the 8-question floor for data-sparse patients
+**Context:** DEC-042's deterministic output guardrail (`src/agents/output_guardrails.py`, added after v7's revert) strips presupposed-test/referral/medication questions post-generation, which is working (validated 0% unsupported-claim rate on the 5-case fixture set) — but pushed two data-sparse cases' final question count under the prompt's own stated 8-15 floor (`cold_start`: 3, `groundedness_labs_vitals`: 7), since the guardrail has no backfill step. The prompt's count instruction treats 8 as "a hard requirement, not a suggestion" and explicitly tells the model to "dig deeper... rather than stopping early" when short — a plausible root cause of the presupposition pattern itself, not just a side effect of the guardrail: a model pressured to hit 8 from a patient with little real data on file has a direct incentive to pad with invented specifics.
+
+**Change:** softened the count instruction (task-description paragraph and the pre-response self-check, both prompts) from an unconditional hard floor to "aim for 8-15 when the patient's data supports it," with explicit permission to fall under 8 for a genuinely data-sparse patient and an explicit instruction not to pad the count with a presupposed test/referral/medication. The upper bound (cap at 15, cut down rather than include everything) is unchanged — that side wasn't implicated in either finding.
+
+**Reasoning:** unlike v7 (an added negative constraint layered onto an already-loaded prompt, which regressed), this is a change to an existing, already-present numeric instruction — the same kind of edit v2-2026-07-19 and v6-2026-08-20 made successfully (reinforcing/adjusting the lower and upper bound respectively). unsupported-claim regressions to date have all come from *adding* new rules for the model to track, not from *loosening* an existing one, so this is expected to carry materially lower risk than v7 did — but treated as a hypothesis to verify, not assumed safe by that reasoning alone.
+
+**Eval evidence:** pending — validate via `eval/run.py --judge` plus `eval/judge_noise_check.py`'s noise-isolation method (the standard this DEC's line of work now holds every change to) before trusting a before/after comparison. Update this entry with the result.
+
 ### v8-2026-08-24 — reverts v7 (measured regression)
 **Context:** v7's two added rules were re-evaluated properly before being trusted, per DEC-042's judge-noise-isolation method (re-judging the same fixed, already-generated output multiple times to separate real effect from the judge's own non-pinnable-temperature noise, rather than a single noisy before/after comparison). Result: v6's baseline unsupported-claim rate across 5 independent re-judges was 22.5%-25.6% (mean 24.4%); v7's was 26.5%-33.3% (mean 31.7%) — the two ranges do not overlap. v7 measurably made the rate worse, not better.
 
