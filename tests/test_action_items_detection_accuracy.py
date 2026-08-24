@@ -106,20 +106,17 @@ async def test_completed_without_avs_14_day_boundary(client: AsyncClient, db_ses
     profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
     now = datetime.now(timezone.utc)
 
-    # Ground truth: each appointment's own date, spaced far apart (>>14 days
-    # from each other) so each one's document-proximity check is isolated —
-    # _doc_near_appointment matches ANY parsed document for the profile
-    # within 14 days of a given appointment's date, not a document tied to
-    # that specific appointment_id, so appointments placed close together
-    # would otherwise contaminate each other's ground truth (see the
-    # separate cross-appointment ambiguity test below).
-    appt_exactly_14 = await _make_appointment(db_session, profile_id, now - timedelta(days=100), status="completed")
-    doc_date_14 = (appt_exactly_14.scheduled_date + timedelta(days=14)).strftime("%m/%d/%Y")
-    await _make_document(db_session, profile_id, visit_date=doc_date_14)
+    # Ground truth: exact-date matching, not proximity. A document dated
+    # exactly on an appointment's date covers it; a document even 1 day off
+    # does not — there is no tolerance window, since a wide window is what
+    # caused the cross-appointment false negative documented below.
+    appt_exact_match = await _make_appointment(db_session, profile_id, now - timedelta(days=100), status="completed")
+    doc_date_exact = appt_exact_match.scheduled_date.strftime("%m/%d/%Y")
+    await _make_document(db_session, profile_id, visit_date=doc_date_exact)
 
-    appt_15_days_late = await _make_appointment(db_session, profile_id, now - timedelta(days=200), status="completed")
-    doc_date_15 = (appt_15_days_late.scheduled_date + timedelta(days=15)).strftime("%m/%d/%Y")
-    await _make_document(db_session, profile_id, visit_date=doc_date_15)
+    appt_1_day_off = await _make_appointment(db_session, profile_id, now - timedelta(days=200), status="completed")
+    doc_date_1_off = (appt_1_day_off.scheduled_date + timedelta(days=1)).strftime("%m/%d/%Y")
+    await _make_document(db_session, profile_id, visit_date=doc_date_1_off)
 
     appt_no_doc = await _make_appointment(db_session, profile_id, now - timedelta(days=300), status="completed")
 
@@ -128,51 +125,119 @@ async def test_completed_without_avs_14_day_boundary(client: AsyncClient, db_ses
     resp = await client.get(f"/api/profiles/{profile_id}/completed-without-avs")
     ids = {a["id"] for a in resp.json()}
 
-    assert appt_exactly_14.id not in ids, "doc at exactly 14 days should count as near — false positive"
-    assert appt_15_days_late.id in ids, "doc at 15 days is outside the window — should still fire, false negative if missing"
+    assert appt_exact_match.id not in ids, "doc dated exactly on the appointment date should count as covered"
+    assert appt_1_day_off.id in ids, "doc dated 1 day off is not an exact match — should still fire, no tolerance window"
     assert appt_no_doc.id in ids, "no document at all — should fire"
     assert appt_still_scheduled.id not in ids, "not completed — should not be evaluated"
 
 
 @pytest.mark.asyncio
-async def test_completed_without_avs_cross_appointment_document_ambiguity(
+async def test_completed_without_avs_cross_appointment_false_negative_fixed(
     client: AsyncClient, db_session: AsyncSession, sample_profile_data,
 ):
-    """_doc_near_appointment matches ANY parsed document for the profile
-    within 14 days of an appointment's date — it does not check the
-    document's appointment_id. Two completed appointments close together
-    in time can therefore contaminate each other's detection: uploading a
-    document for one can incorrectly suppress the nudge for the other,
-    which truly has no document of its own. This is a real detection gap,
-    not a hypothetical — documented here as a known limitation rather than
-    silently left for a future bug report.
+    """Regression test for the false negative this module previously had:
+    a document uploaded for one completed appointment used to be able to
+    silently suppress the missing-AVS nudge for a different completed
+    appointment within ~28 days of it, because matching was by date
+    proximity across the whole profile rather than by exact date. Fixed by
+    matching on exact visit-date equality — two appointments on different
+    dates can no longer share a document.
     """
     profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
     now = datetime.now(timezone.utc)
 
     appt_with_doc = await _make_appointment(db_session, profile_id, now - timedelta(days=20), status="completed")
     appt_without_doc = await _make_appointment(db_session, profile_id, now - timedelta(days=22), status="completed")
-    # Document uploaded for appt_with_doc only, not linked via appointment_id
-    # to either appointment (matches how completed_appointments_without_avs
-    # actually queries — by parse_status, not appointment_id).
     doc_date = appt_with_doc.scheduled_date.strftime("%m/%d/%Y")
     await _make_document(db_session, profile_id, visit_date=doc_date)
 
     resp = await client.get(f"/api/profiles/{profile_id}/completed-without-avs")
     ids = {a["id"] for a in resp.json()}
 
-    assert appt_with_doc.id not in ids  # correctly suppressed — it has a real document
-    # This assertion documents the actual (undesired) current behavior: the
-    # nearby document for appt_with_doc also suppresses appt_without_doc's
-    # nudge, a false negative, because proximity is checked profile-wide
-    # rather than per-appointment. If this assertion starts failing, the
-    # underlying gap has been fixed — update this test to assert the
-    # correct behavior at that point.
-    assert appt_without_doc.id not in ids, (
-        "documents current false-negative behavior: a document 2 days apart "
-        "from a doc-less appointment incorrectly suppresses that appointment's "
-        "nudge too, since matching is profile-wide, not appointment-specific"
+    assert appt_with_doc.id not in ids  # correctly suppressed — it has a real, exact-date-matched document
+    assert appt_without_doc.id in ids, (
+        "fixed behavior: a document dated for a different appointment, even one "
+        "only 2 days apart, must not suppress this appointment's own missing-AVS nudge"
     )
+
+
+@pytest.mark.asyncio
+async def test_completed_without_avs_same_day_disambiguated_by_provider(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data,
+):
+    """Two completed appointments on the exact same date (different
+    specialists seen same day) is the one case exact-date matching alone
+    cannot resolve. A document should only cover the appointment whose
+    doctor's name/clinic plausibly matches the document's parsed
+    provider/facility — not either same-date appointment interchangeably.
+    """
+    from src.data.models import Doctor
+
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    now = datetime.now(timezone.utc)
+    same_date = now - timedelta(days=20)
+
+    dermatologist = Doctor(profile_id=profile_id, name="Eliana Krulig, MD", clinic="Sutter Dermatology")
+    endocrinologist = Doctor(profile_id=profile_id, name="D.M. Antoniucci, MD", clinic="Sutter Endocrinology")
+    db_session.add_all([dermatologist, endocrinologist])
+    await db_session.commit()
+    await db_session.refresh(dermatologist)
+    await db_session.refresh(endocrinologist)
+
+    derm_appt = Appointment(profile_id=profile_id, doctor_id=dermatologist.id, scheduled_date=same_date, status="completed")
+    endo_appt = Appointment(profile_id=profile_id, doctor_id=endocrinologist.id, scheduled_date=same_date, status="completed")
+    db_session.add_all([derm_appt, endo_appt])
+    await db_session.commit()
+    await db_session.refresh(derm_appt)
+    await db_session.refresh(endo_appt)
+
+    # Document's parsed provider matches the dermatologist, not the endocrinologist.
+    doc = Document(
+        profile_id=profile_id,
+        original_filename="derm_avs.pdf",
+        file_path="/tmp/derm_avs.pdf",
+        file_size_bytes=100,
+        visit_date=same_date.strftime("%m/%d/%Y"),
+        provider_name="Eliana Krulig, MD",
+        facility_name="Sutter Dermatology",
+        parse_status="completed",
+    )
+    db_session.add(doc)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/profiles/{profile_id}/completed-without-avs")
+    ids = {a["id"] for a in resp.json()}
+
+    assert derm_appt.id not in ids, "document's provider matches the dermatologist — should be covered"
+    assert endo_appt.id in ids, "document's provider does not match the endocrinologist — should still fire"
+
+
+@pytest.mark.asyncio
+async def test_completed_without_avs_same_day_no_provider_match_stays_ambiguous(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data,
+):
+    """When two same-date completed appointments exist and the document has
+    no parseable provider information (or neither appointment has a linked
+    doctor), the ambiguity cannot be resolved. Fail-safe direction: neither
+    appointment is marked covered, rather than guessing — a false
+    "still needs attention" nudge is preferable to silently clearing a
+    genuine gap.
+    """
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    now = datetime.now(timezone.utc)
+    same_date = now - timedelta(days=20)
+
+    appt_a = await _make_appointment(db_session, profile_id, same_date, status="completed")
+    appt_b = await _make_appointment(db_session, profile_id, same_date, status="completed")
+    # No doctor_id on either appointment, no provider_name on the document —
+    # nothing to disambiguate with.
+    await _make_document(db_session, profile_id, visit_date=same_date.strftime("%m/%d/%Y"))
+
+    resp = await client.get(f"/api/profiles/{profile_id}/completed-without-avs")
+    ids = {a["id"] for a in resp.json()}
+
+    assert appt_a.id in ids, "no provider info to disambiguate — should not silently mark as covered"
+    assert appt_b.id in ids, "no provider info to disambiguate — should not silently mark as covered"
 
 
 # ── vitals_alert — threshold boundaries ────────────────────────────────────
