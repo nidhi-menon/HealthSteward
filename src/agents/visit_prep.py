@@ -7,6 +7,7 @@ This module implements DEC-006 (PII Anonymization) and DEC-008 (Intelligent Cont
 - Logs only anonymized content to ConversationLog
 """
 
+import json
 from typing import Any, Optional
 
 from loguru import logger
@@ -15,7 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.agents.base import BaseAgent
-from src.agents.llm_backend import ToolCallParsingError, get_llm_backend
+from src.agents.llm_backend import (
+    _CHARS_PER_TOKEN_ESTIMATE,
+    _RESERVED_OUTPUT_TOKENS_ESTIMATE,
+    ToolCallParsingError,
+    get_llm_backend,
+)
 from src.agents.ollama_client import get_ollama_client
 from src.agents.tools import UnknownToolError, VisitPrepTools, get_tools_for_provider
 from src.config import get_settings
@@ -52,6 +58,89 @@ FALLBACK_PARSE_ERROR = "parse_error"               # backend emitted a malformed
 FALLBACK_UNKNOWN_TOOL = "unknown_tool"             # model called a tool that doesn't exist
 FALLBACK_LOOP_ERROR = "loop_error"                 # anything else the loop raised — a real bug
 FALLBACK_BACKEND_UNAVAILABLE = "backend_unavailable"  # both paths failed; placeholder returned
+
+# Not a FALLBACK_* reason (this doesn't replace the agentic-vs-single-shot
+# path, it's an extra repair step that can follow either one) — recorded
+# separately on the repair call's own ConversationLog row so a JSON-repair
+# retry is visible in the fallback-rate diagnostics rather than looking like
+# an ordinary single-shot call.
+JSON_REPAIR_RETRY = "json_repair_retry"
+
+
+# Running tool-result content budget for the agentic loop (issue found via
+# eval/run.py --trials against llama3.2:latest: a batch of 7-9 tool calls in
+# one case's loop — several near-duplicate lookup_past_visits calls with
+# slightly different keyword/specialty args — filled enough of ollama_num_ctx
+# that the final answer got cut off mid-JSON; agent_max_turns had no effect,
+# since the model was converging well within the turn cap already, and a
+# flat per-turn call-count cap was rejected because it throttles genuinely
+# distinct, necessary lookups (e.g. two different medications' details in
+# one turn) exactly as hard as it throttles redundant ones.
+#
+# Instead this tracks actual tool-result content size against the real
+# remaining context budget (ollama_num_ctx minus what the base messages
+# already use minus a reserve for the response itself — the same reserve
+# llm_backend._RESERVED_OUTPUT_TOKENS_ESTIMATE warns on), so any number of
+# small, distinct calls are allowed through as long as they fit, and only
+# calls that would actually blow the budget get held back. Exact-duplicate
+# calls (same name + args) never re-execute and never replay their full
+# result text into the conversation a second time — a short placeholder
+# costs the budget almost nothing, whereas re-appending the same visit notes
+# verbatim would burn real context for no new information.
+_DUPLICATE_CALL_PLACEHOLDER = "(Same tool call as earlier in this conversation — see that result above.)"
+_BUDGET_EXCEEDED_PLACEHOLDER = (
+    "[Tool result budget exceeded for this response — use the results already "
+    "returned above to finish your answer rather than requesting more.]"
+)
+
+# JSON Schema for the final {"questions": ..., "context_summary": ...}
+# response both system prompts already ask for in prose. Passed as
+# response_schema to constrain decoding (Ollama's `format` — see
+# llm_backend.py) on the two calls that produce this shape without also
+# requesting tools: the single-shot fallback (_call_backend) and the
+# JSON-repair retry (_repair_response_via_model). Deliberately not applied
+# to the agentic loop's tool-enabled calls — see LLMBackend.call's docstring.
+# A loose schema on purpose: it only constrains the shape (an object of
+# string arrays, plus a string summary), not category names, question count,
+# or content — those stay governed by the prompt text and eval scorers, not
+# by what would otherwise be a second, harder-to-change source of truth.
+RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "object",
+            "additionalProperties": {"type": "array", "items": {"type": "string"}},
+        },
+        "context_summary": {"type": "string"},
+    },
+    "required": ["questions", "context_summary"],
+}
+
+
+def _render_gathered_tool_results(tool_calls: list[dict[str, Any]]) -> str:
+    """Render already-executed tool calls as plain text for the single-shot
+    fallback path (see _prepare_visit_in_scope) — a non-convergent or parse-
+    failing agentic loop still made real, already-anonymized tool calls
+    before it failed, and discarding them meant the fallback answered with
+    strictly less information than the agent already had.
+
+    Concretely found via eval/run.py against granite4:3b's cold_start case:
+    the loop called get_medication_details four times, every time correctly
+    confirming "No matching medications found" — then non-convergence threw
+    all of that away, and the single-shot fallback (told to reference actual
+    medication names, given none) invented a literal unfilled template
+    placeholder — "I currently take [list any known medications here]" —
+    instead of a confirmed, definitive absence. Passing the real results
+    forward gives the fallback the same grounding the agent already earned.
+    """
+    lines = []
+    for call in tool_calls:
+        if call.get("result") in (_DUPLICATE_CALL_PLACEHOLDER, _BUDGET_EXCEEDED_PLACEHOLDER):
+            continue  # adds nothing — the real result is already included above
+        lines.append(f"[{call['name']}]")
+        lines.append(str(call.get("result", "")))
+        lines.append("")
+    return "\n".join(lines).strip()
 
 
 # ICD-10 prefix → specialty mapping for tagging conditions
@@ -193,10 +282,12 @@ class VisitPrepAgent(BaseAgent):
     # See docs/notes/PROMPT_CHANGELOG.md for version history/rationale —
     # bump the version and add an entry there whenever either prompt below
     # changes, per the project-wide prompt-versioning convention.
-    SYSTEM_PROMPT_TEMPLATE_VERSION = "v4-2026-07-22"
+    SYSTEM_PROMPT_TEMPLATE_VERSION = "v6-2026-08-20"
     SYSTEM_PROMPT_TEMPLATE = """You are a healthcare assistant preparing a patient for a visit with their {specialty}.
 
-Your task: generate 8-15 focused, actionable questions the patient should ask THIS doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
+Your task: generate 8-15 focused, actionable questions the patient should ask THIS doctor based on the patient data provided. This count is a hard requirement, not a suggestion, at BOTH ends — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early; if you find yourself with more than 15, cut down to the 15 most clinically useful ones rather than including every question you can think of — the goal is a focused, prioritized list a patient can actually use in a visit, not an exhaustive one.
+
+If tools are available to you, use them before finalizing your answer whenever they would give you a more specific or more grounded question than the patient data already provided lets you write — e.g. call get_medication_details before asking anything about a specific medication's dosage, timing, or interactions rather than asking generically or guessing; call lookup_past_visits before asserting what happened at, or is due for, an earlier or upcoming visit that isn't already shown. Do not skip an available, relevant tool just because you can already produce *some* answer without it — a specific, tool-grounded question is what this task requires, not merely a plausible-sounding one.
 
 IMPORTANT RULES:
 - Only include questions relevant to this doctor's specialty ({specialty})
@@ -229,13 +320,15 @@ Use these categories (omit any that have no relevant questions — do not includ
 - "Lifestyle & Prevention" — actionable lifestyle questions specific to their conditions and this specialty
 - "Follow-up Planning" — what to schedule next, referrals to discuss, and any carryover concern from a past visit's planned-but-unconfirmed-as-addressed topics
 
-Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
+Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one; if you're over 15, cut down to the 15 most clinically useful ones, not just the first 15 you generated. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     # Fallback when no specialty is known
-    SYSTEM_PROMPT_GENERIC_VERSION = "v4-2026-07-22"
+    SYSTEM_PROMPT_GENERIC_VERSION = "v6-2026-08-20"
     SYSTEM_PROMPT_GENERIC = """You are a healthcare assistant preparing a patient for an upcoming doctor visit.
 
-Your task: generate 8-15 focused, actionable questions the patient should ask their doctor based on the patient data provided. This count is a hard requirement, not a suggestion — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early.
+Your task: generate 8-15 focused, actionable questions the patient should ask their doctor based on the patient data provided. This count is a hard requirement, not a suggestion, at BOTH ends — if you find yourself with fewer than 8 well-grounded questions, dig deeper into the conditions, medications, and lab data already provided for more specific angles (e.g. dosage timing, monitoring frequency, symptom tracking) rather than stopping early; if you find yourself with more than 15, cut down to the 15 most clinically useful ones rather than including every question you can think of — the goal is a focused, prioritized list a patient can actually use in a visit, not an exhaustive one.
+
+If tools are available to you, use them before finalizing your answer whenever they would give you a more specific or more grounded question than the patient data already provided lets you write — e.g. call get_medication_details before asking anything about a specific medication's dosage, timing, or interactions rather than asking generically or guessing; call lookup_past_visits before asserting what happened at, or is due for, an earlier or upcoming visit that isn't already shown. Do not skip an available, relevant tool just because you can already produce *some* answer without it — a specific, tool-grounded question is what this task requires, not merely a plausible-sounding one.
 
 IMPORTANT RULES:
 - Do NOT ask about vitals, lab results, conditions, or medications that are not explicitly listed in the patient data below — if a category of data (e.g. vitals) isn't provided, don't reference it or assume it exists
@@ -262,7 +355,7 @@ Use these categories (omit any that have no relevant questions — do not includ
 - "Lifestyle & Prevention" — actionable lifestyle questions
 - "Follow-up Planning" — what to schedule next, and any carryover concern from a past visit's planned-but-unconfirmed-as-addressed topics
 
-Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
+Before finalizing your response, count your questions. You must have between 8 and 15 total across all categories combined — if you're short, add more within your existing (non-empty) categories rather than reintroducing an empty one; if you're over 15, cut down to the 15 most clinically useful ones, not just the first 15 you generated. Be specific — reference actual condition names, medication names, and lab test names from the patient data provided."""
 
     def __init__(self, db: AsyncSession):
         """Initialize the visit prep agent."""
@@ -507,14 +600,55 @@ Before finalizing your response, count your questions. You must have between 8 a
                 fallback_reason = FALLBACK_TOOL_USE_DISABLED
 
             if response is None:
+                # If the agentic loop made real tool calls before failing
+                # (non-convergence, a parse error mid-loop, an unknown-tool
+                # call), don't throw that work away — the single-shot
+                # fallback would otherwise answer with strictly less
+                # information than the agent already had, and can
+                # hallucinate a placeholder for something already
+                # definitively answered. See _render_gathered_tool_results.
+                fallback_messages = messages
+                gathered = _render_gathered_tool_results(self.last_tool_calls)
+                if gathered:
+                    fallback_messages = messages + [{
+                        "role": "user",
+                        "content": (
+                            "Additional information already retrieved via tool calls before "
+                            "this fallback — these results are real and already confirmed. "
+                            "Use them, and do not invent placeholder content for anything "
+                            "already answered below, including a confirmed absence (e.g. "
+                            "\"No matching medications found\" means there are none — omit "
+                            "that category rather than guessing at a value):\n\n" + gathered
+                        ),
+                    }]
                 response = await self._call_backend(
-                    messages, system_prompt, temperature=temperature,
+                    fallback_messages, system_prompt, temperature=temperature,
                     prompt_version=system_prompt_version,
                     fallback_reason=fallback_reason,
                 )
 
-            # Step 8: Parse JSON response
+            # Step 8: Parse JSON response — _parse_json_response already tries
+            # a code-level repair for a truncated-looking response (unclosed
+            # brackets/quotes). If that's still not enough (content itself is
+            # missing, not just closing punctuation), ask the model to finish
+            # its own output once before giving up — see
+            # _repair_response_via_model's docstring for why this is scoped
+            # to exactly one extra call, not a retry loop.
             parsed = self._parse_json_response(response)
+            if not (parsed and "questions" in parsed):
+                repaired_response = await self._repair_response_via_model(
+                    response, system_prompt, prompt_version=system_prompt_version,
+                    temperature=temperature,
+                )
+                if repaired_response is not None:
+                    response = repaired_response
+                    parsed = self._parse_json_response(response)
+                    if parsed and "questions" in parsed:
+                        # warning, not info: a repair-worthy failure is
+                        # diagnostically interesting even when it self-
+                        # corrects — the original response still didn't
+                        # parse, this just means the user never saw it.
+                        logger.warning("JSON repair-via-model attempt succeeded")
 
             if parsed and "questions" in parsed:
                 return {
@@ -586,6 +720,24 @@ Before finalizing your response, count your questions. You must have between 8 a
 
         conversation = list(messages)
         tool_call_log: list[dict[str, Any]] = getattr(self, "last_tool_calls", [])
+        # Cache of (name, canonical-args-json) -> result, shared across every
+        # turn of this loop instance, not just within one turn — a call
+        # repeated on turn 2 that was already answered on turn 1 is exactly
+        # as wasteful as a repeat within the same turn.
+        seen_calls: dict[tuple[str, str], str] = {}
+
+        # Real remaining room for tool-result content: total context minus
+        # what the base prompt (system + starting messages + tool schemas)
+        # already costs, minus the same output reserve llm_backend warns on
+        # — so this budget and that warning agree on what "enough room" means.
+        base_chat_messages = [{"role": "system", "content": system}, *messages]
+        base_chars = sum(len(json.dumps(m)) for m in base_chat_messages)
+        base_chars += sum(len(json.dumps(t)) for t in tools) if tools else 0
+        base_tokens = base_chars // _CHARS_PER_TOKEN_ESTIMATE
+        tool_result_token_budget = max(
+            0, self.settings.ollama_num_ctx - base_tokens - _RESERVED_OUTPUT_TOKENS_ESTIMATE
+        )
+        tool_result_chars_remaining = tool_result_token_budget * _CHARS_PER_TOKEN_ESTIMATE
 
         for turn in range(self.settings.agent_max_turns):
             result = await backend.call(conversation, system, tools=tools, temperature=temperature)
@@ -608,7 +760,20 @@ Before finalizing your response, count your questions. You must have between 8 a
 
             conversation.append(backend.build_assistant_message(result))
             for tool_call in result.tool_calls:
-                tool_result = await tool_executor.execute(tool_call.name, tool_call.input)
+                cache_key = (tool_call.name, json.dumps(tool_call.input, sort_keys=True, default=str))
+
+                if cache_key in seen_calls:
+                    # Exact repeat — never re-execute, and never replay the
+                    # full result text again either; the model already has
+                    # it in the conversation above.
+                    tool_result = _DUPLICATE_CALL_PLACEHOLDER
+                elif tool_result_chars_remaining <= 0:
+                    tool_result = _BUDGET_EXCEEDED_PLACEHOLDER
+                else:
+                    tool_result = await tool_executor.execute(tool_call.name, tool_call.input)
+                    seen_calls[cache_key] = tool_result
+                    tool_result_chars_remaining -= len(tool_result)
+
                 conversation.append(backend.build_tool_result_message(tool_call, tool_result))
                 tool_call_log.append({
                     "name": tool_call.name,
@@ -647,7 +812,9 @@ Before finalizing your response, count your questions. You must have between 8 a
         this was a direct single-shot call rather than a fallback.
         """
         backend = get_llm_backend(self.settings)
-        result = await backend.call(messages, system, tools=None, temperature=temperature)
+        result = await backend.call(
+            messages, system, tools=None, temperature=temperature, response_schema=RESPONSE_SCHEMA,
+        )
         response = result.text or ""
 
         await self._log_conversation(
@@ -662,6 +829,65 @@ Before finalizing your response, count your questions. You must have between 8 a
             redaction_events=self.last_redaction_events,
         )
 
+        return response
+
+    async def _repair_response_via_model(
+        self,
+        malformed_response: str,
+        system: str,
+        prompt_version: Optional[str] = None,
+        temperature: float = 0.7,
+    ) -> Optional[str]:
+        """One extra model call to finish/fix a response that didn't parse as
+        JSON, even after _parse_json_response's own code-level repair attempt.
+
+        Scoped to exactly one attempt, not a retry loop — the point (per the
+        original item #4, "retry-with-repair before falling back") is a cheap
+        second chance for a small model to notice and fix its own mistake,
+        not an open-ended negotiation. If this attempt still doesn't parse,
+        the caller falls through to the existing raw-response fallback bucket
+        same as before this existed.
+
+        Doesn't reuse the full conversation/tool history — the malformed
+        response and a short, explicit instruction are the entire prompt, so
+        this can't itself run into the same long-context degradation that
+        plausibly caused the original truncation.
+
+        Returns the repaired text, or None if the repair call itself failed
+        (network/backend error) — that's a real failure, but not one worth
+        raising past the caller, which already has a working fallback path.
+        """
+        repair_instruction = (
+            "The following is your own previous response to a request for a JSON object "
+            "with \"questions\" (grouped by category) and \"context_summary\" fields. It did "
+            "not parse as valid JSON — likely cut off before the closing braces/brackets. "
+            "Re-output the COMPLETE, valid JSON object only, with no other text before or "
+            "after it. Keep all the same content; just make sure it is well-formed and "
+            "fully closed.\n\n"
+            f"Previous response:\n{malformed_response}"
+        )
+        try:
+            backend = get_llm_backend(self.settings)
+            result = await backend.call(
+                [{"role": "user", "content": repair_instruction}], system,
+                tools=None, temperature=temperature, response_schema=RESPONSE_SCHEMA,
+            )
+            response = result.text or ""
+        except Exception as e:
+            logger.warning(f"JSON repair-via-model attempt failed, falling back: {e}")
+            return None
+
+        await self._log_conversation(
+            messages=[{"role": "user", "content": repair_instruction}],
+            response=response,
+            system=system,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            model=self._model_name_for_provider(),
+            prompt_version=prompt_version,
+            run_diagnostics={"agentic_path": False, "fallback_reason": JSON_REPAIR_RETRY},
+            redaction_events=self.last_redaction_events,
+        )
         return response
 
     async def _log_hard_failure(

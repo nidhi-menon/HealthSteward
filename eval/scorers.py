@@ -237,6 +237,27 @@ def score_tool_call_necessity(case: EvalCase, tool_calls: list[dict[str, Any]]) 
     }
 
 
+def score_tool_call_convergence(raw_result: dict[str, Any]) -> dict[str, Any]:
+    """Did this case's agentic tool-use loop converge, and if not, why.
+
+    Reads the fields VisitPrepAgent.prepare_visit already returns
+    (`agentic_path`, `fallback_reason` — see FALLBACK_* in visit_prep.py):
+    `agentic_path=True` means the loop produced a usable response via real
+    tool-calling; `False` means prepare_visit fell back to single-shot
+    generation, tagged with why (non_convergence within agent_max_turns is
+    benign per DEC-013; parse_error/unknown_tool/loop_error mean the
+    backend's tool-calling itself broke). This is the harness-level signal
+    for "is small-model tool-calling actually reliable" rather than just
+    "graceful under failure" — a case can gracefully fall back on every
+    single run and still mean the agentic loop never once produced real
+    output for it.
+    """
+    return {
+        "converged": bool(raw_result.get("agentic_path")),
+        "fallback_reason": raw_result.get("fallback_reason"),
+    }
+
+
 _VISIT_LINE_RE = re.compile(r"### Visit with (.+?) on (.+)")
 
 

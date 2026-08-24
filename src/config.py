@@ -35,7 +35,10 @@ class Settings(BaseSettings):
 
     # Ollama (used when llm_provider="ollama" or for local LLM scoring)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.2"
+    # Explicit tag, not bare "llama3.2" — this is the model DEC-038's
+    # trials-of-3 comparison confirmed as the default (100% convergence vs.
+    # granite4:3b's 80%, reproducible non-convergence on data-sparse cases).
+    ollama_model: str = "llama3.2:latest"
     # Explicit Ollama context window (num_ctx). Without this, Ollama silently
     # falls back to its own runtime default (commonly 2048 for a
     # freshly-pulled model's Modelfile) regardless of what this app's own
