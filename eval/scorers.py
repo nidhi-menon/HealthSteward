@@ -184,8 +184,29 @@ def off_scope_medications(med_specialty_map: dict[str, str], target_specialty: O
     }
 
 
+# A mention of an off-scope medication paired with interaction-language is
+# the specialty-drug-interaction question the system prompt explicitly
+# requires ("DO identify cross-condition interactions that ARE relevant to
+# this specialty") — not the "discuss/manage this other doctor's med" case
+# the same prompt forbids. Without this exclusion, score_scope collapses
+# both into "violation," which is stricter than the rule the model was
+# actually told to follow — found via DEC-042's judge work when the sole
+# flagged "violation" across two eval runs turned out to be the exact
+# Metformin/Clobetasol interaction question the paper's own qualitative
+# section separately praises as genuinely useful synthesis. Simple
+# substring check, not phrase-structure aware — matches this project's
+# existing regex-first approach elsewhere (see anonymization.py), and its
+# limitation (can't tell whether the off-scope med is actually paired with
+# an in-scope one, vs. mentioned alongside unrelated interaction language)
+# is the same kind of known, documented gap as those patterns.
+_INTERACTION_LANGUAGE = "interact"  # covers interact/interacts/interaction/interactions/interacting
+
+
 def score_scope(result: dict[str, Any], off_scope_names: set[str]) -> dict[str, Any]:
-    """Scope checker: does any question reference an off-scope-tagged medication.
+    """Scope checker: does any question recommend or ask to discuss/manage an
+    off-scope-tagged medication directly. A question that instead names the
+    off-scope medication only to check for an interaction with an in-scope
+    one is not a violation — see _INTERACTION_LANGUAGE's comment.
 
     Checks the final generated output. Tool-call results are checked
     separately by score_tool_result_scope — Phase 2 retrieval bypasses the
@@ -197,6 +218,8 @@ def score_scope(result: dict[str, Any], off_scope_names: set[str]) -> dict[str, 
     violations = []
     for category, q in pairs:
         q_lower = q.lower()
+        if _INTERACTION_LANGUAGE in q_lower:
+            continue
         for name in off_scope_names:
             if name in q_lower:
                 violations.append({"category": category, "question": q, "medication": name})

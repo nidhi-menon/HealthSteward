@@ -226,6 +226,35 @@ def test_score_scope_clean_when_no_off_scope_mentioned():
     assert scored["violation_count"] == 0
 
 
+def test_score_scope_permits_cross_specialty_interaction_question():
+    """The exact case found via DEC-042's judge work: a question asking
+    whether an in-scope and an off-scope medication interact is explicitly
+    required by the system prompt ("DO identify cross-condition
+    interactions"), not a scope violation — even though it names the
+    off-scope medication."""
+    off_scope = {"clobetasol cream"}
+    result = {
+        "questions": {
+            "Medication Review": [
+                "Are there any potential interactions between Metformin and Clobetasol Cream that I should be aware of?"
+            ]
+        }
+    }
+    scored = scorers.score_scope(result, off_scope)
+    assert scored["violation_count"] == 0
+
+
+def test_score_scope_still_flags_direct_management_of_off_scope_medication():
+    """The interaction-language exclusion must not swallow the real
+    violation case: a question that names the off-scope medication with no
+    interaction framing is still asking this doctor to discuss/manage a
+    medication that isn't theirs to manage."""
+    off_scope = {"clobetasol cream"}
+    result = {"questions": {"Medication Review": ["Should I adjust my Clobetasol Cream dosage?"]}}
+    scored = scorers.score_scope(result, off_scope)
+    assert scored["violation_count"] == 1
+
+
 def test_off_scope_medications_uses_specialty_relatedness():
     med_map = {"Metformin": "Endocrinology", "Clobetasol Cream": "Dermatology"}
     off_scope = scorers.off_scope_medications(med_map, target_specialty="Endocrinology")
