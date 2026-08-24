@@ -21,6 +21,7 @@ import asyncio
 import json
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -76,7 +77,9 @@ async def run_generation_case(db: AsyncSession, case) -> dict:
     await db.commit()
 
     agent = VisitPrepAgent(db)
+    start = time.perf_counter()
     result = await agent.prepare_visit(appointment, temperature=EVAL_TEMPERATURE)
+    duration_s = time.perf_counter() - start
 
     target_specialty = appointment.doctor.specialty or _infer_specialty_from_clinic(appointment.doctor.clinic)
     med_specialty_map = agent._build_med_specialty_map(appointment.profile)
@@ -90,6 +93,7 @@ async def run_generation_case(db: AsyncSession, case) -> dict:
     return {
         "case_id": case.id,
         "description": case.description,
+        "duration_s": duration_s,
         "raw_result": result,
         "format": scorers.score_format(result, min_questions=min_questions),
         "groundedness": scorers.score_groundedness(result, entities),
@@ -133,6 +137,25 @@ def _summarize_convergence(case_reports: list[dict]) -> dict[str, Any]:
         "converged": converged,
         "convergence_rate": (converged / len(runs)) if runs else None,
         "fallback_reason_counts": reasons,
+    }
+
+
+def _summarize_latency(case_reports: list[dict]) -> dict[str, Any]:
+    """Wall-clock latency for successful (non-timed-out) generation runs.
+    Timed-out cases are excluded — CASE_TIMEOUT_SECONDS caps them at a fixed
+    ceiling that isn't a meaningful latency sample.
+    """
+    durations = sorted(r["duration_s"] for r in case_reports if not r.get("timed_out") and "duration_s" in r)
+    n = len(durations)
+    if n == 0:
+        return {"n": 0, "mean_s": None, "median_s": None, "p95_s": None, "min_s": None, "max_s": None}
+    return {
+        "n": n,
+        "mean_s": sum(durations) / n,
+        "median_s": durations[n // 2],
+        "p95_s": durations[min(n - 1, int(0.95 * n))],
+        "min_s": durations[0],
+        "max_s": durations[-1],
     }
 
 
@@ -226,7 +249,8 @@ async def main() -> int:
                         f"    format_valid={fmt['valid']} questions={fmt['question_count']} "
                         f"grounded_rate={grounded} scope_violations={scope['violation_count']} "
                         f"tools_called={report['tool_calls_made']} "
-                        f"converged={conv['converged']} fallback_reason={conv['fallback_reason']}"
+                        f"converged={conv['converged']} fallback_reason={conv['fallback_reason']} "
+                        f"duration_s={report['duration_s']:.2f}"
                     )
     finally:
         await db.close()
@@ -241,6 +265,15 @@ async def main() -> int:
         for reason, count in sorted(convergence_summary["fallback_reason_counts"].items()):
             print(f"  {reason}: {count}")
 
+    latency_summary = _summarize_latency(case_reports)
+    if latency_summary["n"]:
+        print(
+            f"\n=== Latency (n={latency_summary['n']}): "
+            f"mean={latency_summary['mean_s']:.2f}s median={latency_summary['median_s']:.2f}s "
+            f"p95={latency_summary['p95_s']:.2f}s min={latency_summary['min_s']:.2f}s "
+            f"max={latency_summary['max_s']:.2f}s ==="
+        )
+
     current = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "git_sha": _git_sha(),
@@ -251,6 +284,7 @@ async def main() -> int:
         "stage1": [{"name": r.name, "passed": r.passed, "detail": r.detail} for r in stage1_results],
         "cases": case_reports,
         "convergence_summary": convergence_summary,
+        "latency_summary": latency_summary,
     }
 
     RESULTS_DIR.mkdir(exist_ok=True)
