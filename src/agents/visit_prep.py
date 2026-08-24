@@ -23,6 +23,7 @@ from src.agents.llm_backend import (
     get_llm_backend,
 )
 from src.agents.ollama_client import get_ollama_client
+from src.agents.output_guardrails import apply_output_guardrails
 from src.agents.tools import UnknownToolError, VisitPrepTools, get_tools_for_provider
 from src.config import get_settings
 from src.data.models import Appointment, FollowUp, LabOrder, Referral, Vitals
@@ -210,6 +211,34 @@ def _icd10_to_specialties(icd_10: Optional[str]) -> list[str]:
     return []
 
 
+# Canonical specialty name list — module-level so both clinic-name inference
+# below and output_guardrails.py's referral-presupposition check (DEC-042)
+# can share one source of truth instead of drifting apart.
+SPECIALTY_KEYWORDS: dict[str, str] = {
+    "endocrinology": "Endocrinology",
+    "dermatology": "Dermatology",
+    "cardiology": "Cardiology",
+    "gynecology": "Gynecology",
+    "ob-gyn": "Obstetrics and Gynecology",
+    "obstetrics": "Obstetrics and Gynecology",
+    "neurology": "Neurology",
+    "orthopedic": "Orthopedics",
+    "oncology": "Oncology",
+    "gastroenterology": "Gastroenterology",
+    "pulmonology": "Pulmonology",
+    "rheumatology": "Rheumatology",
+    "nephrology": "Nephrology",
+    "urology": "Urology",
+    "psychiatry": "Psychiatry",
+    "ophthalmology": "Ophthalmology",
+    "pain management": "Pain Management",
+    "physical therapy": "Physical Therapy",
+    "family medicine": "Family Medicine",
+    "internal medicine": "Internal Medicine",
+    "primary care": "Primary Care",
+}
+
+
 def _infer_specialty_from_clinic(clinic: Optional[str]) -> Optional[str]:
     """Infer doctor specialty from clinic name as a fallback.
 
@@ -218,30 +247,7 @@ def _infer_specialty_from_clinic(clinic: Optional[str]) -> Optional[str]:
     if not clinic:
         return None
     clinic_lower = clinic.lower()
-    specialty_keywords = {
-        "endocrinology": "Endocrinology",
-        "dermatology": "Dermatology",
-        "cardiology": "Cardiology",
-        "gynecology": "Gynecology",
-        "ob-gyn": "Obstetrics and Gynecology",
-        "obstetrics": "Obstetrics and Gynecology",
-        "neurology": "Neurology",
-        "orthopedic": "Orthopedics",
-        "oncology": "Oncology",
-        "gastroenterology": "Gastroenterology",
-        "pulmonology": "Pulmonology",
-        "rheumatology": "Rheumatology",
-        "nephrology": "Nephrology",
-        "urology": "Urology",
-        "psychiatry": "Psychiatry",
-        "ophthalmology": "Ophthalmology",
-        "pain management": "Pain Management",
-        "physical therapy": "Physical Therapy",
-        "family medicine": "Family Medicine",
-        "internal medicine": "Internal Medicine",
-        "primary care": "Primary Care",
-    }
-    for keyword, specialty in specialty_keywords.items():
+    for keyword, specialty in SPECIALTY_KEYWORDS.items():
         if keyword in clinic_lower:
             return specialty
     return None
@@ -372,6 +378,14 @@ Before finalizing your response, count your questions. You must have between 8 a
         # method's docstring. None/empty until a run has actually happened.
         self.last_context_selection: Optional[ContextSelectionResult] = None
         self.last_tool_calls: list[dict[str, Any]] = []
+        # Structured patient data + guardrail events from the most recent
+        # call, set in _prepare_visit_in_scope and consumed by prepare_visit
+        # to apply output_guardrails.py centrally at the one return point
+        # every path (agentic success, fallback) already converges through —
+        # see prepare_visit's docstring. Empty until a run has happened.
+        self.last_clinical_data: dict[str, Any] = {}
+        self.last_target_specialty: Optional[str] = None
+        self.last_guardrail_events: list[dict[str, Any]] = []
         # Redaction events (issue #16) aggregated across this whole
         # prepare_visit() call — profile/appointment anonymization, Stage 4
         # context selection, and any tool-result anonymization from the
@@ -469,7 +483,35 @@ Before finalizing your response, count your questions. You must have between 8 a
                 additional_concerns=additional_concerns,
                 temperature=temperature,
             )
+        result = self._apply_output_guardrails(result)
         return _scrub_generated_output(result)
+
+    def _apply_output_guardrails(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Strips questions presupposing a test/lab or referral relationship
+        not actually on file (DEC-042) — see output_guardrails.py. Applied
+        here, prepare_visit's one convergence point for every return path
+        (agentic success, single-shot fallback, generic fallback), using the
+        structured data _prepare_visit_in_scope already loaded and stashed
+        on self.last_clinical_data/self.last_target_specialty.
+        """
+        questions = result.get("questions")
+        if not isinstance(questions, dict):
+            return result
+
+        known_lab_names = {lab.test_name.lower() for lab in self.last_clinical_data.get("lab_orders", [])}
+        referred_specialties = {r.specialty.lower() for r in self.last_clinical_data.get("referrals", [])}
+        known_specialty_names = set(SPECIALTY_KEYWORDS.values())
+        if self.last_target_specialty:
+            known_specialty_names.add(self.last_target_specialty)
+
+        filtered_questions, events = apply_output_guardrails(
+            questions, known_lab_names, known_specialty_names, referred_specialties
+        )
+        self.last_guardrail_events = events
+        if events:
+            logger.warning(f"Output guardrails stripped {len(events)} question(s): {events}")
+
+        return {**result, "questions": filtered_questions}
 
     async def _prepare_visit_in_scope(
         self,
@@ -537,6 +579,7 @@ Before finalizing your response, count your questions. You must have between 8 a
 
         # Step 3: Load clinical data (labs, vitals, follow-ups, referrals)
         clinical_data = await self._get_clinical_data(appointment.profile_id)
+        self.last_clinical_data = clinical_data
 
         # Step 4: Anonymize current profile and appointment
         anonymized_profile, profile_events = self.anonymizer.anonymize_profile(appointment.profile)
@@ -551,6 +594,7 @@ Before finalizing your response, count your questions. You must have between 8 a
         target_specialty = None
         if appointment.doctor:
             target_specialty = appointment.doctor.specialty or _infer_specialty_from_clinic(appointment.doctor.clinic)
+        self.last_target_specialty = target_specialty
         anonymized_concerns, concerns_events = self.anonymizer.anonymize_text(
             additional_concerns,
             profile_id=appointment.profile_id,
