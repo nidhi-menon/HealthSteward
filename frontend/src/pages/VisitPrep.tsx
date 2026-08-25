@@ -282,6 +282,14 @@ export default function VisitPrep() {
             </div>
           )}
 
+          {/* Interim disclaimer per issue #105 — uniform wording, no per-feature
+              customization. Not a resolution of #105's policy decision (where
+              disclaimers should live app-wide, whether legal review is needed);
+              this is the smallest proportionate step while that stays open. */}
+          <p className="text-xs text-gray-500">
+            This is AI-generated content, not medical advice.
+          </p>
+
           {/* Context Summary */}
           {(prep.context_summary || isEditingPrep) && (
             <Card>
@@ -418,6 +426,9 @@ export default function VisitPrep() {
                     Earlier questions for this visit, kept from before each time you regenerated.
                     They're shown for reference only — copy anything you still want into the
                     current list above.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    This is AI-generated content, not medical advice.
                   </p>
                   {prepVersions.map((version) => (
                     <Card key={version.id}>
