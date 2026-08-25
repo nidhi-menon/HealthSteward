@@ -1232,9 +1232,9 @@
 
     <!-- EVALUATION PLAN -->
     <section class="panel" id="panel-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0">
-      <div class="eyebrow">Deterministic checks shipped · LLM-judge tier still proposed</div>
+      <div class="eyebrow">Deterministic checks + groundedness LLM-judge shipped · relevance/usefulness tier still proposed</div>
       <h1>Evaluation Plan</h1>
-      <p class="dek">A deterministic evaluation harness runs the real pipeline end-to-end against a real LLM backend, not mocks. It's explicitly a smoke test, not a quality measure: it catches gross regressions — hallucination, scope violations, malformed output, retrieval rule breaks — and it already caught and fixed one real prompt regression on its first real run. What it can't yet measure is the fuzzier stuff: whether output is actually good, not just correctly-shaped. That's the proposed next tier, described below.</p>
+      <p class="dek">A deterministic evaluation harness runs the real pipeline end-to-end against a real LLM backend, not mocks. It catches gross regressions — hallucination, scope violations, malformed output, retrieval rule breaks — and it already caught and fixed one real prompt regression on its first real run. A separate LLM-judge pass (DEC-042) now measures the harder property the deterministic checks can't reach on their own: whether each generated claim is actually supported by the patient's data, not just correctly-shaped. What's still not measured is the fuzzier "is this actually good" tier — relevance, usefulness, non-redundancy — described as still-proposed below.</p>
 
       <section class="block">
         <h2>Two eval surfaces inside visit prep</h2>
@@ -1293,11 +1293,11 @@
         <table class="mini-table">
           <tr><th>Judge?</th><th>Dimension</th><th>Ground truth</th><th>Metric</th><th>Method</th></tr>
           <tr>
-            <td><span class="strat-tag strat-hybrid">det ± judge</span></td>
+            <td><span class="strat-tag strat-hybrid">det ± judge — shipped</span></td>
             <td>Groundedness</td>
             <td>The anonymized context actually sent — the safety-critical dimension</td>
             <td>Unsupported-claim rate (unsupported facts / total factual claims)</td>
-            <td>Cheap pass: extract entities (drug/date/lab names), verify each appears in the logged context. Deeper pass: an LLM judge for softer inferential claims, scored by a <em>different</em> model than generated it to avoid self-grading bias.</td>
+            <td>Cheap pass (<code>score_groundedness</code>): entity-substring match — kept as a fast free smoke test, not the paper-citable number, since it can't tell a safe general question from a genuinely unsupported one. Real measure (DEC-042, <code>eval/judge.py</code>): a separate, stronger-tier judge model enumerates every distinct factual claim per output and verdicts each against the patient's actual data, allowing paraphrase rather than requiring literal string match — scored by a <em>different</em> model than generated it to avoid self-grading bias. Paired with a deterministic post-generation guardrail (<code>output_guardrails.py</code>) that strips content presupposing a test, referral, or medication not on file, plus specialty-management-convention/named-authority claims this app has no source for — the two together took the measured rate from an initial double-digit percentage down to near-zero on the current fixture set.</td>
           </tr>
           <tr>
             <td><span class="strat-tag strat-det">deterministic</span></td>
@@ -1368,7 +1368,7 @@
 
       <section class="block">
         <h2>What's built vs. proposed</h2>
-        <p>Deterministic checks — format validity, specialty-scope violations, retrieval rule assertions, and a cheap groundedness pass via entity matching — are implemented and run today. What's proposed but not yet built is the harder tier: an LLM-judge pass for relevance and usefulness (properties with no cheap deterministic proxy), deeper inferential groundedness, and formal retrieval recall/precision scoring against a larger labeled fixture set.</p>
+        <p>Deterministic checks — format validity, specialty-scope violations, retrieval rule assertions, and a cheap groundedness pass via entity matching — are implemented and run today, alongside a real LLM-judge groundedness pass and a deterministic output guardrail that acts on its findings (DEC-042). What's still proposed but not yet built is the harder tier: an LLM-judge pass for relevance and usefulness (properties with no cheap deterministic proxy), a non-redundancy check on the generated question set, and formal retrieval recall/precision scoring against a larger labeled fixture set.</p>
       </section>
     </section>
 
@@ -1472,16 +1472,16 @@ Lab Orders:
       <section class="block">
         <h2>Known gaps</h2>
         <div class="callout gap">
-          <span class="callout-label">No quality evaluation of generated output — partially resolved</span>
-          <p>A deterministic eval harness now runs the real pipeline against a real backend and catches format/scope/groundedness/retrieval-rule regressions — it already caught and fixed one real prompt regression on its first run. What it still can't measure: relevance/usefulness, non-redundancy, and deeper inferential groundedness a simple entity-match can't verify (e.g. a question referencing a trend or prior visit without repeating the entity name) — that's the proposed LLM-judge work, still not built.</p>
+          <span class="callout-label">No quality evaluation of generated output — mostly resolved for groundedness</span>
+          <p>A deterministic eval harness runs the real pipeline against a real backend and catches format/scope/retrieval-rule regressions — it already caught and fixed one real prompt regression on its first run. Deeper inferential groundedness (a simple entity-match can't verify, e.g. a question referencing a trend or prior visit without repeating the entity name) is now covered by a real LLM-judge pass plus a deterministic output guardrail acting on what it finds (DEC-042). What's still not measured: relevance, usefulness, and non-redundancy — no cheap deterministic proxy exists for any of the three, so this remains proposed work.</p>
         </div>
         <div class="callout gap">
-          <span class="callout-label">No visibility into agentic-loop fallback rate</span>
-          <p>The data needed to compute it is logged, but nothing surfaces how often the loop actually falls back to single-shot in production usage. A silently degrading backend would be invisible today.</p>
+          <span class="callout-label">No visibility into agentic-loop fallback rate — resolved</span>
+          <p>Every <code>prepare_visit()</code> run now records how it was actually produced — agentic loop, or single-shot fallback and why — readable via <code>GET /api/diagnostics/visit-prep-fallback</code>. Still a read-on-demand number rather than an alert: nothing notices a rising fallback rate unless someone looks.</p>
         </div>
         <div class="callout gap">
-          <span class="callout-label">No frontend test coverage</span>
-          <p>Backend has 119+ tests; frontend has zero — no framework installed, no test files.</p>
+          <span class="callout-label">Frontend test coverage — partial</span>
+          <p>Backend has 500+ tests; frontend has 4 test files (38 tests) covering the Needs Attention panel, parsed-document review, and visit-prep version history — real but thin relative to the backend, and most frontend surfaces still have none.</p>
         </div>
       </section>
 
