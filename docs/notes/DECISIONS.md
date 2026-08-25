@@ -1505,4 +1505,4 @@ Related: `eval/scorers.py::score_groundedness`, `docs/tdd.html` (Generation eval
 
 ---
 
-*Last updated: 2026-08-23*
+*Last updated: 2026-08-24*
