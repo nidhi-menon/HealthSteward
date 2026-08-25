@@ -99,7 +99,7 @@ No staged rollout — single-user local app, changes ship by pulling `main` and 
 
 ## 8. Evaluation, Monitoring & Known Gaps
 
-**What exists:** `ConversationLog` records every LLM call (anonymized content + token counts) for future distillation. Backend test suite (119+ tests) verifies plumbing — loop convergence, tool execution, anonymization boundaries, fallback triggering.
+**What exists:** `ConversationLog` records every LLM call (anonymized content + token counts) for future distillation. Backend test suite (530 collected, 502 passing, 28 skipped — spaCy-dependent NER tests, expected when spaCy isn't installed) verifies plumbing — loop convergence, tool execution, anonymization boundaries, fallback triggering.
 
 **Eval harness v1 (DEC-018, `eval/`), deterministic-only:** run on-demand via `python -m eval.run` against a real pipeline + real LLM backend (not mocks), at `temperature=0.0` for run-to-run comparability. Catches gross regressions (hallucination, scope violations, malformed output, retrieval rule breaks). Two eval surfaces, matching `docs/tdd.html`'s original plan:
 - **Retrieval** (`eval/retrieval_stage1.py`) — Stage 1's rules-based filtering, checked by exact assertion against synthetic fixtures.
@@ -113,7 +113,7 @@ Results are diffed against the prior run (`eval/results/`, gitignored) rather th
 - **Relevance/usefulness and non-redundancy judging, not yet built.** No cheap deterministic proxy exists for either — both remain the named backlog per `docs/tdd.html`'s Evaluation Plan tab. Distinct from groundedness above, which is now covered.
 - **One deliberately-deferred groundedness pattern** (issue #164): a dosage-as-"starting point" claim and a patient-age presupposition both need new fixture plumbing (the production `Medication.start_date`/`HealthProfile.date_of_birth` fields exist but eval fixtures never populate them) plus a policy decision, not a quick pattern addition — unlike every other guardrail pattern shipped, which is always-unsupported by construction.
 - ~~**No visibility into agentic-loop fallback rate in production.**~~ *Closed by DEC-026 (issue #30):* every `prepare_visit()` run now records how it was actually produced — agentic loop, or single-shot fallback and why — in `ConversationLog.extra_data["run_diagnostics"]`, readable via `GET /api/diagnostics/visit-prep-fallback`. Still a read-on-demand number rather than an alert: nothing notices a rising fallback rate unless someone looks.
-- **No frontend test coverage** (tracked: issue #27) — worth re-verifying before citing further; at least one frontend test file now exists (`VisitPrep.versions.test.tsx`), so this claim may itself be stale independent of this snapshot's actual scope.
+- **Frontend test coverage, partial** (tracked: issue #27) — 4 test files, 38 tests (`ActionItemsSection`, `ParsedItemsReview`, `PostAvsActionPanel`, `VisitPrep.versions`), real but thin against the backend's 500+ and most frontend surfaces still untested. Confirmed via `npx vitest run` — this bullet was itself stale as of this snapshot's earlier draft, caught in the same review that found the other DEC-042-related staleness below.
 
 ## 9. Alternatives Considered
 
