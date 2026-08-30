@@ -49,11 +49,16 @@ _PRESUPPOSED_TEST_PATTERNS = [
     for p in [
         r"\bresults? of\b",
         r"\bresults? from\b",
+        r"\bresults? for\b",
         r"\bwere the results\b",
         r"\bprevious results\b",
         r"\bcompare(d)?\s+to\s+(previous|prior|earlier)\b",
         r"\brecent lab trends?\b",
-        r"\b(most recent|last|recent)\s+\S+\s+(tests?|testing|labs?)\b",
+        # Bounded-gap ([^.?!]{0,40}, not \S+) so a recency qualifier still
+        # matches across intervening descriptive words — e.g. "current lung
+        # function test results" (3 words between "current" and "results")
+        # slipped through a single-word-gap version of this pattern.
+        r"\b(most recent|last|recent|latest|current)\b[^.?!]{0,40}\b(results?|tests?|testing|labs?)\b",
     ]
 ]
 
