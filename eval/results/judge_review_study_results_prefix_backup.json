@@ -1,0 +1,3361 @@
+{
+  "seed": 20260829,
+  "results": [
+    {
+      "example_number": 1,
+      "case_id": "routine_neurology",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "N/A",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's chronic migraine condition, their Topiramate medication, and the migraine follow-up purpose of the visit.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language without excessive medical jargon and are easy to understand.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover treatment adjustments, medication side effects/dosage, monitoring, lifestyle, and follow-up planning, which would meaningfully structure a productive conversation with the neurologist.",
+        "input_tokens": 1054,
+        "output_tokens": 229,
+        "duration_s": 3.3914257920114323
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any adjustments to be made to my current treatment plan for chronic migraines?",
+          "claim_text": "current treatment plan for chronic migraines",
+          "verdict": "grounded",
+          "reasoning": "The record lists Chronic Migraine as an active condition with Topiramate for prevention, so a current treatment plan for chronic migraines is supported."
+        },
+        {
+          "category": "Medication Review",
+          "question": "What are the potential side effects of Topiramate, and how can I minimize them?",
+          "claim_text": "patient is taking Topiramate",
+          "verdict": "grounded",
+          "reasoning": "Topiramate is listed in the patient's medications."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any dosage adjustments that can be made to Topiramate to better manage my migraines?",
+          "claim_text": "Topiramate is for managing migraines",
+          "verdict": "grounded",
+          "reasoning": "Topiramate is listed as a medication for migraine prevention in the record."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the next steps for monitoring my migraine frequency and severity?",
+          "claim_text": "monitoring migraine frequency and severity",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question asking about next steps with no specific factual assertion beyond the grounded migraine condition."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any additional lab tests that need to be run to track my condition?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no verifiable factual claim."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to help reduce my migraine frequency and severity?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended lifestyle question with no verifiable factual claim or external authority invoked."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific dietary or exercise recommendations for managing chronic migraines?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question about recommendations with no external authority or patient-specific claim asserted."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for a follow-up appointment in the near future?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is a logistical question with no verifiable factual claim."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that need to be scheduled?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is a logistical question with no verifiable factual claim."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic migraines and is taking Topiramate for migraine prevention. The purpose of the visit is to follow up on their current treatment plan and make any necessary adjustments.",
+          "claim_text": "The patient has chronic migraines",
+          "verdict": "grounded",
+          "reasoning": "Chronic Migraine is listed as an active condition in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic migraines and is taking Topiramate for migraine prevention. The purpose of the visit is to follow up on their current treatment plan and make any necessary adjustments.",
+          "claim_text": "is taking Topiramate for migraine prevention",
+          "verdict": "grounded",
+          "reasoning": "Topiramate is listed as a medication for migraine prevention."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic migraines and is taking Topiramate for migraine prevention. The purpose of the visit is to follow up on their current treatment plan and make any necessary adjustments.",
+          "claim_text": "The purpose of the visit is to follow up on their current treatment plan",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as Migraine follow-up, supporting a follow-up on the treatment plan."
+        }
+      ]
+    },
+    {
+      "example_number": 2,
+      "case_id": "routine_pulmonology",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Unsupported",
+        "Lifestyle & Prevention": "N/A",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions center on asthma management, the patient's Fluticasone/Salmeterol medication, lung function monitoring, and triggers\u2014all directly aligned with an asthma follow-up appointment and the patient's single active condition.",
+        "clarity": "Clear",
+        "clarity_reasoning": "Most questions are phrased in accessible language; the one clinical term (FEV1) is helpfully explained with an example, making them understandable to a patient.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover symptom control, medication adjustments, monitoring, triggers, and follow-up planning, which would meaningfully guide a productive conversation with the pulmonologist.",
+        "input_tokens": 1133,
+        "output_tokens": 261,
+        "duration_s": 4.403549208014738
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.16666666666666666,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current asthma symptoms, and how have they been managing over the past few months?",
+          "claim_text": "the patient has asthma with symptoms",
+          "verdict": "grounded",
+          "reasoning": "Asthma is listed as an active condition in the record."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes in my asthma medication regimen that I should be aware of?",
+          "claim_text": "the patient has an asthma medication regimen",
+          "verdict": "grounded",
+          "reasoning": "The record lists Fluticasone/Salmeterol for asthma maintenance."
+        },
+        {
+          "category": "Medication Review",
+          "question": "What is the purpose of my current medication regimen, and how will it be adjusted if necessary?",
+          "claim_text": "the patient has a current medication regimen",
+          "verdict": "grounded",
+          "reasoning": "The record lists Fluticasone/Salmeterol as a current medication."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between my medications and other health conditions I may have?",
+          "claim_text": "the patient may have other health conditions",
+          "verdict": "not_applicable",
+          "reasoning": "This is speculative and open-ended, asserting no specific fact about existing conditions."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are my current lung function test results (e.g., FEV1), and are there any changes or concerns?",
+          "claim_text": "the patient has current lung function test results",
+          "verdict": "unsupported",
+          "reasoning": "No lung function test results (FEV1 or otherwise) are present in the patient's record."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or monitoring that I should be aware of?",
+          "claim_text": "there may be pending lab tests or monitoring",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended inquiry without asserting a specific fact about pending tests."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to better manage my asthma, and how often should I monitor my symptoms?",
+          "claim_text": "lifestyle changes can help manage asthma",
+          "verdict": "not_applicable",
+          "reasoning": "This is general lifestyle guidance without asserting any external authority or specific patient fact."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific allergens or triggers that I should avoid or take precautions against?",
+          "claim_text": "there may be allergens or triggers to avoid",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended question asking about triggers, no specific fact asserted."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "What is the plan for my next follow-up appointment, and are there any specific topics to be discussed?",
+          "claim_text": "there is a plan for a next follow-up appointment",
+          "verdict": "not_applicable",
+          "reasoning": "This is a logistical/open-ended question that does not assert a specific fact."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that I need to schedule in the near future?",
+          "claim_text": "there may be referrals or specialist appointments to schedule",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no specific factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "As we prepare for your asthma follow-up appointment, I want to ensure that we review your current symptoms, medication regimen, and any changes or concerns. This will help us tailor a plan to better manage your asthma and prevent any potential complications.",
+          "claim_text": "the patient has an asthma follow-up appointment",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is explicitly listed as an asthma follow-up."
+        },
+        {
+          "category": "Context Summary",
+          "question": "As we prepare for your asthma follow-up appointment, I want to ensure that we review your current symptoms, medication regimen, and any changes or concerns. This will help us tailor a plan to better manage your asthma and prevent any potential complications.",
+          "claim_text": "the patient has a medication regimen for asthma",
+          "verdict": "grounded",
+          "reasoning": "The record lists Fluticasone/Salmeterol for asthma maintenance."
+        }
+      ]
+    },
+    {
+      "example_number": 3,
+      "case_id": "routine_family_medicine_multicondition",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Partially Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's active conditions (hypertension, hyperlipidemia), their two medications, and the stated follow-up purpose, including lab monitoring which is appropriate for statin therapy.",
+        "clarity": "Partially Clear",
+        "clarity_reasoning": "Most questions are understandable, but terms like 'lipid profiles' and phrasing such as 'what are the updated lipid profiles' are somewhat clinical and could confuse a layperson.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover medication interactions, dosage/timing, lab monitoring, and lifestyle changes, which would meaningfully guide a productive conversation at this type of follow-up.",
+        "input_tokens": 1159,
+        "output_tokens": 273,
+        "duration_s": 4.204014957998879
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.18181818181818182,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What is the current blood pressure reading, and are there any concerns regarding my hypertension management?",
+          "claim_text": "my hypertension (patient has hypertension)",
+          "verdict": "grounded",
+          "reasoning": "The patient's record lists Essential Hypertension as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to my cholesterol management plan, and what are the updated lipid profiles?",
+          "claim_text": "cholesterol management plan (patient has cholesterol management)",
+          "verdict": "grounded",
+          "reasoning": "The patient has Hyperlipidemia and takes Atorvastatin for cholesterol management."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between my Amlodipine and Atorvastatin that I should be aware of?",
+          "claim_text": "patient takes Amlodipine and Atorvastatin",
+          "verdict": "grounded",
+          "reasoning": "Both medications are listed in the patient's medication record."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is there a need to adjust the dosage or timing of my medications?",
+          "claim_text": "patient takes medications",
+          "verdict": "grounded",
+          "reasoning": "The patient has two active medications on record."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the latest lipid profiles, and are there any concerns regarding my cholesterol levels?",
+          "claim_text": "cholesterol levels (patient has cholesterol concern)",
+          "verdict": "grounded",
+          "reasoning": "The patient has Hyperlipidemia, so cholesterol levels are a relevant concern."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab results that I should be aware of?",
+          "claim_text": "no factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question with no factual claim asserted."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to improve my blood pressure and cholesterol management?",
+          "claim_text": "blood pressure and cholesterol management",
+          "verdict": "grounded",
+          "reasoning": "The patient has both hypertension and hyperlipidemia, so these management areas are supported."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any recommendations for diet, exercise, or stress management?",
+          "claim_text": "no factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended request for recommendations with no factual claim asserted."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or next steps that I should be aware of?",
+          "claim_text": "no factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual claim asserted."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has essential hypertension and hyperlipidemia, and is due for a follow-up appointment with their Family Medicine specialist to discuss their management plans. The patient is currently taking Amlodipine and Atorvastatin, and has not had any recent lab results or follow-up appointments with Cardiology.",
+          "claim_text": "The patient has essential hypertension and hyperlipidemia",
+          "verdict": "grounded",
+          "reasoning": "Both conditions are listed as active in the patient's record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has essential hypertension and hyperlipidemia, and is due for a follow-up appointment with their Family Medicine specialist to discuss their management plans. The patient is currently taking Amlodipine and Atorvastatin, and has not had any recent lab results or follow-up appointments with Cardiology.",
+          "claim_text": "is due for a follow-up appointment with their Family Medicine specialist",
+          "verdict": "grounded",
+          "reasoning": "The appointment is with Dr. Alex Kim (Family Medicine) for a hypertension and cholesterol follow-up."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has essential hypertension and hyperlipidemia, and is due for a follow-up appointment with their Family Medicine specialist to discuss their management plans. The patient is currently taking Amlodipine and Atorvastatin, and has not had any recent lab results or follow-up appointments with Cardiology.",
+          "claim_text": "The patient is currently taking Amlodipine and Atorvastatin",
+          "verdict": "grounded",
+          "reasoning": "Both medications are listed in the patient's medication record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has essential hypertension and hyperlipidemia, and is due for a follow-up appointment with their Family Medicine specialist to discuss their management plans. The patient is currently taking Amlodipine and Atorvastatin, and has not had any recent lab results or follow-up appointments with Cardiology.",
+          "claim_text": "has not had any recent lab results",
+          "verdict": "unsupported",
+          "reasoning": "The provided data contains no lab result records, so the absence of recent labs cannot be verified as a fact from the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has essential hypertension and hyperlipidemia, and is due for a follow-up appointment with their Family Medicine specialist to discuss their management plans. The patient is currently taking Amlodipine and Atorvastatin, and has not had any recent lab results or follow-up appointments with Cardiology.",
+          "claim_text": "has not had any recent follow-up appointments with Cardiology",
+          "verdict": "unsupported",
+          "reasoning": "The provided data contains no appointment history with Cardiology, so this absence cannot be verified from the record."
+        }
+      ]
+    },
+    {
+      "example_number": 4,
+      "case_id": "routine_rheumatology",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lifestyle & Prevention"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All three questions directly address the patient's active RA condition, their Methotrexate therapy, and the purpose of a rheumatology follow-up.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language without excessive clinical jargon and are easy to understand.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "The questions are reasonable but quite generic; adding RA-specific items like disease activity monitoring, Methotrexate side effects, and required lab tests (e.g., liver function, blood counts) would make the visit conversation more productive.",
+        "input_tokens": 916,
+        "output_tokens": 243,
+        "duration_s": 4.03117899998324
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any adjustments to be made to my current treatment plan for Rheumatoid Arthritis?",
+          "claim_text": "The patient has a treatment plan for Rheumatoid Arthritis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Rheumatoid Arthritis as an active condition and Methotrexate as disease-modifying therapy, supporting the existence of a treatment plan."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is there a need to adjust the dosage or frequency of Methotrexate?",
+          "claim_text": "The patient takes Methotrexate",
+          "verdict": "grounded",
+          "reasoning": "Methotrexate 15mg once weekly is listed in the patient's medications."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes I can make to help manage my Rheumatoid Arthritis?",
+          "claim_text": "The patient has Rheumatoid Arthritis",
+          "verdict": "grounded",
+          "reasoning": "Rheumatoid Arthritis is listed as an active condition in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Rheumatoid Arthritis and is taking Methotrexate as part of their treatment plan. They are due for a follow-up appointment with the Rheumatology department on 2026-09-01T11:00:00.",
+          "claim_text": "The patient has Rheumatoid Arthritis",
+          "verdict": "grounded",
+          "reasoning": "Rheumatoid Arthritis is listed as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Rheumatoid Arthritis and is taking Methotrexate as part of their treatment plan. They are due for a follow-up appointment with the Rheumatology department on 2026-09-01T11:00:00.",
+          "claim_text": "The patient is taking Methotrexate as part of their treatment plan",
+          "verdict": "grounded",
+          "reasoning": "Methotrexate is listed as a medication for disease-modifying therapy."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Rheumatoid Arthritis and is taking Methotrexate as part of their treatment plan. They are due for a follow-up appointment with the Rheumatology department on 2026-09-01T11:00:00.",
+          "claim_text": "They are due for a follow-up appointment with the Rheumatology department on 2026-09-01T11:00:00",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is a Rheumatoid Arthritis follow-up with Dr. Laila Haddad in Rheumatology on the stated date and time."
+        }
+      ]
+    },
+    {
+      "example_number": 5,
+      "case_id": "conflicting_cross_visit_notes",
+      "categories_present": [
+        "Condition Management",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions directly address the patient's Hashimoto's Thyroiditis, Levothyroxine therapy, TSH monitoring, and thyroid follow-up purpose, all matching the record. The dietary and lifestyle questions are also pertinent to autoimmune thyroid management.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language and are easy to understand without excessive clinical jargon.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "Given the prior discussion about a possible dose increase pending TSH, questions about lab results and symptom changes would meaningfully guide the conversation; a specific question about whether the dose should be adjusted would have made it even stronger.",
+        "input_tokens": 1148,
+        "output_tokens": 286,
+        "duration_s": 4.317537249997258
+      },
+      "missing_categories": [
+        "Medication Review"
+      ],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes in my Hashimoto's Thyroiditis symptoms since my last visit?",
+          "claim_text": "patient has Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Hashimoto's Thyroiditis (E06.3) as an active condition."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What were my last TSH levels, and when were they ordered?",
+          "claim_text": "patient had TSH levels/tests",
+          "verdict": "grounded",
+          "reasoning": "Past visit notes reference TSH being stable and pending next TSH, so TSH testing is supported."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or follow-up appointments related to my thyroid condition?",
+          "claim_text": "thyroid condition",
+          "verdict": "grounded",
+          "reasoning": "The patient has Hashimoto's Thyroiditis, a thyroid condition; the question is otherwise open-ended asking about pending items."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes I can make to help manage my Hashimoto's Thyroiditis?",
+          "claim_text": "patient has Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Hashimoto's Thyroiditis is listed as an active condition in the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific dietary recommendations or restrictions for my condition?",
+          "claim_text": "the patient has a condition",
+          "verdict": "grounded",
+          "reasoning": "The patient has a documented condition (Hashimoto's Thyroiditis); the question is otherwise open-ended with no specific asserted recommendation."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that need to be scheduled?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Hashimoto's Thyroiditis is listed as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "is on Levothyroxine for thyroid hormone replacement",
+          "verdict": "grounded",
+          "reasoning": "The record lists Levothyroxine 75mcg once daily for thyroid hormone replacement."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The purpose of the upcoming appointment is for a thyroid follow-up",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as Thyroid follow-up."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "the patient's last TSH levels were stable",
+          "verdict": "grounded",
+          "reasoning": "The 2026-07-01 visit note states 'TSH stable.'"
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient's symptoms and medication regimen will be discussed during the appointment",
+          "verdict": "not_applicable",
+          "reasoning": "This is a general expectation of the visit with no specific verifiable factual assertion."
+        }
+      ]
+    },
+    {
+      "example_number": 6,
+      "case_id": "medication_mentioned_only_in_past_notes",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Unsupported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Partially Relevant",
+        "relevance_reasoning": "Most questions align well with the knee osteoarthritis and the ibuprofen-to-acetaminophen medication change, but the lab results question is irrelevant since osteoarthritis is not typically monitored via labs and no tests are in the record.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language and are easy to understand, though a couple mix the doctor's and patient's perspective ('your lab results...that we should be aware of').",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover treatment options, the recent pain medication switch, lifestyle/exercise, and follow-up planning, which would meaningfully guide a productive conversation at a knee pain follow-up despite one off-target lab question.",
+        "input_tokens": 1157,
+        "output_tokens": 297,
+        "duration_s": 4.515542750013992
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.14285714285714285,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "You have osteoarthritis in your right knee. What are the current treatment options, and are there any changes to your management plan since our last visit?",
+          "claim_text": "You have osteoarthritis in your right knee.",
+          "verdict": "grounded",
+          "reasoning": "The record lists Osteoarthritis, Right Knee (M17.11) as an active condition."
+        },
+        {
+          "category": "Medication Review",
+          "question": "You were advised to discontinue ibuprofen due to GI upset and switch to acetaminophen as needed. Are there any concerns about this change, and are there any alternative pain management options we should consider?",
+          "claim_text": "You were advised to discontinue ibuprofen due to GI upset and switch to acetaminophen as needed.",
+          "verdict": "grounded",
+          "reasoning": "The past visit notes state ibuprofen was discontinued due to GI upset and acetaminophen advised as needed."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Since our last visit, what are the current lab results for your osteoarthritis, and are there any pending tests or follow-ups that we should be aware of?",
+          "claim_text": "there are current lab results for your osteoarthritis",
+          "verdict": "unsupported",
+          "reasoning": "No lab results are present in the patient's record; the question implies labs exist for the osteoarthritis, which is not supported."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "As you have osteoarthritis, it's essential to maintain a healthy weight to reduce stress on your joints. What lifestyle changes can you make to support your weight management, and are there any specific exercises or activities that you should avoid?",
+          "claim_text": "As you have osteoarthritis",
+          "verdict": "grounded",
+          "reasoning": "The record confirms an active osteoarthritis diagnosis."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "As you have osteoarthritis, it's essential to maintain a healthy weight to reduce stress on your joints. What lifestyle changes can you make to support your weight management, and are there any specific exercises or activities that you should avoid?",
+          "claim_text": "it's essential to maintain a healthy weight to reduce stress on your joints",
+          "verdict": "not_applicable",
+          "reasoning": "This is general lifestyle guidance without asserting an external authority or patient-specific fact."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Our next visit is scheduled for 2026-09-03T13:00:00. Are there any specific topics you'd like to discuss or any concerns you'd like to address before then?",
+          "claim_text": "Our next visit is scheduled for 2026-09-03T13:00:00.",
+          "verdict": "grounded",
+          "reasoning": "The appointment date in the record is 2026-09-03T13:00:00."
+        },
+        {
+          "category": "Context Summary",
+          "question": "You have osteoarthritis in your right knee, and we previously discussed discontinuing ibuprofen due to GI upset. We should review your current treatment options and consider alternative pain management strategies.",
+          "claim_text": "You have osteoarthritis in your right knee.",
+          "verdict": "grounded",
+          "reasoning": "The record lists Osteoarthritis, Right Knee as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "You have osteoarthritis in your right knee, and we previously discussed discontinuing ibuprofen due to GI upset. We should review your current treatment options and consider alternative pain management strategies.",
+          "claim_text": "we previously discussed discontinuing ibuprofen due to GI upset",
+          "verdict": "grounded",
+          "reasoning": "The past visit notes document ibuprofen being discontinued due to GI upset."
+        }
+      ]
+    },
+    {
+      "example_number": 7,
+      "case_id": "inactive_condition_not_active_management",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's active Type 2 Diabetes, their Metformin regimen, and the diabetes follow-up purpose, including relevant topics like A1c targets, labs, and lifestyle.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language without excessive clinical jargon, making them easy for a patient to ask.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover the key areas of a diabetes follow-up (targets, medication, labs, lifestyle, follow-up) and would help structure a productive conversation with the endocrinologist.",
+        "input_tokens": 1093,
+        "output_tokens": 251,
+        "duration_s": 4.13719887501793
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current blood sugar targets for my Type 2 Diabetes Mellitus, and are they being met?",
+          "claim_text": "I have Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "The patient's record lists Type 2 Diabetes Mellitus (E11.9) as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to my medication regimen or dosage that need to be discussed?",
+          "claim_text": "I have a medication regimen",
+          "verdict": "grounded",
+          "reasoning": "The patient is on Metformin, so a medication regimen exists; the question otherwise asks openly about changes."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Can I expect any changes to my Metformin dosage or schedule in the future?",
+          "claim_text": "I am taking Metformin",
+          "verdict": "grounded",
+          "reasoning": "The record lists Metformin 500mg twice daily as a current medication."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab results or tests that need to be discussed?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to improve my blood sugar control and overall health?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended request for lifestyle guidance with no factual assertion or external authority cited."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific dietary or exercise recommendations for my Type 2 Diabetes Mellitus?",
+          "claim_text": "I have Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "Type 2 Diabetes Mellitus is listed as an active condition in the record."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any follow-up appointments or tests in the near future?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any concerns or issues that need to be addressed before my next appointment?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Type 2 Diabetes Mellitus and is currently taking Metformin. The purpose of the visit is to follow up on their diabetes management and discuss any necessary changes to their treatment plan.",
+          "claim_text": "The patient has Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "Type 2 Diabetes Mellitus is listed as an active condition in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Type 2 Diabetes Mellitus and is currently taking Metformin. The purpose of the visit is to follow up on their diabetes management and discuss any necessary changes to their treatment plan.",
+          "claim_text": "the patient is currently taking Metformin",
+          "verdict": "grounded",
+          "reasoning": "The record lists Metformin 500mg twice daily as a current medication."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Type 2 Diabetes Mellitus and is currently taking Metformin. The purpose of the visit is to follow up on their diabetes management and discuss any necessary changes to their treatment plan.",
+          "claim_text": "The purpose of the visit is to follow up on their diabetes management",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as 'Diabetes follow-up'."
+        }
+      ]
+    },
+    {
+      "example_number": 8,
+      "case_id": "vitals_only_no_labs",
+      "categories_present": [
+        "Condition Management",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Lifestyle & Prevention": "N/A",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Partially Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions directly address the patient's active overweight condition and the weight management follow-up purpose, covering treatment plan, lifestyle changes, and goal tracking.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language without excessive clinical jargon, making them easy for a patient to bring up.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "These questions would help structure a productive conversation about weight goals, dietary recommendations, and tracking metrics with the doctor.",
+        "context_note": "One minor issue: the summary states weight/BMI showed a steady increase, but the data actually shows a decrease from 201 lbs to 195 lbs, which is inaccurate.",
+        "input_tokens": 1049,
+        "output_tokens": 283,
+        "duration_s": 4.732424749992788
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.2857142857142857,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What is the current plan for managing my overweight condition, and are there any changes to be made to my treatment plan?",
+          "claim_text": "my overweight condition",
+          "verdict": "grounded",
+          "reasoning": "The record lists an active Overweight (E66.3) condition."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to support my weight loss goals, and are there any specific dietary recommendations for my condition?",
+          "claim_text": "lifestyle changes to support my weight loss goals / dietary recommendations",
+          "verdict": "not_applicable",
+          "reasoning": "This is open-ended lifestyle guidance with no external authority or specific factual assertion about the patient."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "What is the expected weight loss goal for this follow-up appointment, and are there any specific metrics or measurements that will be tracked?",
+          "claim_text": "expected weight loss goal / metrics tracked",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question asking about goals and metrics, containing no factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient is a 41-year-old",
+          "verdict": "unsupported",
+          "reasoning": "The record provides no age or date of birth, so the stated age of 41 is not supported by the provided data."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "active overweight condition",
+          "verdict": "grounded",
+          "reasoning": "The record lists an active Overweight (E66.3) condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "this follow-up appointment is scheduled to discuss weight management",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as 'Weight management follow-up'."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient's vitals have shown a steady increase in weight and BMI over the past few months",
+          "verdict": "unsupported",
+          "reasoning": "The data shows weight decreasing from 201 lbs to 195 lbs and BMI from 29.8 to 28.9, which is a decrease, not an increase, contradicting the claim."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "the most recent reading on 2026-08-15 showing a weight of 195 lbs and a BMI of 28.9",
+          "verdict": "grounded",
+          "reasoning": "The record's most recent vitals on 2026-08-15 list weight 195 lbs and BMI 28.9."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "the most recent reading on 2026-08-15 showing a BP of 128/82",
+          "verdict": "grounded",
+          "reasoning": "The record's most recent vitals on 2026-08-15 list BP 128/82."
+        }
+      ]
+    },
+    {
+      "example_number": 9,
+      "case_id": "max_density_multi_comorbidity",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions directly address all four active conditions, all five medications, and the specific labs ordered for this endocrine follow-up, matching the appointment purpose well.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language and are easy to understand, with only minor clinical terms that are already part of the patient's own diagnoses.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions prompt discussion of lab results, medication interactions, BP/lipid targets, and lifestyle changes, all of which would meaningfully guide a comprehensive endocrine follow-up, especially given the A1C trend from prior visits.",
+        "input_tokens": 1674,
+        "output_tokens": 264,
+        "duration_s": 4.666898249997757
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "How does my Hashimoto's Thyroiditis treatment plan align with my current medication regimen?",
+          "claim_text": "I have Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Hashimoto's Thyroiditis (E06.3) is listed as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "What are the current blood pressure targets for my Essential Hypertension, and are they being met?",
+          "claim_text": "I have Essential Hypertension",
+          "verdict": "grounded",
+          "reasoning": "Essential Hypertension (I10) is listed as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "What are the current lipid targets for my Hyperlipidemia, and are they being met?",
+          "claim_text": "I have Hyperlipidemia",
+          "verdict": "grounded",
+          "reasoning": "Hyperlipidemia (E78.5) is listed as an active condition."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between my medications, such as Metformin, Levothyroxine, Lisinopril, Atorvastatin, and Empagliflozin?",
+          "claim_text": "I take Metformin, Levothyroxine, Lisinopril, Atorvastatin, and Empagliflozin",
+          "verdict": "grounded",
+          "reasoning": "All five medications are listed in the patient's medication list."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any dosage adjustments or changes to my medication regimen that need to be made?",
+          "claim_text": "no factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question with no factual claim."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the results of my recent HbA1c test (ordered: 2026-08-20)?",
+          "claim_text": "HbA1c test ordered 2026-08-20",
+          "verdict": "grounded",
+          "reasoning": "The record lists HbA1c ordered on 2026-08-20."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the results of my recent TSH test (ordered: 2026-08-20)?",
+          "claim_text": "TSH test ordered 2026-08-20",
+          "verdict": "grounded",
+          "reasoning": "The record lists TSH ordered on 2026-08-20."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the results of my recent Lipid Panel test (ordered: 2026-07-01)?",
+          "claim_text": "Lipid Panel test ordered 2026-07-01",
+          "verdict": "grounded",
+          "reasoning": "The record lists Lipid Panel ordered on 2026-07-01."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab orders or tests that need to be scheduled?",
+          "claim_text": "no factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual claim."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes or recommendations can I make to better manage my Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis?",
+          "claim_text": "I have Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Both conditions are listed as active in the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific dietary changes or restrictions that I need to follow?",
+          "claim_text": "no factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question with no factual claim."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that need to be scheduled?",
+          "claim_text": "no factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual claim."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has multiple chronic conditions, including Type 2 Diabetes Mellitus, Hashimoto's Thyroiditis, Essential Hypertension, and Hyperlipidemia.",
+          "verdict": "grounded",
+          "reasoning": "All four conditions are listed as active in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "They are currently taking several medications to manage these conditions.",
+          "verdict": "grounded",
+          "reasoning": "The record lists five active medications for these conditions."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has recent lab orders and vitals data.",
+          "verdict": "grounded",
+          "reasoning": "The record includes lab orders (HbA1c, TSH, Lipid Panel) and vitals measured 2026-08-20."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "we need to review their treatment plans and make any necessary adjustments",
+          "verdict": "not_applicable",
+          "reasoning": "This is a general statement of intent with no verifiable factual assertion."
+        }
+      ]
+    },
+    {
+      "example_number": 10,
+      "case_id": "groundedness_labs_vitals",
+      "categories_present": [
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions directly address the patient's Hashimoto's Thyroiditis, Levothyroxine dosing, the ordered TSH test, and follow-up planning, all consistent with a thyroid check appointment.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language without excessive clinical jargon, making them easy for a patient to bring up.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "Asking about TSH results, dosage adjustments, lifestyle management, and follow-up would meaningfully guide a productive conversation for a thyroid check, though the referral question is slightly generic.",
+        "input_tokens": 1169,
+        "output_tokens": 255,
+        "duration_s": 3.876972208963707
+      },
+      "missing_categories": [
+        "Condition Management"
+      ],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Medication Review",
+          "question": "Are there any alternative medications or dosages that could be used for thyroid hormone replacement?",
+          "claim_text": "for thyroid hormone replacement",
+          "verdict": "grounded",
+          "reasoning": "The record lists Levothyroxine for thyroid hormone replacement, so referencing this purpose is supported."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What were the results of the TSH test ordered on 2026-07-15, and are they available?",
+          "claim_text": "TSH test ordered on 2026-07-15",
+          "verdict": "grounded",
+          "reasoning": "The record shows a TSH lab order dated 2026-07-15."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab results or tests that need to be discussed during this appointment?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no specific factual assertion."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What are some lifestyle changes that could help manage Hashimoto's Thyroiditis, and how can I implement them?",
+          "claim_text": "manage Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Hashimoto's Thyroiditis as an active condition."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for a follow-up appointment to check on the effectiveness of the current treatment plan?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no specific factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that need to be scheduled in the near future?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no specific factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Hashimoto's Thyroiditis as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "is taking Levothyroxine for thyroid hormone replacement",
+          "verdict": "grounded",
+          "reasoning": "The record lists Levothyroxine 75mcg for thyroid hormone replacement."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The upcoming appointment is for a thyroid check",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as 'Thyroid check'."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "recent vitals show a weight of 165 lbs and a BMI of 26.1",
+          "verdict": "grounded",
+          "reasoning": "The most recent vitals (2026-07-15) show weight 165 lbs and BMI 26.1."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient's current medication regimen and lab results will be discussed during the appointment",
+          "verdict": "not_applicable",
+          "reasoning": "This is a general expectation about the appointment agenda with no specific verifiable factual assertion beyond items already grounded."
+        }
+      ]
+    },
+    {
+      "example_number": 11,
+      "case_id": "routine_gastroenterology",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "N/A",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's GERD diagnosis, omeprazole medication, and the follow-up appointment purpose, including symptom effectiveness, dosage, lifestyle triggers, and follow-up planning.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language without excessive clinical jargon and are easy to understand.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "These questions cover the key areas a patient would want to discuss at a GERD follow-up\u2014symptom control, medication adjustment, lifestyle triggers, and next steps\u2014which would meaningfully guide the conversation with the doctor.",
+        "input_tokens": 1050,
+        "output_tokens": 265,
+        "duration_s": 3.901573292037938
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any concerns about the effectiveness of omeprazole in managing my GERD symptoms?",
+          "claim_text": "omeprazole is used for managing GERD symptoms",
+          "verdict": "grounded",
+          "reasoning": "The record lists Omeprazole 20mg for acid suppression and an active GERD diagnosis, so linking omeprazole to GERD management is supported."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is it possible to adjust the dosage of omeprazole to better manage my symptoms?",
+          "claim_text": "patient is taking omeprazole",
+          "verdict": "grounded",
+          "reasoning": "The record lists Omeprazole 20mg once daily, so referencing its dosage is supported."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or procedures scheduled for my follow-up visit?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question asking whether tests exist; it asserts no specific fact."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to help manage my GERD symptoms, such as diet and exercise?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended lifestyle guidance question with no specific factual assertion or external authority cited."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific foods or triggers that I should avoid to reduce my symptoms?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question about triggers with no specific factual assertion or cited authority."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for a follow-up appointment to monitor my symptoms or adjust my treatment plan?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question about scheduling with no specific factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments scheduled for my follow-up visit?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question asking whether referrals exist; it asserts no specific fact."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has an active diagnosis of GERD and is taking omeprazole for acid suppression. The purpose of the visit is to follow up on their symptoms and adjust their treatment plan as needed.",
+          "claim_text": "The patient has an active diagnosis of GERD",
+          "verdict": "grounded",
+          "reasoning": "The record lists Gastroesophageal Reflux Disease (K21.9) as active."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has an active diagnosis of GERD and is taking omeprazole for acid suppression. The purpose of the visit is to follow up on their symptoms and adjust their treatment plan as needed.",
+          "claim_text": "is taking omeprazole for acid suppression",
+          "verdict": "grounded",
+          "reasoning": "The record lists Omeprazole 20mg once daily for acid suppression."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has an active diagnosis of GERD and is taking omeprazole for acid suppression. The purpose of the visit is to follow up on their symptoms and adjust their treatment plan as needed.",
+          "claim_text": "The purpose of the visit is to follow up on their symptoms",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as GERD follow-up, supporting the follow-up characterization."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has an active diagnosis of GERD and is taking omeprazole for acid suppression. The purpose of the visit is to follow up on their symptoms and adjust their treatment plan as needed.",
+          "claim_text": "and adjust their treatment plan as needed",
+          "verdict": "not_applicable",
+          "reasoning": "This is a general conditional statement about potentially adjusting treatment; it asserts no specific fact or external authority and is a reasonable characterization of a follow-up."
+        }
+      ]
+    },
+    {
+      "example_number": 12,
+      "case_id": "routine_psychiatry",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Partially Relevant",
+        "relevance_reasoning": "Most questions appropriately address the patient's MDD, Sertraline, and medication follow-up purpose. However, the TSH lab question introduces a thyroid measure with no basis in this patient's record, and the 'next 2 weeks' framing is arbitrary.",
+        "clarity": "Partially Clear",
+        "clarity_reasoning": "Most questions are understandable, but repeatedly inserting the ICD code '(F33.1)' and clinical terms like 'TSH level' add unnecessary confusion for a lay patient.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "Questions about side effects, dosage adjustments, stress management, and follow-up planning are genuinely helpful for a med follow-up. The odd TSH question and the self-answerable question about whether the already-scheduled appointment exists dilute the overall usefulness.",
+        "input_tokens": 1223,
+        "output_tokens": 324,
+        "duration_s": 5.1532942919875495
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the expected symptoms of Major Depressive Disorder (F33.1) during the next 2 weeks, and how will they be monitored?",
+          "claim_text": "Patient has Major Depressive Disorder (F33.1)",
+          "verdict": "grounded",
+          "reasoning": "The record lists Major Depressive Disorder (F33.1) as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to my current treatment plan for Major Depressive Disorder (F33.1) that I should be aware of?",
+          "claim_text": "Patient has Major Depressive Disorder (F33.1) with a treatment plan",
+          "verdict": "grounded",
+          "reasoning": "The condition is listed in the record; asking about changes is open-ended."
+        },
+        {
+          "category": "Medication Review",
+          "question": "What are the potential side effects of Sertraline (100mg) that I should be aware of?",
+          "claim_text": "Patient takes Sertraline 100mg",
+          "verdict": "grounded",
+          "reasoning": "The record lists Sertraline 100mg once daily."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any dosage adjustments or changes to the treatment plan for Sertraline (100mg) that I should be aware of?",
+          "claim_text": "Patient takes Sertraline 100mg",
+          "verdict": "grounded",
+          "reasoning": "Sertraline 100mg is listed in the medications; asking about adjustments is open-ended."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What is the expected TSH level for someone with Major Depressive Disorder (F33.1) on Sertraline (100mg) treatment?",
+          "claim_text": "TSH level is relevant to a patient with MDD on Sertraline",
+          "verdict": "grounded",
+          "reasoning": "The condition and medication are grounded; the question about an expected TSH level is open-ended and asserts no specific patient-specific fact or external guideline."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab results or tests that I should be aware of?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "How can I manage stress and anxiety while taking Sertraline (100mg) for Major Depressive Disorder (F33.1)?",
+          "claim_text": "Patient takes Sertraline 100mg for MDD",
+          "verdict": "grounded",
+          "reasoning": "Both the medication and condition are supported by the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes or recommendations that can help improve my symptoms?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended lifestyle question with no specific factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a scheduled follow-up appointment for my medication follow-up on 2026-09-01T10:00:00?",
+          "claim_text": "Medication follow-up appointment on 2026-09-01T10:00:00",
+          "verdict": "grounded",
+          "reasoning": "The record lists a medication follow-up appointment on 2026-09-01T10:00:00."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or recommendations for additional treatment or support that I should be aware of?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has Major Depressive Disorder (F33.1)",
+          "verdict": "grounded",
+          "reasoning": "The record lists MDD (F33.1) as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient is taking Sertraline (100mg) for depression management",
+          "verdict": "grounded",
+          "reasoning": "The record lists Sertraline 100mg for depression management."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The purpose of the upcoming appointment is a medication follow-up",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as medication follow-up."
+        }
+      ]
+    },
+    {
+      "example_number": 13,
+      "case_id": "routine_orthopedics",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Unsupported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Unsupported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions address the patient's active knee osteoarthritis, their Naproxen use, and the follow-up appointment purpose, all of which align with the record.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language without excessive clinical jargon and are easy to understand.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "Most questions would help guide the conversation, but the lab results question is somewhat misplaced since osteoarthritis is not typically monitored via labs, potentially causing confusion; imaging and lifestyle questions add genuine value.",
+        "input_tokens": 1045,
+        "output_tokens": 245,
+        "duration_s": 3.974658166989684
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.2,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What is the current severity of my right knee osteoarthritis, and are there any changes since our last visit?",
+          "claim_text": "my right knee osteoarthritis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Osteoarthritis, Right Knee (M17.11) as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "What is the current severity of my right knee osteoarthritis, and are there any changes since our last visit?",
+          "claim_text": "our last visit (implying a prior visit occurred)",
+          "verdict": "unsupported",
+          "reasoning": "The record does not document any prior visit; while this is a follow-up appointment, there is no evidence of a specific previous encounter with this doctor."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any dosage adjustments or changes to my Naproxen regimen that I should be aware of?",
+          "claim_text": "my Naproxen regimen",
+          "verdict": "grounded",
+          "reasoning": "The record lists Naproxen 500mg as needed for pain."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the latest lab results for my knee osteoarthritis, and are there any pending tests or follow-ups I should be aware of?",
+          "claim_text": "latest lab results for my knee osteoarthritis",
+          "verdict": "unsupported",
+          "reasoning": "The record contains no lab results, so referencing 'latest lab results' asserts data not present in the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes or recommendations I can make to help manage my knee osteoarthritis?",
+          "claim_text": "my knee osteoarthritis",
+          "verdict": "grounded",
+          "reasoning": "The record confirms an active knee osteoarthritis diagnosis; the rest of the question is open-ended lifestyle inquiry."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any further imaging or testing to monitor my knee osteoarthritis?",
+          "claim_text": "my knee osteoarthritis",
+          "verdict": "grounded",
+          "reasoning": "The record confirms an active knee osteoarthritis diagnosis; the question is otherwise open-ended."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialists I should be seeing for my knee osteoarthritis?",
+          "claim_text": "my knee osteoarthritis",
+          "verdict": "grounded",
+          "reasoning": "The record confirms an active knee osteoarthritis diagnosis; the question is otherwise open-ended."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "I have knee osteoarthritis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Osteoarthritis, Right Knee as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "am taking Naproxen for pain management",
+          "verdict": "grounded",
+          "reasoning": "The record lists Naproxen 500mg as needed for pain, with purpose pain management."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "I have a follow-up appointment with my Orthopedics specialist on 2026-09-02",
+          "verdict": "grounded",
+          "reasoning": "The appointment is with Dr. Foster Reyes (Orthopedics) on 2026-09-02 for a knee osteoarthritis follow-up."
+        }
+      ]
+    },
+    {
+      "example_number": 14,
+      "case_id": "routine_ent",
+      "categories_present": [
+        "Medication Review",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Medication Review": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All three questions directly address the patient's chronic sinusitis, their fluticasone nasal spray, and appropriate follow-up considerations like imaging and allergy testing, which fit the ENT follow-up purpose.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language with helpful examples, and any clinical terms are explained in context.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "These questions cover medication management, prevention, and further evaluation, giving the patient a solid framework to have a productive conversation with the ENT specialist.",
+        "input_tokens": 957,
+        "output_tokens": 237,
+        "duration_s": 3.751461332954932
+      },
+      "missing_categories": [
+        "Condition Management"
+      ],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Medication Review",
+          "question": "Can I adjust the dosage or frequency of my fluticasone nasal spray, and if so, how often should I do so?",
+          "claim_text": "the patient takes fluticasone nasal spray",
+          "verdict": "grounded",
+          "reasoning": "The record lists Fluticasone Nasal Spray as a current medication."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes I can make to help manage my chronic sinusitis, such as avoiding allergens or using a humidifier?",
+          "claim_text": "the patient has chronic sinusitis",
+          "verdict": "grounded",
+          "reasoning": "Chronic Sinusitis is listed as an active condition."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes I can make to help manage my chronic sinusitis, such as avoiding allergens or using a humidifier?",
+          "claim_text": "suggestion to avoid allergens or use a humidifier",
+          "verdict": "not_applicable",
+          "reasoning": "This is general lifestyle guidance with no external authority or specialty-management assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for further testing or evaluation, such as a CT scan or allergy testing, to better manage my chronic sinusitis?",
+          "claim_text": "the patient has chronic sinusitis",
+          "verdict": "grounded",
+          "reasoning": "Chronic Sinusitis is listed as an active condition."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for further testing or evaluation, such as a CT scan or allergy testing, to better manage my chronic sinusitis?",
+          "claim_text": "possibility of further testing such as CT scan or allergy testing",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question about potential testing options, not an assertion of fact."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic sinusitis and is taking fluticasone nasal spray twice daily. The purpose of the visit is to follow up on the patient's condition and discuss any changes or concerns.",
+          "claim_text": "The patient has chronic sinusitis",
+          "verdict": "grounded",
+          "reasoning": "Chronic Sinusitis is listed as an active condition in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic sinusitis and is taking fluticasone nasal spray twice daily. The purpose of the visit is to follow up on the patient's condition and discuss any changes or concerns.",
+          "claim_text": "is taking fluticasone nasal spray twice daily",
+          "verdict": "grounded",
+          "reasoning": "The medication list includes Fluticasone Nasal Spray taken twice daily."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic sinusitis and is taking fluticasone nasal spray twice daily. The purpose of the visit is to follow up on the patient's condition and discuss any changes or concerns.",
+          "claim_text": "The purpose of the visit is to follow up on the patient's condition",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is a chronic sinusitis follow-up."
+        }
+      ]
+    },
+    {
+      "example_number": 15,
+      "case_id": "labs_mixed_temporal_status",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's active Crohn's Disease, mesalamine maintenance therapy, the ordered CRP and Fecal Calprotectin labs, and the IBD follow-up purpose.",
+        "clarity": "Partially Clear",
+        "clarity_reasoning": "Most questions are understandable, but the raw timestamp format (2026-09-04T11:00:00) is awkward for a patient and the last follow-up question is vague and somewhat redundant.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover treatment effectiveness, medication adjustment, interpreting relevant lab results, diet, and monitoring, all of which would meaningfully guide a productive IBD follow-up conversation.",
+        "input_tokens": 1236,
+        "output_tokens": 281,
+        "duration_s": 4.215202083985787
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any concerns about the effectiveness of my current treatment plan, and are there any potential side effects I should be aware of?",
+          "claim_text": "my current treatment plan",
+          "verdict": "grounded",
+          "reasoning": "The patient has an active treatment plan of mesalamine for maintenance therapy per the record."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is there a need to adjust my dosage or frequency of taking mesalamine, and if so, what are the recommended changes?",
+          "claim_text": "taking mesalamine",
+          "verdict": "grounded",
+          "reasoning": "Mesalamine 1.2g three times daily is listed in the patient's medications."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the results of my recent C-Reactive Protein test (ordered: 2026-08-25), and what do they indicate about my overall health?",
+          "claim_text": "recent C-Reactive Protein test (ordered: 2026-08-25)",
+          "verdict": "grounded",
+          "reasoning": "The record lists a C-Reactive Protein lab order dated 2026-08-25."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the results of my recent Fecal Calprotectin test (ordered: 2026-03-01), and how do they relate to my Crohn's Disease management?",
+          "claim_text": "recent Fecal Calprotectin test (ordered: 2026-03-01)",
+          "verdict": "grounded",
+          "reasoning": "The record lists a Fecal Calprotectin lab order dated 2026-03-01."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the results of my recent Fecal Calprotectin test (ordered: 2026-03-01), and how do they relate to my Crohn's Disease management?",
+          "claim_text": "my Crohn's Disease",
+          "verdict": "grounded",
+          "reasoning": "Crohn's Disease is listed as an active condition in the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any dietary changes or lifestyle modifications that I can make to help manage my Crohn's Disease?",
+          "claim_text": "my Crohn's Disease",
+          "verdict": "grounded",
+          "reasoning": "Crohn's Disease is listed as an active condition; the rest is open-ended lifestyle guidance."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific nutrients or supplements that I should be taking to support my treatment plan?",
+          "claim_text": "specific nutrients or supplements to support my treatment plan",
+          "verdict": "not_applicable",
+          "reasoning": "This is open-ended lifestyle/supplement guidance with no specific factual assertion or external authority named."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any additional testing or monitoring to support my treatment plan, and if so, what are the next steps?",
+          "claim_text": "additional testing or monitoring",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question with no factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any concerns about my upcoming appointment on 2026-09-04T11:00:00, and are there any specific topics that need to be discussed?",
+          "claim_text": "upcoming appointment on 2026-09-04T11:00:00",
+          "verdict": "grounded",
+          "reasoning": "The appointment date matches the record's scheduled appointment."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has active Crohn's Disease",
+          "verdict": "grounded",
+          "reasoning": "Crohn's Disease is listed as an active condition in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "is taking mesalamine for maintenance therapy",
+          "verdict": "grounded",
+          "reasoning": "The record lists mesalamine with 'for: Maintenance therapy'."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "recent lab orders for C-Reactive Protein and Fecal Calprotectin",
+          "verdict": "grounded",
+          "reasoning": "Both lab orders are listed in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "next appointment is scheduled for 2026-09-04T11:00:00",
+          "verdict": "grounded",
+          "reasoning": "The appointment date matches the record."
+        }
+      ]
+    },
+    {
+      "example_number": 16,
+      "case_id": "same_specialty_switched_doctors",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Partially Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions directly address the patient's active AFib, Apixaban use for stroke prevention, rate control, monitoring, and follow-up planning, all appropriate for an AFib cardiology follow-up.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language and are easy to understand without excessive clinical jargon.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "Bringing these questions would meaningfully guide a productive conversation about rate control, medication tolerability, monitoring, and lifestyle changes relevant to this patient's care.",
+        "input_tokens": 1233,
+        "output_tokens": 242,
+        "duration_s": 3.9551657080301084
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.08333333333333333,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current rate control goals for my atrial fibrillation, and are they being met?",
+          "claim_text": "my atrial fibrillation",
+          "verdict": "grounded",
+          "reasoning": "The patient's record lists active Atrial Fibrillation as a condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to the recommended rate control strategy since my last visit?",
+          "claim_text": "since my last visit",
+          "verdict": "grounded",
+          "reasoning": "The patient has documented past visits including an AFib follow-up on 2026-07-01, supporting a prior visit."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is it possible to adjust the dosage of Apixaban to improve tolerability or reduce side effects?",
+          "claim_text": "Apixaban dosage",
+          "verdict": "grounded",
+          "reasoning": "The record lists Apixaban 5mg twice daily as a current medication."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or procedures scheduled for my atrial fibrillation management?",
+          "claim_text": "atrial fibrillation management",
+          "verdict": "grounded",
+          "reasoning": "The patient has active AFib, and the question asks about pending tests without asserting any exist."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle modifications or recommendations that can help reduce my risk of stroke or improve my overall cardiovascular health?",
+          "claim_text": "reduce my risk of stroke",
+          "verdict": "grounded",
+          "reasoning": "The record lists Apixaban for stroke prevention, supporting stroke risk as relevant; the question is otherwise open-ended lifestyle guidance."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Should I consider any additional tests or screenings to monitor my atrial fibrillation or cardiovascular risk?",
+          "claim_text": "monitor my atrial fibrillation",
+          "verdict": "grounded",
+          "reasoning": "The patient has active AFib; the question is an open-ended inquiry about additional tests with no unsupported assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any further follow-up appointments or tests to monitor my atrial fibrillation?",
+          "claim_text": "monitor my atrial fibrillation",
+          "verdict": "grounded",
+          "reasoning": "The patient has active AFib; the question is open-ended with no unsupported factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or consultations with other specialists that I should be aware of?",
+          "claim_text": "referrals or consultations with other specialists",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no verifiable factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "A 41-year-old patient",
+          "verdict": "unsupported",
+          "reasoning": "The patient's record does not contain any age or date of birth, so the 41-year-old age is unsupported."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "active atrial fibrillation",
+          "verdict": "grounded",
+          "reasoning": "The record lists Atrial Fibrillation as active."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "currently taking Apixaban for stroke prevention",
+          "verdict": "grounded",
+          "reasoning": "The record lists Apixaban 5mg twice daily for stroke prevention."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "due for a follow-up appointment with their Cardiology specialist on 2026-09-04T13:00:00",
+          "verdict": "grounded",
+          "reasoning": "The appointment is with Dr. Priya Nair (Cardiology) on 2026-09-04T13:00:00 for AFib follow-up."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "a history of well-controlled atrial fibrillation on current regimen",
+          "verdict": "grounded",
+          "reasoning": "The 2026-07-01 visit note states 'Rate well-controlled on current regimen.'"
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "it is unclear if the current rate control strategy is optimal",
+          "verdict": "not_applicable",
+          "reasoning": "This is a hedged, non-factual statement of uncertainty rather than an assertion of fact."
+        }
+      ]
+    },
+    {
+      "example_number": 17,
+      "case_id": "excluded_doctor_relevant_history",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's Hashimoto's Thyroiditis, Levothyroxine medication, and the thyroid follow-up appointment purpose.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language; the only clinical abbreviation (TFT) is spelled out in full alongside it.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover lab results, dosage optimization, lifestyle, and follow-up planning, which would meaningfully guide a productive conversation at a thyroid follow-up.",
+        "input_tokens": 1059,
+        "output_tokens": 236,
+        "duration_s": 3.908557209011633
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current thyroid function test (TFT) results, and are there any adjustments needed to my Levothyroxine dosage?",
+          "claim_text": "I am taking Levothyroxine",
+          "verdict": "grounded",
+          "reasoning": "The record lists Levothyroxine 75mcg once daily as a current medication."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Can you review my Levothyroxine dosage and timing to ensure it's optimal for my Hashimoto's Thyroiditis?",
+          "claim_text": "I take Levothyroxine and have Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Both the Levothyroxine medication and the Hashimoto's Thyroiditis condition are present in the patient's record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes I can make to help manage my Hashimoto's Thyroiditis, such as diet or exercise recommendations?",
+          "claim_text": "I have Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Hashimoto's Thyroiditis is listed as an active condition. The diet/exercise portion is general lifestyle guidance without an external authority claim."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any follow-up appointments or tests in the near future?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "This patient has Hashimoto's Thyroiditis and is taking Levothyroxine for thyroid hormone replacement. The purpose of this visit is for a thyroid follow-up, and the patient's current medication regimen and lab results will be reviewed.",
+          "claim_text": "This patient has Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Hashimoto's Thyroiditis is listed as an active condition in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "This patient has Hashimoto's Thyroiditis and is taking Levothyroxine for thyroid hormone replacement. The purpose of this visit is for a thyroid follow-up, and the patient's current medication regimen and lab results will be reviewed.",
+          "claim_text": "is taking Levothyroxine for thyroid hormone replacement",
+          "verdict": "grounded",
+          "reasoning": "The record lists Levothyroxine with the purpose 'Thyroid hormone replacement.'"
+        },
+        {
+          "category": "Context Summary",
+          "question": "This patient has Hashimoto's Thyroiditis and is taking Levothyroxine for thyroid hormone replacement. The purpose of this visit is for a thyroid follow-up, and the patient's current medication regimen and lab results will be reviewed.",
+          "claim_text": "The purpose of this visit is for a thyroid follow-up",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is explicitly listed as 'Thyroid follow-up.'"
+        },
+        {
+          "category": "Context Summary",
+          "question": "This patient has Hashimoto's Thyroiditis and is taking Levothyroxine for thyroid hormone replacement. The purpose of this visit is for a thyroid follow-up, and the patient's current medication regimen and lab results will be reviewed.",
+          "claim_text": "the patient's current medication regimen and lab results will be reviewed",
+          "verdict": "not_applicable",
+          "reasoning": "This describes the intended scope of the upcoming visit rather than asserting a specific verifiable fact from the record."
+        }
+      ]
+    },
+    {
+      "example_number": 18,
+      "case_id": "minimal_single_condition_single_med",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's atopic dermatitis, their Tacrolimus ointment, and the eczema follow-up purpose, which matches the record exactly.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language without excessive clinical jargon and are easy to understand.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover symptom management, medication side effects, alternatives, flare prevention, skincare, and follow-up planning, which would meaningfully guide a productive dermatology conversation.",
+        "input_tokens": 1150,
+        "output_tokens": 233,
+        "duration_s": 3.5440517920069396
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current symptoms of my atopic dermatitis, and how can I manage them?",
+          "claim_text": "my atopic dermatitis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Atopic Dermatitis (L20.9) as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes in my condition that I should be aware of, and how can I track them?",
+          "claim_text": "my condition",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question referencing the condition generally with no specific factual assertion beyond the grounded diagnosis."
+        },
+        {
+          "category": "Medication Review",
+          "question": "What are the potential side effects of Tacrolimus Ointment (0.1%) for my atopic dermatitis, and how can I minimize them?",
+          "claim_text": "Tacrolimus Ointment (0.1%) for my atopic dermatitis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Tacrolimus Ointment 0.1% for eczema flare control and atopic dermatitis as the active condition."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any alternative treatments or medications that could be used for my condition, and why not?",
+          "claim_text": "my condition",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended question about alternatives with no specific factual assertion beyond the grounded diagnosis."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any specific lab tests or examinations that I need to have to track my condition?",
+          "claim_text": "track my condition",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no verifiable factual assertion."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "How can I prevent eczema flare-ups, and what lifestyle changes can I make to reduce my symptoms?",
+          "claim_text": "eczema flare-ups",
+          "verdict": "grounded",
+          "reasoning": "The medication is noted for eczema flare control, consistent with the atopic dermatitis diagnosis."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific skin care routines or products that you recommend for my condition?",
+          "claim_text": "my condition",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended question requesting recommendations, no verifiable factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "What are the next steps for my treatment plan, and when can I expect to see improvements in my symptoms?",
+          "claim_text": "my treatment plan",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended question about next steps with no specific factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any follow-up appointments or tests that I need to have to ensure my condition is being managed effectively?",
+          "claim_text": "follow-up appointments or tests",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no verifiable factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has atopic dermatitis and is using Tacrolimus Ointment (0.1%) to manage their symptoms. They are due for a follow-up appointment with the Dermatology specialist on 2026-09-05T10:00:00 to discuss their condition and treatment plan.",
+          "claim_text": "The patient has atopic dermatitis",
+          "verdict": "grounded",
+          "reasoning": "Atopic Dermatitis (L20.9) is listed as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has atopic dermatitis and is using Tacrolimus Ointment (0.1%) to manage their symptoms. They are due for a follow-up appointment with the Dermatology specialist on 2026-09-05T10:00:00 to discuss their condition and treatment plan.",
+          "claim_text": "is using Tacrolimus Ointment (0.1%) to manage their symptoms",
+          "verdict": "grounded",
+          "reasoning": "The record lists Tacrolimus Ointment 0.1% twice daily for eczema flare control."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has atopic dermatitis and is using Tacrolimus Ointment (0.1%) to manage their symptoms. They are due for a follow-up appointment with the Dermatology specialist on 2026-09-05T10:00:00 to discuss their condition and treatment plan.",
+          "claim_text": "follow-up appointment with the Dermatology specialist on 2026-09-05T10:00:00",
+          "verdict": "grounded",
+          "reasoning": "The record lists an eczema follow-up appointment with Dr. Priya Malhotra (Dermatology) on 2026-09-05T10:00:00."
+        }
+      ]
+    },
+    {
+      "example_number": 19,
+      "case_id": "cold_start",
+      "categories_present": [
+        "Lifestyle & Prevention"
+      ],
+      "accuracy_rollup": {
+        "Lifestyle & Prevention": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The single question directly addresses the patient's only active condition (seasonal allergic rhinitis) and fits within an annual physical context.",
+        "clarity": "Partially Clear",
+        "clarity_reasoning": "The question is mostly understandable but 'immunotherapy' is a clinical term some patients may not follow without explanation.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "The question is helpful for discussing allergy management, but it's the only question and an annual physical would typically warrant broader preventive/screening topics, limiting overall usefulness.",
+        "input_tokens": 782,
+        "output_tokens": 223,
+        "duration_s": 3.562073207984213
+      },
+      "missing_categories": [
+        "Condition Management"
+      ],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes or recommendations can I make to help manage my Seasonal Allergic Rhinitis, such as avoiding triggers or using immunotherapy?",
+          "claim_text": "I have Seasonal Allergic Rhinitis",
+          "verdict": "grounded",
+          "reasoning": "The patient's record lists Seasonal Allergic Rhinitis (J30.2) as an active condition."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes or recommendations can I make to help manage my Seasonal Allergic Rhinitis, such as avoiding triggers or using immunotherapy?",
+          "claim_text": "avoiding triggers or using immunotherapy as management options",
+          "verdict": "not_applicable",
+          "reasoning": "This is lifestyle/management guidance suggestion without asserting an external authority, guideline, or specialty-management fact."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient is scheduled for an annual physical with their Family Medicine specialist on August 3rd, 2026.",
+          "claim_text": "The patient is scheduled for an annual physical on August 3rd, 2026",
+          "verdict": "grounded",
+          "reasoning": "The record states the appointment purpose is Annual physical with a date of 2026-08-03."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient is scheduled for an annual physical with their Family Medicine specialist on August 3rd, 2026.",
+          "claim_text": "the appointment is with a Family Medicine specialist",
+          "verdict": "grounded",
+          "reasoning": "The record lists the appointment doctor as Dr. Alex Kim (Family Medicine)."
+        }
+      ]
+    },
+    {
+      "example_number": 20,
+      "case_id": "tool_call_necessity_dosing",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Partially Relevant",
+        "relevance_reasoning": "Most questions align with the patient's diabetes, thyroid conditions, and medications, but the appointment's stated purpose is specifically medication timing, and none of the questions directly address timing (e.g., spacing Levothyroxine from food/Metformin), which is a notable gap.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language, and while they use condition names, they are stated in a way a patient could easily read aloud to a doctor.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "The questions would help a general conversation about diabetes and thyroid management, but they miss the core reason for the visit (medication timing) and the 'optimal starting points' question is odd for an established regimen, reducing their targeted usefulness.",
+        "input_tokens": 1254,
+        "output_tokens": 301,
+        "duration_s": 4.959662833018228
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current blood sugar targets for my Type 2 Diabetes Mellitus, and are they being met?",
+          "claim_text": "I have Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "The record lists Type 2 Diabetes Mellitus (E11.9) as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "How does my Hashimoto's Thyroiditis affect my thyroid hormone levels, and what are the implications for my treatment plan?",
+          "claim_text": "I have Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Hashimoto's Thyroiditis (E06.3) as an active condition."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between Metformin and Levothyroxine that I should be aware of?",
+          "claim_text": "I take Metformin and Levothyroxine",
+          "verdict": "grounded",
+          "reasoning": "Both Metformin and Levothyroxine are listed in the patient's medications."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Can you confirm that the prescribed dosages of Metformin and Levothyroxine are the optimal starting points for my treatment plan?",
+          "claim_text": "Metformin and Levothyroxine are prescribed",
+          "verdict": "grounded",
+          "reasoning": "Both medications are listed in the patient's record with dosages."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any specific thyroid function tests that I should be monitoring, and what are the target ranges?",
+          "claim_text": "monitoring thyroid function tests",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question asking about tests to monitor; it asserts no specific patient fact or external authority."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to improve my blood sugar control and thyroid function?",
+          "claim_text": "open-ended lifestyle question",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended question about lifestyle changes with no factual assertion or external authority invoked."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific dietary restrictions or recommendations for my Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis?",
+          "claim_text": "I have Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Both conditions are listed as active in the patient's record."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any follow-up appointments or referrals to discuss my treatment plan?",
+          "claim_text": "logistical follow-up question",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any specific concerns or issues that need to be addressed before my next appointment?",
+          "claim_text": "open-ended concerns question",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended question with no factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis, and is taking Metformin and Levothyroxine. The purpose of the upcoming appointment is to review medication timing and discuss treatment plan.",
+          "claim_text": "The patient has Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Both conditions are listed as active in the patient's record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis, and is taking Metformin and Levothyroxine. The purpose of the upcoming appointment is to review medication timing and discuss treatment plan.",
+          "claim_text": "is taking Metformin and Levothyroxine",
+          "verdict": "grounded",
+          "reasoning": "Both medications are listed in the patient's medications."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis, and is taking Metformin and Levothyroxine. The purpose of the upcoming appointment is to review medication timing and discuss treatment plan.",
+          "claim_text": "The purpose of the upcoming appointment is to review medication timing and discuss treatment plan",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is stated as 'Diabetes and thyroid follow-up \u2014 reviewing medication timing,' which matches this description."
+        }
+      ]
+    },
+    {
+      "example_number": 21,
+      "case_id": "routine_nephrology",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's Stage 2 CKD, the Lisinopril medication, and the recently ordered eGFR/metabolic panel, matching the appointment purpose of a CKD follow-up.",
+        "clarity": "Partially Clear",
+        "clarity_reasoning": "Most questions are understandable, but the phrasing is written in third person ('the patient') as if for a clinician rather than for the patient to ask, and terms like 'estimated glomerular filtration rate (eGFR)' remain fairly clinical.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover kidney function trends, medication adjustment, lab results, lifestyle, warning signs, and follow-up, which would meaningfully guide a productive conversation with the nephrologist, though there is some redundancy in the two eGFR questions.",
+        "input_tokens": 1141,
+        "output_tokens": 315,
+        "duration_s": 4.631244499993045
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current kidney function estimates based on the eGFR test ordered on 2026-08-20?",
+          "claim_text": "eGFR test ordered on 2026-08-20",
+          "verdict": "grounded",
+          "reasoning": "The record lists a Basic Metabolic Panel (eGFR) ordered on 2026-08-20."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes in the patient's kidney function since the last visit?",
+          "claim_text": "there was a last visit",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended inquiry about changes; it asserts no specific verifiable fact beyond the general implication of prior care."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is there any need to adjust the dosage of Lisinopril based on the patient's current kidney function?",
+          "claim_text": "patient is taking Lisinopril",
+          "verdict": "grounded",
+          "reasoning": "The record lists Lisinopril 10mg once daily as a medication."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the current estimated glomerular filtration rate (eGFR) values based on the recent test?",
+          "claim_text": "there was a recent eGFR test",
+          "verdict": "grounded",
+          "reasoning": "The record lists a Basic Metabolic Panel (eGFR) ordered on 2026-08-20, supporting the reference to a recent test."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or follow-up appointments related to the patient's kidney function?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual claim."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle modifications or dietary changes recommended for the patient's chronic kidney disease management?",
+          "claim_text": "patient has chronic kidney disease",
+          "verdict": "grounded",
+          "reasoning": "The record lists Chronic Kidney Disease, Stage 2 as an active condition."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any signs of worsening kidney function that the patient should be aware of?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question asking for information with no factual claim asserted."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments scheduled for the patient's ongoing care?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual claim."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic kidney disease, stage 2, and is taking Lisinopril for blood pressure and renal protection. The patient's recent lab orders include a basic metabolic panel (eGFR) test ordered on 2026-08-20.",
+          "claim_text": "patient has chronic kidney disease, stage 2",
+          "verdict": "grounded",
+          "reasoning": "The record lists Chronic Kidney Disease, Stage 2 (N18.2) as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic kidney disease, stage 2, and is taking Lisinopril for blood pressure and renal protection. The patient's recent lab orders include a basic metabolic panel (eGFR) test ordered on 2026-08-20.",
+          "claim_text": "taking Lisinopril for blood pressure and renal protection",
+          "verdict": "grounded",
+          "reasoning": "The record lists Lisinopril 10mg once daily for blood pressure and renal protection."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has chronic kidney disease, stage 2, and is taking Lisinopril for blood pressure and renal protection. The patient's recent lab orders include a basic metabolic panel (eGFR) test ordered on 2026-08-20.",
+          "claim_text": "lab orders include a basic metabolic panel (eGFR) test ordered on 2026-08-20",
+          "verdict": "grounded",
+          "reasoning": "The record lists a Basic Metabolic Panel (eGFR) ordered on 2026-08-20."
+        }
+      ]
+    },
+    {
+      "example_number": 22,
+      "case_id": "routine_obgyn",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "N/A",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Partially Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's active PCOS, her oral contraceptive medication, and the follow-up appointment purpose, including monitoring, lifestyle, and treatment planning.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language and are easy to understand without excessive clinical jargon.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover treatment changes, medication side effects, monitoring, lifestyle, and next steps, which would meaningfully guide a productive conversation at a PCOS follow-up.",
+        "input_tokens": 1069,
+        "output_tokens": 239,
+        "duration_s": 3.744983874959871
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.14285714285714285,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to my treatment plan for PCOS, and why?",
+          "claim_text": "I have a treatment plan for PCOS",
+          "verdict": "grounded",
+          "reasoning": "The record lists active PCOS and a medication for cycle regulation, so a treatment plan for PCOS is supported."
+        },
+        {
+          "category": "Medication Review",
+          "question": "What are the potential side effects of Norethindrone/Ethinyl Estradiol, and how can I minimize them?",
+          "claim_text": "I take Norethindrone/Ethinyl Estradiol",
+          "verdict": "grounded",
+          "reasoning": "The record lists Norethindrone/Ethinyl Estradiol as a current medication."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any additional lab tests that need to be run to monitor my PCOS symptoms or treatment response?",
+          "claim_text": "I have PCOS symptoms/treatment being monitored",
+          "verdict": "grounded",
+          "reasoning": "PCOS is an active condition and the patient is on treatment, so referencing symptoms and treatment response is grounded."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to help manage my PCOS symptoms and improve my overall health?",
+          "claim_text": "lifestyle changes to manage PCOS",
+          "verdict": "not_applicable",
+          "reasoning": "This is open-ended lifestyle guidance with no external authority or specific factual assertion beyond the grounded PCOS condition."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific dietary or exercise recommendations for me to follow?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended lifestyle question with no verifiable factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "What are the next steps in my care, and when can I expect to see my provider again?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is a logistical, open-ended question with no factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "I am a 41-year-old woman with active Polycystic Ovary Syndrome (PCOS) and am taking Norethindrone/Ethinyl Estradiol for cycle regulation. I am due for a follow-up visit with my Obstetrics & Gynecology provider on September 1st, 2026.",
+          "claim_text": "I am a 41-year-old woman",
+          "verdict": "unsupported",
+          "reasoning": "The record does not provide the patient's age or gender, so the 41-year-old woman detail is not supported by the provided data."
+        },
+        {
+          "category": "Context Summary",
+          "question": "I am a 41-year-old woman with active Polycystic Ovary Syndrome (PCOS) and am taking Norethindrone/Ethinyl Estradiol for cycle regulation. I am due for a follow-up visit with my Obstetrics & Gynecology provider on September 1st, 2026.",
+          "claim_text": "active PCOS",
+          "verdict": "grounded",
+          "reasoning": "The record lists Polycystic Ovary Syndrome as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "I am a 41-year-old woman with active Polycystic Ovary Syndrome (PCOS) and am taking Norethindrone/Ethinyl Estradiol for cycle regulation. I am due for a follow-up visit with my Obstetrics & Gynecology provider on September 1st, 2026.",
+          "claim_text": "taking Norethindrone/Ethinyl Estradiol for cycle regulation",
+          "verdict": "grounded",
+          "reasoning": "The record lists this medication with the stated purpose of cycle regulation."
+        },
+        {
+          "category": "Context Summary",
+          "question": "I am a 41-year-old woman with active Polycystic Ovary Syndrome (PCOS) and am taking Norethindrone/Ethinyl Estradiol for cycle regulation. I am due for a follow-up visit with my Obstetrics & Gynecology provider on September 1st, 2026.",
+          "claim_text": "follow-up visit with my Obstetrics & Gynecology provider on September 1st, 2026",
+          "verdict": "grounded",
+          "reasoning": "The appointment is a PCOS follow-up with an Obstetrics & Gynecology doctor dated 2026-09-01, matching this claim."
+        }
+      ]
+    },
+    {
+      "example_number": 23,
+      "case_id": "routine_ophthalmology",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's glaucoma diagnosis, latanoprost medication, intraocular pressure monitoring, and follow-up planning, which are precisely aligned with a glaucoma follow-up appointment.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language, and where clinical terms like intraocular pressure appear, they are contextualized so a patient can follow them.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "These questions cover pressure targets, medication adjustments, lifestyle, and follow-up scheduling, giving the patient a solid framework to have a productive conversation with the ophthalmologist.",
+        "input_tokens": 1146,
+        "output_tokens": 268,
+        "duration_s": 4.133493417000864
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current intraocular pressure readings, and are they within the target range for my glaucoma treatment?",
+          "claim_text": "my glaucoma treatment",
+          "verdict": "grounded",
+          "reasoning": "The patient has active Primary Open-Angle Glaucoma and is on treatment (Latanoprost), so referencing glaucoma treatment is supported."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes in my glaucoma management plan, such as adjustments to my medication regimen or follow-up schedule?",
+          "claim_text": "my glaucoma management plan / medication regimen",
+          "verdict": "grounded",
+          "reasoning": "The patient has glaucoma and a medication regimen (Latanoprost), so referencing these is supported by the record."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is it necessary to adjust my latanoprost dosage or timing, and if so, what are the recommended changes?",
+          "claim_text": "my latanoprost dosage or timing",
+          "verdict": "grounded",
+          "reasoning": "The record lists Latanoprost 0.005% once daily at bedtime, so referencing its dosage and timing is supported."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or examinations that I need to have, and if so, what are the scheduled dates?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question asking whether tests are pending; it asserts no fact."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes I can make to help manage my glaucoma, such as diet or exercise recommendations?",
+          "claim_text": "help manage my glaucoma",
+          "verdict": "grounded",
+          "reasoning": "The patient has glaucoma per the record; the question offers lifestyle guidance without invoking any external authority."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific eye care habits I should follow to help prevent further progression of my glaucoma?",
+          "claim_text": "my glaucoma",
+          "verdict": "grounded",
+          "reasoning": "The patient has active glaucoma per the record, so referencing it is supported."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for a follow-up appointment within the next few months, and if so, what are the scheduled dates and times?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question about scheduling follow-up; it asserts no fact."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that I need to schedule in the near future?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question about referrals; it asserts no fact."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has primary open-angle glaucoma and is taking latanoprost to control intraocular pressure. They have an upcoming appointment with their Ophthalmology to discuss their glaucoma management plan and any necessary adjustments.",
+          "claim_text": "The patient has primary open-angle glaucoma",
+          "verdict": "grounded",
+          "reasoning": "The record lists Primary Open-Angle Glaucoma as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has primary open-angle glaucoma and is taking latanoprost to control intraocular pressure. They have an upcoming appointment with their Ophthalmology to discuss their glaucoma management plan and any necessary adjustments.",
+          "claim_text": "is taking latanoprost to control intraocular pressure",
+          "verdict": "grounded",
+          "reasoning": "The record lists Latanoprost for intraocular pressure control."
+        },
+        {
+          "category": "Context Summary",
+          "question": "The patient has primary open-angle glaucoma and is taking latanoprost to control intraocular pressure. They have an upcoming appointment with their Ophthalmology to discuss their glaucoma management plan and any necessary adjustments.",
+          "claim_text": "upcoming appointment with their Ophthalmology to discuss their glaucoma management plan",
+          "verdict": "grounded",
+          "reasoning": "The appointment is a glaucoma follow-up with Dr. Nadia Petrov in Ophthalmology, matching the summary."
+        }
+      ]
+    },
+    {
+      "example_number": 24,
+      "case_id": "routine_cardiology",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Unsupported",
+        "Lifestyle & Prevention": "N/A",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "N/A"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Partially Relevant",
+        "relevance_reasoning": "Most questions correctly address the patient's AFib, Apixaban, and Metoprolol, but the INR monitoring question is clinically inaccurate since Apixaban (a DOAC) does not require INR monitoring, unlike warfarin.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, patient-friendly language and are easy to understand, with only minor clinical terms like 'anticoagulant' and 'embolism' that remain reasonably accessible.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "Many questions would genuinely help guide the AFib follow-up conversation, but the incorrect INR question could confuse the patient or waste appointment time, slightly reducing overall usefulness.",
+        "input_tokens": 1092,
+        "output_tokens": 294,
+        "duration_s": 4.345008082978893
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.16666666666666666,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any concerns about the risk of stroke or embolism with Apixaban, and are there any alternative anticoagulants being considered?",
+          "claim_text": "Apixaban is used and is an anticoagulant for stroke/embolism prevention",
+          "verdict": "grounded",
+          "reasoning": "The record lists Apixaban 5mg twice daily for stroke prevention, so referring to it as an anticoagulant for stroke/embolism risk is supported."
+        },
+        {
+          "category": "Condition Management",
+          "question": "How is the rate control with Metoprolol, and are there any adjustments that need to be made?",
+          "claim_text": "Metoprolol is used for rate control",
+          "verdict": "grounded",
+          "reasoning": "The record lists Metoprolol 25mg twice daily for rate control, which supports this claim."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between Apixaban and Metoprolol that I should be aware of?",
+          "claim_text": "Patient takes Apixaban and Metoprolol",
+          "verdict": "grounded",
+          "reasoning": "Both medications are listed in the patient's record."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any changes to the dosing schedule for either medication that I should be aware of?",
+          "claim_text": "Patient is on medications with a dosing schedule",
+          "verdict": "grounded",
+          "reasoning": "The record lists both medications with twice-daily dosing schedules; the question makes no unsupported specific assertion."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any alternative medications that could be used to manage my atrial fibrillation?",
+          "claim_text": "Patient has atrial fibrillation",
+          "verdict": "grounded",
+          "reasoning": "Atrial Fibrillation is listed as an active condition in the record."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the latest results for my INR level, and are there any adjustments that need to be made to my Apixaban dosage?",
+          "claim_text": "Patient has INR level results / INR monitoring for Apixaban",
+          "verdict": "unsupported",
+          "reasoning": "The record contains no INR lab results, and Apixaban does not require INR monitoring; asserting an INR level exists is not supported by the data."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or monitoring that I should be aware of?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question with no factual assertion."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes that I can make to reduce my risk of stroke or heart failure?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is open-ended lifestyle guidance with no external authority or unsupported patient-specific assertion."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any recommendations for exercise or physical activity that I should follow?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is open-ended lifestyle guidance with no factual assertion or external source."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for a follow-up appointment in the near future?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is a logistical open-ended question with no factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that I need to schedule?",
+          "claim_text": "",
+          "verdict": "not_applicable",
+          "reasoning": "This is a logistical open-ended question with no factual assertion."
+        }
+      ]
+    },
+    {
+      "example_number": 25,
+      "case_id": "condition_severity_variation",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Unsupported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Unsupported",
+        "Lifestyle & Prevention": "N/A",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "N/A"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's severe asthma, current maintenance and rescue medications, and the follow-up purpose including recent ER visits, triggers, and lung function monitoring.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in accessible, patient-friendly language without excessive clinical jargon, and each is easy to understand.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "Given two recent ER visits, questions about severity, triggers, medication adjustment, and lung function would meaningfully guide a productive conversation with the pulmonologist, though the medication-interaction question is slightly less critical.",
+        "input_tokens": 1092,
+        "output_tokens": 253,
+        "duration_s": 4.128908582999998
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.4,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What is the current severity of my asthma, and how does it compare to my previous visits?",
+          "claim_text": "my asthma has a current severity",
+          "verdict": "grounded",
+          "reasoning": "The record lists active asthma and the appointment is a 'Severe asthma follow-up', so referencing asthma severity is supported."
+        },
+        {
+          "category": "Condition Management",
+          "question": "What are the specific triggers that are causing my asthma to be severe, and how can I avoid them?",
+          "claim_text": "there are specific triggers causing my asthma to be severe",
+          "verdict": "unsupported",
+          "reasoning": "The record does not identify any specific asthma triggers; it only notes ER visits, so asserting specific triggers exist is not supported."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any adjustments that need to be made to my Fluticasone/Salmeterol dosage, and why?",
+          "claim_text": "I take Fluticasone/Salmeterol",
+          "verdict": "grounded",
+          "reasoning": "Fluticasone/Salmeterol 500/50mcg is listed in the patient's medications."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between my Fluticasone/Salmeterol and Albuterol that I should be aware of?",
+          "claim_text": "I take Fluticasone/Salmeterol and Albuterol",
+          "verdict": "grounded",
+          "reasoning": "Both Fluticasone/Salmeterol and Albuterol are listed in the patient's medications."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are my latest lung function test results, and how do they compare to my previous tests?",
+          "claim_text": "I have latest lung function test results and previous tests",
+          "verdict": "unsupported",
+          "reasoning": "The record contains no lung function test results or any prior tests, so asserting these exist is not supported."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests that I need to have done, and what are their purposes?",
+          "claim_text": "there may be pending lab tests",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question asking whether pending tests exist and does not assert any specific fact."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to help manage my asthma, and how often should I monitor my symptoms?",
+          "claim_text": "lifestyle changes can help manage my asthma",
+          "verdict": "not_applicable",
+          "reasoning": "This is general lifestyle guidance related to a documented condition and asserts no external authority or patient-specific fact."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific asthma-friendly products or services that you recommend?",
+          "claim_text": "recommendation of asthma-friendly products or services",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended request for recommendations with no factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any additional testing or follow-up appointments in the next few months?",
+          "claim_text": "need for additional testing or follow-up",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no specific factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that I need to schedule in the near future?",
+          "claim_text": "possible referrals or specialist appointments",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question asking whether referrals are needed and asserts no specific fact."
+        }
+      ]
+    },
+    {
+      "example_number": 26,
+      "case_id": "referral_carryover_unconfirmed",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions directly address the patient's Stage 3 CKD, Lisinopril, kidney function monitoring, and the previously noted renal dietitian referral, all appropriate for a CKD follow-up.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language with minimal jargon, and technical terms like eGFR are contextualized appropriately.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover kidney function trends, medication adjustments, diet, and the pending dietitian referral, giving the patient a well-structured basis for a productive discussion with the nephrologist.",
+        "input_tokens": 1302,
+        "output_tokens": 254,
+        "duration_s": 4.26071362500079
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current kidney function tests (eGFR) and how do they compare to the previous visit?",
+          "claim_text": "eGFR was measured at previous visits",
+          "verdict": "grounded",
+          "reasoning": "The 2026-07-15 visit notes state 'eGFR stable', supporting that eGFR is tracked at visits."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to my CKD stage or classification?",
+          "claim_text": "The patient has a CKD stage/classification",
+          "verdict": "grounded",
+          "reasoning": "The record lists Chronic Kidney Disease, Stage 3, supporting the existence of a CKD stage."
+        },
+        {
+          "category": "Condition Management",
+          "question": "What are the current treatment goals for my CKD, and how will they be monitored?",
+          "claim_text": "The patient has CKD",
+          "verdict": "grounded",
+          "reasoning": "CKD Stage 3 is an active listed condition."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is there any need to adjust the dosage of Lisinopril, and what are the potential benefits and risks of changing the medication?",
+          "claim_text": "The patient takes Lisinopril",
+          "verdict": "grounded",
+          "reasoning": "Lisinopril 10mg once daily is listed in the patient's medications."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the current lab results for my kidney function, and when can I expect to see the next set of results?",
+          "claim_text": "The patient has kidney function lab results",
+          "verdict": "grounded",
+          "reasoning": "Kidney function monitoring (eGFR) is referenced in past visit notes, consistent with CKD management."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or procedures that I should be aware of?",
+          "claim_text": "None",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question asking about pending tests without asserting any specific fact."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What dietary changes can I make to better manage my CKD, and how can I work with a renal dietitian to develop a personalized plan?",
+          "claim_text": "The patient has CKD and a renal dietitian is relevant",
+          "verdict": "grounded",
+          "reasoning": "CKD is a listed condition and a referral to a renal dietitian was planned per the 2026-06-01 visit notes."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle modifications I can make to reduce my risk of CKD progression?",
+          "claim_text": "None",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended lifestyle question with no specific factual assertion or external authority."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for a referral to a renal dietitian, and when can I expect to see a specialist?",
+          "claim_text": "A renal dietitian referral is relevant to this patient",
+          "verdict": "grounded",
+          "reasoning": "The 2026-06-01 visit notes mention planning to discuss a referral to a renal dietitian."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any upcoming appointments or procedures that I should be aware of?",
+          "claim_text": "None",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no specific factual assertion."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has Chronic Kidney Disease, Stage 3",
+          "verdict": "grounded",
+          "reasoning": "CKD Stage 3 (N18.3) is listed as an active condition."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient is currently taking Lisinopril for blood pressure and renal protection",
+          "verdict": "grounded",
+          "reasoning": "Lisinopril 10mg once daily is listed with the stated purpose of blood pressure and renal protection."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient's last CKD follow-up visit was on 2026-07-15T10:00:00 and the provider discussed hydration and blood pressure control",
+          "verdict": "grounded",
+          "reasoning": "The 2026-07-15 past visit notes state eGFR stable and discussed hydration and blood pressure control."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient is due for a follow-up visit on 2026-09-04T10:00:00",
+          "verdict": "grounded",
+          "reasoning": "The appointment date is listed as 2026-09-04T10:00:00 for a CKD follow-up."
+        }
+      ]
+    },
+    {
+      "example_number": 27,
+      "case_id": "all_out_of_scope_for_specialty",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Unsupported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Partially Relevant",
+        "relevance_reasoning": "The eye-exam-focused questions and the hypertension-eye connection (relevant since amlodipine/hypertension affects eye health) are appropriate, but several questions about psoriasis treatment plans, Clobetasol alternatives, and drug interactions between a topical steroid and a BP pill are off-target for an ophthalmologist and clinically not very meaningful.",
+        "clarity": "Partially Clear",
+        "clarity_reasoning": "Most questions are phrased in plain, understandable language, but items like the 'carryover concern from my last visit's planned-but-unconfirmed-as-addressed topics' are awkward and confusing to a patient.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "The eye-exam and hypertension-related eye-health questions would genuinely help the conversation, but the misdirected psoriasis medication and interaction questions dilute the value and could waste time with a specialist who isn't managing those conditions.",
+        "input_tokens": 1483,
+        "output_tokens": 355,
+        "duration_s": 5.427888333972078
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0625,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any new or worsening symptoms of Essential Hypertension that need to be addressed?",
+          "claim_text": "Patient has Essential Hypertension",
+          "verdict": "grounded",
+          "reasoning": "Essential Hypertension (I10) is listed as an active condition in the record."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to my treatment plan for either condition that I should be aware of?",
+          "claim_text": "Patient has two conditions ('either condition')",
+          "verdict": "grounded",
+          "reasoning": "The record lists two active conditions: Plaque Psoriasis and Essential Hypertension."
+        },
+        {
+          "category": "Medication Review",
+          "question": "What are the potential interactions between Clobetasol Cream (0.05%) and Amlodipine (5mg) that I should be aware of?",
+          "claim_text": "Patient takes Clobetasol Cream (0.05%) and Amlodipine (5mg)",
+          "verdict": "grounded",
+          "reasoning": "Both medications and their dosages are listed in the record."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any alternative treatments for my Psoriasis that could reduce the risk of side effects from Clobetasol Cream?",
+          "claim_text": "Patient has Psoriasis and takes Clobetasol Cream",
+          "verdict": "grounded",
+          "reasoning": "The record lists Mild Plaque Psoriasis and Clobetasol Cream for psoriasis flare control."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Can you review my Amlodipine (5mg) dosage and schedule to ensure it is aligned with my blood pressure control goals?",
+          "claim_text": "Patient takes Amlodipine 5mg for blood pressure control",
+          "verdict": "grounded",
+          "reasoning": "Amlodipine 5mg once daily for blood pressure control is listed in the record."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the expected results for my upcoming eye exam, and are there any specific tests or screenings that I need to be aware of?",
+          "claim_text": "Patient has an upcoming eye exam",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is an annual eye exam, supported by the record."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any changes to my eye exam schedule or procedures that I should be aware of?",
+          "claim_text": "Patient has an eye exam scheduled",
+          "verdict": "grounded",
+          "reasoning": "The record confirms a scheduled annual eye exam."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the current guidelines for monitoring my eye health as it relates to my Plaque Psoriasis and Essential Hypertension?",
+          "claim_text": "current guidelines for monitoring eye health",
+          "verdict": "unsupported",
+          "reasoning": "This invokes external clinical guidelines not present in the patient's record, which cannot be verified."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "What are the current guidelines for monitoring my eye health as it relates to my Plaque Psoriasis and Essential Hypertension?",
+          "claim_text": "Patient has Plaque Psoriasis and Essential Hypertension",
+          "verdict": "grounded",
+          "reasoning": "Both conditions are listed as active in the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes or recommendations that I can make to reduce my risk of eye problems related to my Plaque Psoriasis?",
+          "claim_text": "Patient has Plaque Psoriasis",
+          "verdict": "grounded",
+          "reasoning": "Mild Plaque Psoriasis is listed as an active condition."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Can you provide guidance on how to manage stress and anxiety, which can exacerbate my Plaque Psoriasis?",
+          "claim_text": "Patient has Plaque Psoriasis",
+          "verdict": "grounded",
+          "reasoning": "Plaque Psoriasis is listed in the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Can you provide guidance on how to manage stress and anxiety, which can exacerbate my Plaque Psoriasis?",
+          "claim_text": "stress and anxiety can exacerbate Plaque Psoriasis",
+          "verdict": "not_applicable",
+          "reasoning": "This is general lifestyle-related guidance without invoking a specific external authority or specialty-management fact."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific eye care habits or routines that you recommend for someone with my medical conditions?",
+          "claim_text": "Patient has medical conditions",
+          "verdict": "grounded",
+          "reasoning": "The record lists active medical conditions."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for any follow-up appointments or tests in the near future?",
+          "claim_text": "No factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no verifiable factual claim."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that I need to schedule?",
+          "claim_text": "No factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no verifiable factual claim."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a carryover concern from my last visit's planned-but-unconfirmed-as-addressed topics that I should be aware of?",
+          "claim_text": "No factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question and does not assert a specific prior-visit fact as established."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "Patient is scheduled for an annual eye exam at Clearview Eye Institute on 2026-09-05T14:00:00",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose, location, and date/time all match the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "Patient has mild Plaque Psoriasis and Essential Hypertension",
+          "verdict": "grounded",
+          "reasoning": "Both conditions are listed as active, with Plaque Psoriasis noted as mild."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "Patient is taking Clobetasol Cream (0.05%) and Amlodipine (5mg)",
+          "verdict": "grounded",
+          "reasoning": "Both medications with those dosages are listed in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "There are potential interactions between the patient's medications",
+          "verdict": "not_applicable",
+          "reasoning": "This is a general precautionary statement without asserting a specific verifiable interaction fact or external authority."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient's provider is an ophthalmologist",
+          "verdict": "grounded",
+          "reasoning": "The appointment doctor is listed as Dr. Nadia Petrov, Ophthalmology."
+        }
+      ]
+    },
+    {
+      "example_number": 28,
+      "case_id": "many_irrelevant_past_visits",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "Fully Supported",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "All questions directly address the patient's BPH diagnosis, tamsulosin medication, and appropriate monitoring (PSA, symptoms), matching the appointment purpose.",
+        "clarity": "Clear",
+        "clarity_reasoning": "Questions are phrased in plain, understandable language, and the one clinical term (ejaculatory dysfunction) is a legitimate and understandable side-effect concern.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "The questions cover medication side effects, dosage adjustment, monitoring, lifestyle, and follow-up planning, which would meaningfully structure a productive BPH follow-up conversation.",
+        "input_tokens": 1193,
+        "output_tokens": 256,
+        "duration_s": 3.9189728330238722
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "Are there any concerns about the potential for tamsulosin to cause ejaculatory dysfunction or other side effects?",
+          "claim_text": "the patient is taking tamsulosin",
+          "verdict": "grounded",
+          "reasoning": "The record lists Tamsulosin 0.4mg once daily as a medication."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any concerns about the potential for tamsulosin to cause ejaculatory dysfunction or other side effects?",
+          "claim_text": "tamsulosin can cause ejaculatory dysfunction or other side effects",
+          "verdict": "not_applicable",
+          "reasoning": "This is a general open-ended question about potential side effects with no patient-specific factual assertion or named external authority."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Is there a need to adjust the dosage of tamsulosin, and if so, what are the recommended changes?",
+          "claim_text": "the patient takes tamsulosin",
+          "verdict": "grounded",
+          "reasoning": "Tamsulosin is listed as the patient's medication."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any other lab results or monitoring that I should be aware of in relation to my BPH?",
+          "claim_text": "the patient has BPH",
+          "verdict": "grounded",
+          "reasoning": "The record lists an active diagnosis of Benign Prostatic Hyperplasia."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle changes that I can make to help manage my BPH symptoms?",
+          "claim_text": "the patient has BPH symptoms to manage",
+          "verdict": "grounded",
+          "reasoning": "The patient has an active BPH diagnosis and takes tamsulosin for urinary symptom control."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any recommendations for maintaining a healthy prostate through diet and exercise?",
+          "claim_text": "diet and exercise recommendations for prostate health",
+          "verdict": "not_applicable",
+          "reasoning": "This is open-ended lifestyle guidance with no named external authority or patient-specific factual assertion."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Is there a need for a repeat PSA test or any other follow-up testing in the near future?",
+          "claim_text": "a repeat PSA test may be needed",
+          "verdict": "not_applicable",
+          "reasoning": "This asks whether a test is needed without asserting a prior PSA test was done; it is an open-ended follow-up question with no factual claim about the patient's record."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any upcoming appointments or procedures scheduled for my BPH care?",
+          "claim_text": "upcoming appointments or procedures for BPH care",
+          "verdict": "not_applicable",
+          "reasoning": "This is a logistical open-ended question that does not assert any specific scheduled appointment or procedure as fact."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has an active diagnosis of benign prostatic hyperplasia",
+          "verdict": "grounded",
+          "reasoning": "The record lists Benign Prostatic Hyperplasia (N40.1) as active."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "the patient is taking tamsulosin for urinary symptom control",
+          "verdict": "grounded",
+          "reasoning": "Tamsulosin 0.4mg once daily for urinary symptom control is listed as the patient's medication."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The purpose of the upcoming appointment is to follow up on the patient's condition and discuss any changes or concerns.",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is listed as Benign prostatic hyperplasia follow-up."
+        }
+      ]
+    },
+    {
+      "example_number": 29,
+      "case_id": "cross_specialty_scope",
+      "categories_present": [
+        "Condition Management",
+        "Medication Review",
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Condition Management": "Fully Supported",
+        "Medication Review": "Fully Supported",
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "N/A",
+        "Context Summary": "N/A"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Relevant",
+        "relevance_reasoning": "The questions directly address the patient's Type 2 Diabetes follow-up, Metformin management, blood sugar targets, and monitoring, which align with the appointment purpose and medications. The psoriasis/Clobetasol interaction question is also appropriate given the patient's second condition.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language and avoid excessive clinical jargon, making them easy for a patient to read and ask.",
+        "usefulness": "Useful",
+        "usefulness_reasoning": "These questions cover targets, medication adjustments, labs, lifestyle, and follow-up, giving the patient a well-rounded framework to guide a productive conversation at a diabetes follow-up appointment.",
+        "input_tokens": 1126,
+        "output_tokens": 285,
+        "duration_s": 4.2711235829629
+      },
+      "missing_categories": [],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Condition Management",
+          "question": "What are the current blood sugar targets for my Type 2 Diabetes Mellitus, and are they being met?",
+          "claim_text": "I have Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "The record lists Type 2 Diabetes Mellitus (E11.9) as an active condition."
+        },
+        {
+          "category": "Condition Management",
+          "question": "Are there any changes to my medication regimen or dosage schedule that I should be aware of?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended question with no factual claim."
+        },
+        {
+          "category": "Condition Management",
+          "question": "What are the next steps for managing my Type 2 Diabetes Mellitus, and are there any new tests or monitoring requirements?",
+          "claim_text": "I have Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "The record lists Type 2 Diabetes Mellitus as an active condition."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between Metformin and Clobetasol Cream that I should be aware of?",
+          "claim_text": "I take Metformin",
+          "verdict": "grounded",
+          "reasoning": "Metformin 500mg twice daily is listed in the medications."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any potential interactions between Metformin and Clobetasol Cream that I should be aware of?",
+          "claim_text": "I take Clobetasol Cream",
+          "verdict": "grounded",
+          "reasoning": "Clobetasol Cream 0.05% once daily is listed in the medications."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Can I adjust my Metformin dosage or timing to better manage my blood sugar levels?",
+          "claim_text": "I take Metformin",
+          "verdict": "grounded",
+          "reasoning": "Metformin is listed in the medications for blood sugar control."
+        },
+        {
+          "category": "Medication Review",
+          "question": "Are there any alternative medications or treatments that could be more effective for my Type 2 Diabetes Mellitus?",
+          "claim_text": "I have Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "Type 2 Diabetes Mellitus is an active condition in the record."
+        },
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or monitoring requirements that I should be aware of?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended question with no factual claim."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "What lifestyle changes can I make to better manage my Type 2 Diabetes Mellitus and prevent complications?",
+          "claim_text": "I have Type 2 Diabetes Mellitus",
+          "verdict": "grounded",
+          "reasoning": "Type 2 Diabetes Mellitus is an active condition in the record."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any specific dietary or exercise recommendations for my condition?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended request for recommendations with no factual claim."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any pending referrals or tests that need to be scheduled?",
+          "claim_text": "no specific factual assertion",
+          "verdict": "not_applicable",
+          "reasoning": "Open-ended logistical question with no factual claim."
+        }
+      ]
+    },
+    {
+      "example_number": 30,
+      "case_id": "retrieval_redundancy",
+      "categories_present": [
+        "Lab Results & Monitoring",
+        "Lifestyle & Prevention",
+        "Follow-up Planning"
+      ],
+      "accuracy_rollup": {
+        "Lab Results & Monitoring": "N/A",
+        "Lifestyle & Prevention": "Fully Supported",
+        "Follow-up Planning": "Fully Supported",
+        "Context Summary": "Fully Supported"
+      },
+      "quality": {
+        "prompt_version": "v1-2026-08-29",
+        "relevance": "Partially Relevant",
+        "relevance_reasoning": "The questions relate to Hashimoto's and thyroid management, but they miss the appointment's core focus on lab trends (TSH trending down) and potential Levothyroxine dose adjustments, which would be the most pertinent topics given the recent dose changes.",
+        "clarity": "Clear",
+        "clarity_reasoning": "The questions are phrased in plain, understandable language without excessive clinical jargon, making them easy for a patient to follow.",
+        "usefulness": "Partially Useful",
+        "usefulness_reasoning": "The lifestyle and follow-up questions could add value, but the set omits the most useful discussion points about the downward TSH trend and whether the 75mcg dose needs changing, limiting how much it helps the central appointment purpose.",
+        "input_tokens": 1111,
+        "output_tokens": 283,
+        "duration_s": 4.735475874971598
+      },
+      "missing_categories": [
+        "Condition Management",
+        "Medication Review"
+      ],
+      "groundedness_unsupported_rate": 0.0,
+      "groundedness_claims": [
+        {
+          "category": "Lab Results & Monitoring",
+          "question": "Are there any pending lab tests or follow-up appointments that need to be discussed?",
+          "claim_text": "(none)",
+          "verdict": "not_applicable",
+          "reasoning": "This is an open-ended logistical question with no factual assertion."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle modifications that can be recommended to help manage Hashimoto's Thyroiditis symptoms, such as dietary changes or stress management techniques?",
+          "claim_text": "the patient has Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "The record lists Hashimoto's Thyroiditis (E06.3) as an active condition."
+        },
+        {
+          "category": "Lifestyle & Prevention",
+          "question": "Are there any lifestyle modifications that can be recommended to help manage Hashimoto's Thyroiditis symptoms, such as dietary changes or stress management techniques?",
+          "claim_text": "suggestion of lifestyle modifications such as dietary changes or stress management",
+          "verdict": "not_applicable",
+          "reasoning": "This is general lifestyle guidance without asserting any external authority, guideline, or specialty-management fact."
+        },
+        {
+          "category": "Follow-up Planning",
+          "question": "Are there any referrals or specialist appointments that need to be scheduled for the patient's Hashimoto's Thyroiditis management?",
+          "claim_text": "the patient has Hashimoto's Thyroiditis requiring management",
+          "verdict": "grounded",
+          "reasoning": "The record lists Hashimoto's Thyroiditis as an active condition, and the appointment is for thyroid management."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The patient has Hashimoto's Thyroiditis",
+          "verdict": "grounded",
+          "reasoning": "Hashimoto's Thyroiditis is listed as an active condition in the record."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "is taking Levothyroxine for thyroid hormone replacement",
+          "verdict": "grounded",
+          "reasoning": "The record lists Levothyroxine 75mcg once daily for thyroid hormone replacement."
+        },
+        {
+          "category": "Context Summary",
+          "question": "Context Summary",
+          "claim_text": "The upcoming appointment is to review the patient's thyroid management history and recent lab trends.",
+          "verdict": "grounded",
+          "reasoning": "The appointment purpose is stated as reviewing thyroid management history and recent lab trends."
+        }
+      ]
+    }
+  ]
+}

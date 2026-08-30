@@ -1,0 +1,888 @@
+{
+  "seed": 20260829,
+  "examples": [
+    {
+      "example_number": 1,
+      "case_id": "routine_neurology",
+      "description": "Routine neurology follow-up for migraine on a preventive medication.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any adjustments to be made to my current treatment plan for chronic migraines?"
+          ],
+          "Medication Review": [
+            "What are the potential side effects of Topiramate, and how can I minimize them?",
+            "Are there any dosage adjustments that can be made to Topiramate to better manage my migraines?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the next steps for monitoring my migraine frequency and severity?",
+            "Are there any additional lab tests that need to be run to track my condition?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to help reduce my migraine frequency and severity?",
+            "Are there any specific dietary or exercise recommendations for managing chronic migraines?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for a follow-up appointment in the near future?",
+            "Are there any referrals or specialist appointments that need to be scheduled?"
+          ]
+        },
+        "context_summary": "The patient has chronic migraines and is taking Topiramate for migraine prevention. The purpose of the visit is to follow up on their current treatment plan and make any necessary adjustments.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 2,
+      "case_id": "routine_pulmonology",
+      "description": "Routine pulmonology follow-up for asthma on a maintenance inhaler.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current asthma symptoms, and how have they been managing over the past few months?",
+            "Are there any changes in my asthma medication regimen that I should be aware of?"
+          ],
+          "Medication Review": [
+            "What is the purpose of my current medication regimen, and how will it be adjusted if necessary?",
+            "Are there any potential interactions between my medications and other health conditions I may have?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are my current lung function test results (e.g., FEV1), and are there any changes or concerns?",
+            "Are there any pending lab tests or monitoring that I should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to better manage my asthma, and how often should I monitor my symptoms?",
+            "Are there any specific allergens or triggers that I should avoid or take precautions against?"
+          ],
+          "Follow-up Planning": [
+            "What is the plan for my next follow-up appointment, and are there any specific topics to be discussed?",
+            "Are there any referrals or specialist appointments that I need to schedule in the near future?"
+          ]
+        },
+        "context_summary": "As we prepare for your asthma follow-up appointment, I want to ensure that we review your current symptoms, medication regimen, and any changes or concerns. This will help us tailor a plan to better manage your asthma and prevent any potential complications.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 3,
+      "case_id": "routine_family_medicine_multicondition",
+      "description": "Routine PCP follow-up for hypertension and hyperlipidemia, two conditions and two meds.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What is the current blood pressure reading, and are there any concerns regarding my hypertension management?",
+            "Are there any changes to my cholesterol management plan, and what are the updated lipid profiles?"
+          ],
+          "Medication Review": [
+            "Are there any potential interactions between my Amlodipine and Atorvastatin that I should be aware of?",
+            "Is there a need to adjust the dosage or timing of my medications?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the latest lipid profiles, and are there any concerns regarding my cholesterol levels?",
+            "Are there any pending lab results that I should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to improve my blood pressure and cholesterol management?",
+            "Are there any recommendations for diet, exercise, or stress management?"
+          ],
+          "Follow-up Planning": [
+            "Are there any referrals or next steps that I should be aware of?"
+          ]
+        },
+        "context_summary": "The patient has essential hypertension and hyperlipidemia, and is due for a follow-up appointment with their Family Medicine specialist to discuss their management plans. The patient is currently taking Amlodipine and Atorvastatin, and has not had any recent lab results or follow-up appointments with Cardiology.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 4,
+      "case_id": "routine_rheumatology",
+      "description": "Routine rheumatology follow-up for rheumatoid arthritis on methotrexate.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any adjustments to be made to my current treatment plan for Rheumatoid Arthritis?"
+          ],
+          "Medication Review": [
+            "Is there a need to adjust the dosage or frequency of Methotrexate?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes I can make to help manage my Rheumatoid Arthritis?"
+          ]
+        },
+        "context_summary": "The patient has Rheumatoid Arthritis and is taking Methotrexate as part of their treatment plan. They are due for a follow-up appointment with the Rheumatology department on 2026-09-01T11:00:00.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 5,
+      "case_id": "conflicting_cross_visit_notes",
+      "description": "Two past visits with the target doctor whose notes are in mild tension (one implies a recent dose change, the other says unchanged) \u2014 tests whether the model hedges rather than asserting either as settled fact.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any changes in my Hashimoto's Thyroiditis symptoms since my last visit?"
+          ],
+          "Lab Results & Monitoring": [
+            "What were my last TSH levels, and when were they ordered?",
+            "Are there any pending lab tests or follow-up appointments related to my thyroid condition?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes I can make to help manage my Hashimoto's Thyroiditis?",
+            "Are there any specific dietary recommendations or restrictions for my condition?"
+          ],
+          "Follow-up Planning": [
+            "Are there any referrals or specialist appointments that need to be scheduled?"
+          ]
+        },
+        "context_summary": "The patient has Hashimoto's Thyroiditis and is on Levothyroxine for thyroid hormone replacement. The purpose of the upcoming appointment is for a thyroid follow-up, and the patient's last TSH levels were stable. The patient's symptoms and medication regimen will be discussed during the appointment.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 6,
+      "case_id": "medication_mentioned_only_in_past_notes",
+      "description": "A medication was discontinued and is only mentioned in a past visit's notes, not in the current medication list \u2014 the generated output should not treat it as an ongoing medication.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "You have osteoarthritis in your right knee. What are the current treatment options, and are there any changes to your management plan since our last visit?"
+          ],
+          "Medication Review": [
+            "You were advised to discontinue ibuprofen due to GI upset and switch to acetaminophen as needed. Are there any concerns about this change, and are there any alternative pain management options we should consider?"
+          ],
+          "Lab Results & Monitoring": [
+            "Since our last visit, what are the current lab results for your osteoarthritis, and are there any pending tests or follow-ups that we should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "As you have osteoarthritis, it's essential to maintain a healthy weight to reduce stress on your joints. What lifestyle changes can you make to support your weight management, and are there any specific exercises or activities that you should avoid?"
+          ],
+          "Follow-up Planning": [
+            "Our next visit is scheduled for 2026-09-03T13:00:00. Are there any specific topics you'd like to discuss or any concerns you'd like to address before then?"
+          ]
+        },
+        "context_summary": "You have osteoarthritis in your right knee, and we previously discussed discontinuing ibuprofen due to GI upset. We should review your current treatment options and consider alternative pain management strategies.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 7,
+      "case_id": "inactive_condition_not_active_management",
+      "description": "Patient has one resolved condition and one active condition; the resolved one should not generate active-management questions.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current blood sugar targets for my Type 2 Diabetes Mellitus, and are they being met?",
+            "Are there any changes to my medication regimen or dosage that need to be discussed?"
+          ],
+          "Medication Review": [
+            "Can I expect any changes to my Metformin dosage or schedule in the future?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any pending lab results or tests that need to be discussed?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to improve my blood sugar control and overall health?",
+            "Are there any specific dietary or exercise recommendations for my Type 2 Diabetes Mellitus?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any follow-up appointments or tests in the near future?",
+            "Are there any concerns or issues that need to be addressed before my next appointment?"
+          ]
+        },
+        "context_summary": "The patient has Type 2 Diabetes Mellitus and is currently taking Metformin. The purpose of the visit is to follow up on their diabetes management and discuss any necessary changes to their treatment plan.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 8,
+      "case_id": "vitals_only_no_labs",
+      "description": "A vitals trend present with no lab orders at all \u2014 isolates vitals-only grounding, distinct from groundedness_labs_vitals which has both.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What is the current plan for managing my overweight condition, and are there any changes to be made to my treatment plan?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to support my weight loss goals, and are there any specific dietary recommendations for my condition?"
+          ],
+          "Follow-up Planning": [
+            "What is the expected weight loss goal for this follow-up appointment, and are there any specific metrics or measurements that will be tracked?"
+          ]
+        },
+        "context_summary": "The patient is a 41-year-old with an active overweight condition, and this follow-up appointment is scheduled to discuss weight management. The patient's vitals have shown a steady increase in weight and BMI over the past few months, with the most recent reading on 2026-08-15 showing a weight of 195 lbs and a BMI of 28.9. The patient's blood pressure has also been monitored, with the most recent reading on 2026-08-15 showing a BP of 128/82.",
+        "used_fallback": false,
+        "agentic_path": false,
+        "fallback_reason": "non_convergence"
+      }
+    },
+    {
+      "example_number": 9,
+      "case_id": "max_density_multi_comorbidity",
+      "description": "Dense profile: 4 conditions, 5 medications, multiple labs, and a long past-visit history \u2014 stresses context-selection budget and the 15-question ceiling simultaneously.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "How does my Hashimoto's Thyroiditis treatment plan align with my current medication regimen?",
+            "What are the current blood pressure targets for my Essential Hypertension, and are they being met?",
+            "What are the current lipid targets for my Hyperlipidemia, and are they being met?"
+          ],
+          "Medication Review": [
+            "Are there any potential interactions between my medications, such as Metformin, Levothyroxine, Lisinopril, Atorvastatin, and Empagliflozin?",
+            "Are there any dosage adjustments or changes to my medication regimen that need to be made?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the results of my recent HbA1c test (ordered: 2026-08-20)?",
+            "What are the results of my recent TSH test (ordered: 2026-08-20)?",
+            "What are the results of my recent Lipid Panel test (ordered: 2026-07-01)?",
+            "Are there any pending lab orders or tests that need to be scheduled?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes or recommendations can I make to better manage my Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis?",
+            "Are there any specific dietary changes or restrictions that I need to follow?"
+          ],
+          "Follow-up Planning": [
+            "Are there any referrals or specialist appointments that need to be scheduled?"
+          ]
+        },
+        "context_summary": "The patient has multiple chronic conditions, including Type 2 Diabetes Mellitus, Hashimoto's Thyroiditis, Essential Hypertension, and Hyperlipidemia. They are currently taking several medications to manage these conditions. The patient has recent lab orders and vitals data, and we need to review their treatment plans and make any necessary adjustments.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 10,
+      "case_id": "groundedness_labs_vitals",
+      "description": "Endocrinology visit with lab orders and a vitals trend present, so the groundedness entity-match check has real entities to find.",
+      "raw_result": {
+        "questions": {
+          "Medication Review": [
+            "Are there any alternative medications or dosages that could be used for thyroid hormone replacement?"
+          ],
+          "Lab Results & Monitoring": [
+            "What were the results of the TSH test ordered on 2026-07-15, and are they available?",
+            "Are there any pending lab results or tests that need to be discussed during this appointment?"
+          ],
+          "Lifestyle & Prevention": [
+            "What are some lifestyle changes that could help manage Hashimoto's Thyroiditis, and how can I implement them?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for a follow-up appointment to check on the effectiveness of the current treatment plan?",
+            "Are there any referrals or specialist appointments that need to be scheduled in the near future?"
+          ]
+        },
+        "context_summary": "The patient has Hashimoto's Thyroiditis and is taking Levothyroxine for thyroid hormone replacement. The upcoming appointment is for a thyroid check, and the patient's recent vitals show a weight of 165 lbs and a BMI of 26.1. The patient's current medication regimen and lab results will be discussed during the appointment.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 11,
+      "case_id": "routine_gastroenterology",
+      "description": "Routine gastroenterology follow-up for GERD on a PPI.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any concerns about the effectiveness of omeprazole in managing my GERD symptoms?"
+          ],
+          "Medication Review": [
+            "Is it possible to adjust the dosage of omeprazole to better manage my symptoms?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any pending lab tests or procedures scheduled for my follow-up visit?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to help manage my GERD symptoms, such as diet and exercise?",
+            "Are there any specific foods or triggers that I should avoid to reduce my symptoms?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for a follow-up appointment to monitor my symptoms or adjust my treatment plan?",
+            "Are there any referrals or specialist appointments scheduled for my follow-up visit?"
+          ]
+        },
+        "context_summary": "The patient has an active diagnosis of GERD and is taking omeprazole for acid suppression. The purpose of the visit is to follow up on their symptoms and adjust their treatment plan as needed.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 12,
+      "case_id": "routine_psychiatry",
+      "description": "Routine psychiatry follow-up for major depressive disorder on an SSRI.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the expected symptoms of Major Depressive Disorder (F33.1) during the next 2 weeks, and how will they be monitored?",
+            "Are there any changes to my current treatment plan for Major Depressive Disorder (F33.1) that I should be aware of?"
+          ],
+          "Medication Review": [
+            "What are the potential side effects of Sertraline (100mg) that I should be aware of?",
+            "Are there any dosage adjustments or changes to the treatment plan for Sertraline (100mg) that I should be aware of?"
+          ],
+          "Lab Results & Monitoring": [
+            "What is the expected TSH level for someone with Major Depressive Disorder (F33.1) on Sertraline (100mg) treatment?",
+            "Are there any pending lab results or tests that I should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "How can I manage stress and anxiety while taking Sertraline (100mg) for Major Depressive Disorder (F33.1)?",
+            "Are there any lifestyle changes or recommendations that can help improve my symptoms?"
+          ],
+          "Follow-up Planning": [
+            "Is there a scheduled follow-up appointment for my medication follow-up on 2026-09-01T10:00:00?",
+            "Are there any referrals or recommendations for additional treatment or support that I should be aware of?"
+          ]
+        },
+        "context_summary": "The patient has Major Depressive Disorder (F33.1) and is taking Sertraline (100mg) for depression management. The purpose of the upcoming appointment is a medication follow-up. The patient's current treatment plan and medication regimen will be discussed to ensure optimal management of their symptoms.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 13,
+      "case_id": "routine_orthopedics",
+      "description": "Routine orthopedics follow-up for knee osteoarthritis on an as-needed NSAID.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What is the current severity of my right knee osteoarthritis, and are there any changes since our last visit?"
+          ],
+          "Medication Review": [
+            "Are there any dosage adjustments or changes to my Naproxen regimen that I should be aware of?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the latest lab results for my knee osteoarthritis, and are there any pending tests or follow-ups I should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes or recommendations I can make to help manage my knee osteoarthritis?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any further imaging or testing to monitor my knee osteoarthritis?",
+            "Are there any referrals or specialists I should be seeing for my knee osteoarthritis?"
+          ]
+        },
+        "context_summary": "I have knee osteoarthritis and am taking Naproxen for pain management. I have a follow-up appointment with my Orthopedics specialist on 2026-09-02 to discuss my condition and treatment plan.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 14,
+      "case_id": "routine_ent",
+      "description": "Routine ENT follow-up for chronic sinusitis on a daily nasal spray.",
+      "raw_result": {
+        "questions": {
+          "Medication Review": [
+            "Can I adjust the dosage or frequency of my fluticasone nasal spray, and if so, how often should I do so?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes I can make to help manage my chronic sinusitis, such as avoiding allergens or using a humidifier?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for further testing or evaluation, such as a CT scan or allergy testing, to better manage my chronic sinusitis?"
+          ]
+        },
+        "context_summary": "The patient has chronic sinusitis and is taking fluticasone nasal spray twice daily. The purpose of the visit is to follow up on the patient's condition and discuss any changes or concerns.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 15,
+      "case_id": "labs_mixed_temporal_status",
+      "description": "Multiple lab orders at different ages, some recently ordered and some overdue for follow-up \u2014 tests whether temporal qualifiers are used correctly rather than presupposing results.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any concerns about the effectiveness of my current treatment plan, and are there any potential side effects I should be aware of?"
+          ],
+          "Medication Review": [
+            "Is there a need to adjust my dosage or frequency of taking mesalamine, and if so, what are the recommended changes?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the results of my recent C-Reactive Protein test (ordered: 2026-08-25), and what do they indicate about my overall health?",
+            "What are the results of my recent Fecal Calprotectin test (ordered: 2026-03-01), and how do they relate to my Crohn's Disease management?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any dietary changes or lifestyle modifications that I can make to help manage my Crohn's Disease?",
+            "Are there any specific nutrients or supplements that I should be taking to support my treatment plan?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any additional testing or monitoring to support my treatment plan, and if so, what are the next steps?",
+            "Are there any concerns about my upcoming appointment on 2026-09-04T11:00:00, and are there any specific topics that need to be discussed?"
+          ]
+        },
+        "context_summary": "The patient has active Crohn's Disease and is taking mesalamine for maintenance therapy. They have recent lab orders for C-Reactive Protein and Fecal Calprotectin, and their next appointment is scheduled for 2026-09-04T11:00:00.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 16,
+      "case_id": "same_specialty_switched_doctors",
+      "description": "Patient switched cardiologists; past visits exist with both the target doctor and a prior same-specialty doctor \u2014 tests same-doctor-only-most-recent handling in a non-unit-test case.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current rate control goals for my atrial fibrillation, and are they being met?",
+            "Are there any changes to the recommended rate control strategy since my last visit?"
+          ],
+          "Medication Review": [
+            "Is it possible to adjust the dosage of Apixaban to improve tolerability or reduce side effects?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any pending lab tests or procedures scheduled for my atrial fibrillation management?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle modifications or recommendations that can help reduce my risk of stroke or improve my overall cardiovascular health?",
+            "Should I consider any additional tests or screenings to monitor my atrial fibrillation or cardiovascular risk?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any further follow-up appointments or tests to monitor my atrial fibrillation?",
+            "Are there any referrals or consultations with other specialists that I should be aware of?"
+          ]
+        },
+        "context_summary": "A 41-year-old patient with active atrial fibrillation, currently taking Apixaban for stroke prevention, is due for a follow-up appointment with their Cardiology specialist on 2026-09-04T13:00:00. The patient has a history of well-controlled atrial fibrillation on current regimen, but it is unclear if the current rate control strategy is optimal.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 17,
+      "case_id": "excluded_doctor_relevant_history",
+      "description": "A doctor with clearly relevant history is marked exclude_from_prep_context \u2014 checks that excluded context genuinely doesn't leak into the generated output.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current thyroid function test (TFT) results, and are there any adjustments needed to my Levothyroxine dosage?"
+          ],
+          "Medication Review": [
+            "Can you review my Levothyroxine dosage and timing to ensure it's optimal for my Hashimoto's Thyroiditis?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes I can make to help manage my Hashimoto's Thyroiditis, such as diet or exercise recommendations?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any follow-up appointments or tests in the near future?"
+          ]
+        },
+        "context_summary": "This patient has Hashimoto's Thyroiditis and is taking Levothyroxine for thyroid hormone replacement. The purpose of this visit is for a thyroid follow-up, and the patient's current medication regimen and lab results will be reviewed.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 18,
+      "case_id": "minimal_single_condition_single_med",
+      "description": "One condition, one medication, nothing else \u2014 a step above cold_start's zero-medication case, testing the floor with just barely enough data. Deliberately a different specialty/condition from any other case in this set (was previously a near-duplicate of routine_neurology's migraine/Topiramate profile \u2014 swapped to avoid overlapping coverage).",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current symptoms of my atopic dermatitis, and how can I manage them?",
+            "Are there any changes in my condition that I should be aware of, and how can I track them?"
+          ],
+          "Medication Review": [
+            "What are the potential side effects of Tacrolimus Ointment (0.1%) for my atopic dermatitis, and how can I minimize them?",
+            "Are there any alternative treatments or medications that could be used for my condition, and why not?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any specific lab tests or examinations that I need to have to track my condition?"
+          ],
+          "Lifestyle & Prevention": [
+            "How can I prevent eczema flare-ups, and what lifestyle changes can I make to reduce my symptoms?",
+            "Are there any specific skin care routines or products that you recommend for my condition?"
+          ],
+          "Follow-up Planning": [
+            "What are the next steps for my treatment plan, and when can I expect to see improvements in my symptoms?",
+            "Are there any follow-up appointments or tests that I need to have to ensure my condition is being managed effectively?"
+          ]
+        },
+        "context_summary": "The patient has atopic dermatitis and is using Tacrolimus Ointment (0.1%) to manage their symptoms. They are due for a follow-up appointment with the Dermatology specialist on 2026-09-05T10:00:00 to discuss their condition and treatment plan.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 19,
+      "case_id": "cold_start",
+      "description": "Minimal profile: one condition, no medications, no past visits, no labs \u2014 exercises the fallback/format-validity path.",
+      "raw_result": {
+        "questions": {
+          "Lifestyle & Prevention": [
+            "What lifestyle changes or recommendations can I make to help manage my Seasonal Allergic Rhinitis, such as avoiding triggers or using immunotherapy?"
+          ]
+        },
+        "context_summary": "The patient is scheduled for an annual physical with their Family Medicine specialist on August 3rd, 2026.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 20,
+      "case_id": "tool_call_necessity_dosing",
+      "description": "Two same-specialty medications with a real absorption-timing interaction (mirrors docs/tdd.html's Walkthrough example) \u2014 get_medication_details is worth calling to answer this well.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current blood sugar targets for my Type 2 Diabetes Mellitus, and are they being met?",
+            "How does my Hashimoto's Thyroiditis affect my thyroid hormone levels, and what are the implications for my treatment plan?"
+          ],
+          "Medication Review": [
+            "Are there any potential interactions between Metformin and Levothyroxine that I should be aware of?",
+            "Can you confirm that the prescribed dosages of Metformin and Levothyroxine are the optimal starting points for my treatment plan?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any specific thyroid function tests that I should be monitoring, and what are the target ranges?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to improve my blood sugar control and thyroid function?",
+            "Are there any specific dietary restrictions or recommendations for my Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any follow-up appointments or referrals to discuss my treatment plan?",
+            "Are there any specific concerns or issues that need to be addressed before my next appointment?"
+          ]
+        },
+        "context_summary": "The patient has Type 2 Diabetes Mellitus and Hashimoto's Thyroiditis, and is taking Metformin and Levothyroxine. The purpose of the upcoming appointment is to review medication timing and discuss treatment plan.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 21,
+      "case_id": "routine_nephrology",
+      "description": "Routine nephrology follow-up for stage 2 CKD on an ACE inhibitor.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current kidney function estimates based on the eGFR test ordered on 2026-08-20?",
+            "Are there any changes in the patient's kidney function since the last visit?"
+          ],
+          "Medication Review": [
+            "Is there any need to adjust the dosage of Lisinopril based on the patient's current kidney function?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the current estimated glomerular filtration rate (eGFR) values based on the recent test?",
+            "Are there any pending lab tests or follow-up appointments related to the patient's kidney function?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle modifications or dietary changes recommended for the patient's chronic kidney disease management?",
+            "Are there any signs of worsening kidney function that the patient should be aware of?"
+          ],
+          "Follow-up Planning": [
+            "Are there any referrals or specialist appointments scheduled for the patient's ongoing care?"
+          ]
+        },
+        "context_summary": "The patient has chronic kidney disease, stage 2, and is taking Lisinopril for blood pressure and renal protection. The patient's recent lab orders include a basic metabolic panel (eGFR) test ordered on 2026-08-20.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 22,
+      "case_id": "routine_obgyn",
+      "description": "Routine OB/GYN follow-up for PCOS on an oral contraceptive.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any changes to my treatment plan for PCOS, and why?"
+          ],
+          "Medication Review": [
+            "What are the potential side effects of Norethindrone/Ethinyl Estradiol, and how can I minimize them?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any additional lab tests that need to be run to monitor my PCOS symptoms or treatment response?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to help manage my PCOS symptoms and improve my overall health?",
+            "Are there any specific dietary or exercise recommendations for me to follow?"
+          ],
+          "Follow-up Planning": [
+            "What are the next steps in my care, and when can I expect to see my provider again?"
+          ]
+        },
+        "context_summary": "I am a 41-year-old woman with active Polycystic Ovary Syndrome (PCOS) and am taking Norethindrone/Ethinyl Estradiol for cycle regulation. I am due for a follow-up visit with my Obstetrics & Gynecology provider on September 1st, 2026.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 23,
+      "case_id": "routine_ophthalmology",
+      "description": "Routine ophthalmology follow-up for glaucoma on daily eye drops.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current intraocular pressure readings, and are they within the target range for my glaucoma treatment?",
+            "Are there any changes in my glaucoma management plan, such as adjustments to my medication regimen or follow-up schedule?"
+          ],
+          "Medication Review": [
+            "Is it necessary to adjust my latanoprost dosage or timing, and if so, what are the recommended changes?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any pending lab tests or examinations that I need to have, and if so, what are the scheduled dates?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes I can make to help manage my glaucoma, such as diet or exercise recommendations?",
+            "Are there any specific eye care habits I should follow to help prevent further progression of my glaucoma?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for a follow-up appointment within the next few months, and if so, what are the scheduled dates and times?",
+            "Are there any referrals or specialist appointments that I need to schedule in the near future?"
+          ]
+        },
+        "context_summary": "The patient has primary open-angle glaucoma and is taking latanoprost to control intraocular pressure. They have an upcoming appointment with their Ophthalmology to discuss their glaucoma management plan and any necessary adjustments.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 24,
+      "case_id": "routine_cardiology",
+      "description": "Routine cardiology follow-up for atrial fibrillation on anticoagulation.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any concerns about the risk of stroke or embolism with Apixaban, and are there any alternative anticoagulants being considered?",
+            "How is the rate control with Metoprolol, and are there any adjustments that need to be made?"
+          ],
+          "Medication Review": [
+            "Are there any potential interactions between Apixaban and Metoprolol that I should be aware of?",
+            "Are there any changes to the dosing schedule for either medication that I should be aware of?",
+            "Are there any alternative medications that could be used to manage my atrial fibrillation?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the latest results for my INR level, and are there any adjustments that need to be made to my Apixaban dosage?",
+            "Are there any pending lab tests or monitoring that I should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes that I can make to reduce my risk of stroke or heart failure?",
+            "Are there any recommendations for exercise or physical activity that I should follow?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for a follow-up appointment in the near future?",
+            "Are there any referrals or specialist appointments that I need to schedule?"
+          ]
+        },
+        "context_summary": "",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 25,
+      "case_id": "condition_severity_variation",
+      "description": "A condition explicitly marked severe \u2014 tests whether severity influences question specificity without inventing facts beyond what the severity field states.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What is the current severity of my asthma, and how does it compare to my previous visits?",
+            "What are the specific triggers that are causing my asthma to be severe, and how can I avoid them?"
+          ],
+          "Medication Review": [
+            "Are there any adjustments that need to be made to my Fluticasone/Salmeterol dosage, and why?",
+            "Are there any potential interactions between my Fluticasone/Salmeterol and Albuterol that I should be aware of?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are my latest lung function test results, and how do they compare to my previous tests?",
+            "Are there any pending lab tests that I need to have done, and what are their purposes?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to help manage my asthma, and how often should I monitor my symptoms?",
+            "Are there any specific asthma-friendly products or services that you recommend?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any additional testing or follow-up appointments in the next few months?",
+            "Are there any referrals or specialist appointments that I need to schedule in the near future?"
+          ]
+        },
+        "context_summary": "",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 26,
+      "case_id": "referral_carryover_unconfirmed",
+      "description": "A past visit's notes mention a planned referral; the next visit's notes are silent on it \u2014 a real carryover the model should surface as a follow-up question.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current kidney function tests (eGFR) and how do they compare to the previous visit?",
+            "Are there any changes to my CKD stage or classification?",
+            "What are the current treatment goals for my CKD, and how will they be monitored?"
+          ],
+          "Medication Review": [
+            "Is there any need to adjust the dosage of Lisinopril, and what are the potential benefits and risks of changing the medication?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the current lab results for my kidney function, and when can I expect to see the next set of results?",
+            "Are there any pending lab tests or procedures that I should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "What dietary changes can I make to better manage my CKD, and how can I work with a renal dietitian to develop a personalized plan?",
+            "Are there any lifestyle modifications I can make to reduce my risk of CKD progression?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for a referral to a renal dietitian, and when can I expect to see a specialist?",
+            "Are there any upcoming appointments or procedures that I should be aware of?"
+          ]
+        },
+        "context_summary": "The patient has Chronic Kidney Disease, Stage 3, and is currently taking Lisinopril for blood pressure and renal protection. The patient's last CKD follow-up visit was on 2026-07-15T10:00:00, and the provider discussed hydration and blood pressure control. The patient is due for a follow-up visit on 2026-09-04T10:00:00.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 27,
+      "case_id": "all_out_of_scope_for_specialty",
+      "description": "Every condition and medication is out of scope for the target specialty \u2014 an extreme version of cross_specialty_scope. Every category should legitimately have little or nothing to say; tests whether the model produces a short, honest list instead of padding with off-scope or invented content.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any new or worsening symptoms of Essential Hypertension that need to be addressed?",
+            "Are there any changes to my treatment plan for either condition that I should be aware of?"
+          ],
+          "Medication Review": [
+            "What are the potential interactions between Clobetasol Cream (0.05%) and Amlodipine (5mg) that I should be aware of?",
+            "Are there any alternative treatments for my Psoriasis that could reduce the risk of side effects from Clobetasol Cream?",
+            "Can you review my Amlodipine (5mg) dosage and schedule to ensure it is aligned with my blood pressure control goals?"
+          ],
+          "Lab Results & Monitoring": [
+            "What are the expected results for my upcoming eye exam, and are there any specific tests or screenings that I need to be aware of?",
+            "Are there any changes to my eye exam schedule or procedures that I should be aware of?",
+            "What are the current guidelines for monitoring my eye health as it relates to my Plaque Psoriasis and Essential Hypertension?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes or recommendations that I can make to reduce my risk of eye problems related to my Plaque Psoriasis?",
+            "Can you provide guidance on how to manage stress and anxiety, which can exacerbate my Plaque Psoriasis?",
+            "Are there any specific eye care habits or routines that you recommend for someone with my medical conditions?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for any follow-up appointments or tests in the near future?",
+            "Are there any referrals or specialist appointments that I need to schedule?",
+            "Is there a carryover concern from my last visit's planned-but-unconfirmed-as-addressed topics that I should be aware of?"
+          ]
+        },
+        "context_summary": "The patient is scheduled for an annual eye exam at Clearview Eye Institute on 2026-09-05T14:00:00. They have mild Plaque Psoriasis and Essential Hypertension, and are currently taking Clobetasol Cream (0.05%) and Amlodipine (5mg). The patient should be aware of potential interactions between their medications, and should discuss any changes to their treatment plan or lifestyle habits with their ophthalmologist.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 28,
+      "case_id": "many_irrelevant_past_visits",
+      "description": "Several past visits, all with an unrelated-specialty doctor \u2014 tests retrieval filtering under volume, distinct from retrieval_redundancy's same-doctor case. Deliberately a different specialty/condition from any other case in this set (was previously a near-duplicate of routine_ophthalmology's glaucoma/Latanoprost profile \u2014 swapped to avoid overlapping coverage).",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "Are there any concerns about the potential for tamsulosin to cause ejaculatory dysfunction or other side effects?"
+          ],
+          "Medication Review": [
+            "Is there a need to adjust the dosage of tamsulosin, and if so, what are the recommended changes?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any other lab results or monitoring that I should be aware of in relation to my BPH?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle changes that I can make to help manage my BPH symptoms?",
+            "Are there any recommendations for maintaining a healthy prostate through diet and exercise?"
+          ],
+          "Follow-up Planning": [
+            "Is there a need for a repeat PSA test or any other follow-up testing in the near future?",
+            "Are there any upcoming appointments or procedures scheduled for my BPH care?"
+          ]
+        },
+        "context_summary": "The patient has an active diagnosis of benign prostatic hyperplasia and is taking tamsulosin for urinary symptom control. The purpose of the upcoming appointment is to follow up on the patient's condition and discuss any changes or concerns.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 29,
+      "case_id": "cross_specialty_scope",
+      "description": "Endocrinology visit; patient also has a dermatology medication from an unrelated doctor \u2014 scope checker should catch a question about it if the model generates one.",
+      "raw_result": {
+        "questions": {
+          "Condition Management": [
+            "What are the current blood sugar targets for my Type 2 Diabetes Mellitus, and are they being met?",
+            "Are there any changes to my medication regimen or dosage schedule that I should be aware of?",
+            "What are the next steps for managing my Type 2 Diabetes Mellitus, and are there any new tests or monitoring requirements?"
+          ],
+          "Medication Review": [
+            "Are there any potential interactions between Metformin and Clobetasol Cream that I should be aware of?",
+            "Can I adjust my Metformin dosage or timing to better manage my blood sugar levels?",
+            "Are there any alternative medications or treatments that could be more effective for my Type 2 Diabetes Mellitus?"
+          ],
+          "Lab Results & Monitoring": [
+            "Are there any pending lab tests or monitoring requirements that I should be aware of?"
+          ],
+          "Lifestyle & Prevention": [
+            "What lifestyle changes can I make to better manage my Type 2 Diabetes Mellitus and prevent complications?",
+            "Are there any specific dietary or exercise recommendations for my condition?"
+          ],
+          "Follow-up Planning": [
+            "Are there any pending referrals or tests that need to be scheduled?"
+          ]
+        },
+        "context_summary": "",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    },
+    {
+      "example_number": 30,
+      "case_id": "retrieval_redundancy",
+      "description": "Several past visits with the target doctor, already surfaced by Phase 1 context selection \u2014 if the model calls lookup_past_visits, check whether it just re-fetched what Phase 1 already provided.",
+      "raw_result": {
+        "questions": {
+          "Lab Results & Monitoring": [
+            "Are there any pending lab tests or follow-up appointments that need to be discussed?"
+          ],
+          "Lifestyle & Prevention": [
+            "Are there any lifestyle modifications that can be recommended to help manage Hashimoto's Thyroiditis symptoms, such as dietary changes or stress management techniques?"
+          ],
+          "Follow-up Planning": [
+            "Are there any referrals or specialist appointments that need to be scheduled for the patient's Hashimoto's Thyroiditis management?"
+          ]
+        },
+        "context_summary": "The patient has Hashimoto's Thyroiditis and is taking Levothyroxine for thyroid hormone replacement. The upcoming appointment is to review the patient's thyroid management history and recent lab trends.",
+        "used_fallback": false,
+        "agentic_path": true,
+        "fallback_reason": null
+      }
+    }
+  ]
+}
