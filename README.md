@@ -11,6 +11,7 @@
 ![python](https://img.shields.io/badge/python-3.11+-2f626a)
 ![status](https://img.shields.io/badge/status-active%20development-2f626a)
 ![release](https://img.shields.io/github/v/release/nidhi-menon/HealthSteward?include_prereleases&color=20464c)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22181289.svg)](https://doi.org/10.5281/zenodo.22181289)
 
 **[Website](https://healthstewardai.com/) · [LinkedIn](https://www.linkedin.com/company/healthsteward-ai/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues) · [Contact](mailto:nidhi@healthstewardai.com)**
 
