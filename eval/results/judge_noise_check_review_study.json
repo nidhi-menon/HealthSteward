@@ -1,0 +1,52 @@
+{
+  "prefix": [
+    {
+      "unsupported_rate": 0.04721030042918455,
+      "scored_claims": 233,
+      "unsupported_claims": 11,
+      "skipped_cases": [
+        "condition_severity_variation"
+      ]
+    },
+    {
+      "unsupported_rate": 0.05909090909090909,
+      "scored_claims": 220,
+      "unsupported_claims": 13,
+      "skipped_cases": [
+        "condition_severity_variation",
+        "cross_specialty_scope"
+      ]
+    },
+    {
+      "unsupported_rate": 0.05263157894736842,
+      "scored_claims": 228,
+      "unsupported_claims": 12,
+      "skipped_cases": [
+        "condition_severity_variation",
+        "cross_specialty_scope"
+      ]
+    }
+  ],
+  "postfix": [
+    {
+      "unsupported_rate": 0.04072398190045249,
+      "scored_claims": 221,
+      "unsupported_claims": 9,
+      "skipped_cases": []
+    },
+    {
+      "unsupported_rate": 0.05263157894736842,
+      "scored_claims": 228,
+      "unsupported_claims": 12,
+      "skipped_cases": []
+    },
+    {
+      "unsupported_rate": 0.0410958904109589,
+      "scored_claims": 219,
+      "unsupported_claims": 9,
+      "skipped_cases": [
+        "cross_specialty_scope"
+      ]
+    }
+  ]
+}

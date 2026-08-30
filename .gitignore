@@ -26,6 +26,18 @@ CLAUDE.md
 # tracked; only its output isn't.
 eval/results/*.json
 
+# Exception: the 30-case human-vs-LLM-judge review study's own inputs/
+# outputs are cited in the paper's Data Availability section (DEC-042) —
+# these need to be publicly reproducible, unlike the general run output
+# ignored above.
+!eval/results/review_study_outputs.json
+!eval/results/review_study_outputs_prefix_backup.json
+!eval/results/review_study_outputs_postfix.json
+!eval/results/judge_review_study_results.json
+!eval/results/judge_review_study_results_prefix_backup.json
+!eval/results/judge_review_study_results_postfix.json
+!eval/results/judge_noise_check_review_study.json
+
 # ===============================================
 # SECRETS & API KEYS
 # ===============================================

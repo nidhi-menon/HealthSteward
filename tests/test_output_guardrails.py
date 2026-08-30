@@ -55,6 +55,29 @@ class TestPresupposesMissingTest:
         q = "What are my current A1C and TSH levels, and when should I expect to see the next lab results?"
         assert _presupposes_missing_test(q, known_lab_names=set()) is True
 
+    def test_flags_real_found_case_current_lung_function_test_results(self):
+        """Found in the review-study eval: 'current' and 'results' were
+        already covered individually, but the single-word-gap version of the
+        recency-qualifier regex missed 'current lung function test results'
+        (3 words between 'current' and 'results'). Needed the bounded-gap
+        rewrite ([^.?!]{0,40} instead of \\S+)."""
+        q = "What do my current lung function test results show, and is any change to my treatment plan needed?"
+        assert _presupposes_missing_test(q, known_lab_names=set()) is True
+
+    def test_flags_real_found_case_latest_lab_results(self):
+        """'latest' wasn't in the recency-qualifier alternation at all
+        (only 'most recent'/'last'/'recent') until DEC-042's review-study
+        pass added it alongside the bounded-gap fix."""
+        q = "What were my latest lab results, and do they suggest I need a medication adjustment?"
+        assert _presupposes_missing_test(q, known_lab_names=set()) is True
+
+    def test_flags_real_found_case_results_for_no_lab_orders(self):
+        """'results for' (as opposed to 'results of'/'results from') slipped
+        through _PRESUPPOSED_TEST_PATTERNS until the review-study pass added
+        it explicitly."""
+        q = "What are the results for my metabolic panel, and should my diet change based on them?"
+        assert _presupposes_missing_test(q, known_lab_names=set()) is True
+
 
 class TestPresupposesMissingReferral:
     def test_flags_real_found_case_endocrinology_followup(self):
