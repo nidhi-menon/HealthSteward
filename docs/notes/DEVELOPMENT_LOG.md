@@ -2212,4 +2212,14 @@ Related: DEC-042, DEC-016, DEC-033, issue #164.
 
 ---
 
+**2026-08-30 — Pre-release readiness check surfaces three gaps between the manuscript and the repo (DEC-042 addendum).** Asked whether the codebase was ready to lock in for a release the paper could cite, and it wasn't, despite the full test suite passing clean. First, the review-study eval had found a real regex gap — "current lung function test results" slipped through the recency-qualifier check because the old pattern only allowed a single word between the qualifier and the noun — and the fix sat uncommitted while the manuscript already claimed it had been "added to the guardrail's regression suite." Wrote 3 regression tests pinning the exact failing strings and committed the fix with them. Second, the entire 30-case human-vs-LLM-judge review-study harness (6 scripts plus their JSON outputs) had never been committed at all, despite the paper's Data Availability section claiming the evaluation results were public — added a targeted `.gitignore` exception for just those 7 files, since the blanket `eval/results/*.json` ignore rule (issue #29) is for disposable run output, not paper-cited artifacts. Third, in committing that harness, the human-reviewer packets (`HS-review-packet-*.md/.pdf`) got swept in by mistake — DEC-042 already states those live in the separate Research repo, not here — caught immediately and reverted in a follow-up commit, with the packets moved to `Research/npj-perspective-2026/ieee-jbhi/review-packets/` instead.
+
+Still open: no tagged release exists yet, and the manuscript's Data Availability TODO should point at that tag once cut rather than a moving `main` branch.
+
+**Files changed:** `src/agents/output_guardrails.py`, `tests/test_output_guardrails.py`, `.gitignore`, `docs/notes/DECISIONS.md` (DEC-042 addendum), 6 new files under `eval/`, 7 new files under `eval/results/`.
+
+Related: DEC-042.
+
+---
+
 *This document will be updated at periodic checkpoints as development continues.*

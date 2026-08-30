@@ -1503,6 +1503,16 @@ Both fixed (`eval/judge.py`, prompt version bumped to v2): `_questions_text` now
 
 Related: `eval/scorers.py::score_groundedness`, `docs/tdd.html` (Generation eval table), DEC-016.
 
+**Addendum, 2026-08-30 — regression-test gap and eval-harness availability, found preparing to lock a release for the paper.** Asked whether the codebase was ready to cut a release the paper could cite as a fixed version, and it wasn't: three real gaps between what the manuscript claims and what was actually in git.
+
+- **Uncommitted regex fix with no regression test.** `_PRESUPPOSED_TEST_PATTERNS`'/`_PRESUPPOSED_RESULT_VALUE_PATTERNS`' recency-qualifier regex used a single-word gap (`\S+`) between the qualifier and the noun, so "current lung function test results" (3 intervening words) slipped through — found via the review-study eval. Manuscript Section V.E already claimed *"the pattern was corrected and added to the guardrail's regression suite"*, which wasn't true yet. Fixed with a bounded-gap match (`[^.?!]{0,40}` instead of `\S+`), added "latest" to the qualifier alternation and "results for" to `_PRESUPPOSED_TEST_PATTERNS`, and added 3 regression tests in `tests/test_output_guardrails.py` pinning the exact failing strings, per this DEC's existing discipline of pinning real found-bug cases rather than only synthetic examples.
+- **The 30-case review-study harness was entirely untracked.** `eval/build_review_assignments.py`, `eval/build_review_packets.py`, `eval/fixtures_review_study.py`, `eval/generate_review_outputs.py`, `eval/judge_noise_check_review_study.py`, `eval/judge_review_study.py`, and their JSON outputs (`review_study_outputs*.json`, `judge_review_study_results*.json`, `judge_noise_check_review_study.json`) had never been committed, despite the manuscript's Data Availability section claiming the evaluation results are publicly available. Committed the scripts and a targeted `.gitignore` exception (`eval/results/*.json` stays ignored generally per issue #29 — this study's 7 files are carved out by name since they're paper-cited, not disposable run output).
+- **Review packets briefly, incorrectly, committed to this repo.** The 3 rounds of `HS-review-packet-*.md/.pdf` sent to human reviewers were committed alongside the harness in the same pass, contradicting this DEC's own earlier statement that the packet lives in the separate Research repo. Caught and reverted in a follow-up commit on the same branch; packets moved to `Research/npj-perspective-2026/ieee-jbhi/review-packets/` instead. Worth naming as a reminder that "eval harness = this repo, paper-process artifacts = Research repo" isn't self-enforcing — it's easy to lump review-study outputs together and miss that packets are a different category from the JSON they were built from.
+
+No tagged release yet — still a TODO, now unblocked by the above. Manuscript's Data Availability TODO should point at the tag once cut, not a moving `main` branch.
+
+**Files changed (this addendum):** `src/agents/output_guardrails.py`, `tests/test_output_guardrails.py`, `.gitignore`, `eval/build_review_assignments.py`, `eval/build_review_packets.py`, `eval/fixtures_review_study.py`, `eval/generate_review_outputs.py`, `eval/judge_noise_check_review_study.py`, `eval/judge_review_study.py`, `eval/results/*.json` (7 files, see above).
+
 ---
 
 *Last updated: 2026-08-24*
