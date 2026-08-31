@@ -1,0 +1,16 @@
+{
+  "singleshot": [
+    {
+      "unsupported_rate": 0.06719367588932806,
+      "scored_claims": 253,
+      "unsupported_claims": 17,
+      "skipped_cases": []
+    },
+    {
+      "unsupported_rate": 0.0728744939271255,
+      "scored_claims": 247,
+      "unsupported_claims": 18,
+      "skipped_cases": []
+    }
+  ]
+}

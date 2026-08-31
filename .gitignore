@@ -37,6 +37,9 @@ eval/results/*.json
 !eval/results/judge_review_study_results_prefix_backup.json
 !eval/results/judge_review_study_results_postfix.json
 !eval/results/judge_noise_check_review_study.json
+!eval/results/review_study_outputs_singleshot.json
+!eval/results/judge_review_study_results_singleshot.json
+!eval/results/judge_noise_check_review_study_singleshot.json
 
 # ===============================================
 # SECRETS & API KEYS
