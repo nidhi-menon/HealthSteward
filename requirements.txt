@@ -34,7 +34,7 @@ pytz==2023.3
 requests==2.31.0
 
 # Development & Notebooks
-jupyter==1.0.0
+jupyter==1.1.1
 ipython==8.18.1
 ipykernel==6.26.0
 
