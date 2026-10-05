@@ -2,13 +2,13 @@
 
 All notable changes to HealthSteward are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project doesn't yet follow strict semantic versioning (pre-1.0, `v0.x.y-alpha` releases).
 
-For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rationale) and `docs/notes/DEVELOPMENT_LOG.md` (narrative build history) — this file tracks *what* shipped, not the reasoning.
+This file tracks *what* shipped, not the reasoning behind it.
 
 ## [Unreleased]
 
 ### Added
 - Deterministic evaluation harness (v1) for visit-prep output quality — format validity, groundedness, specialty-scope, tool-call necessity, and Phase 1/Phase 2 retrieval-redundancy checks, runnable on-demand against the real pipeline (#29, DEC-018)
-- Project-wide prompt versioning — every LLM prompt now carries a version tag, with change history in `docs/notes/PROMPT_CHANGELOG.md` (DEC-018)
+- Project-wide prompt versioning — every LLM prompt now carries a version tag, with change history kept in a prompt changelog (DEC-018)
 - `VisitPrep.used_fallback` flag, surfaced as a warning banner in the UI, so a total LLM backend failure (e.g. unreachable/misconfigured Ollama URL) no longer looks like a normal successful generation with generic placeholder questions (#47, DEC-020)
 - A unified "currently snoozed" view (`GET /snoozed-items`) across both action-item snooze mechanisms, an "Un-snooze now" action per item, and an 8-second undo banner after any snooze action — snoozing was previously a silent, unrecoverable action-item removal with no way to see or reverse it (#44)
 - Ollama auto-discovery on the Settings page — an explicit "Detect" button probes well-known candidate addresses and auto-fills the Base URL field, with a guided fallback (different machine / different port / Docker) if nothing responds (#48, DEC-021)

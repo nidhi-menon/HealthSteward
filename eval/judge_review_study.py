@@ -11,7 +11,7 @@ different things:
 1. Category-level Accuracy rollup: NO NEW LLM CALL. Reuses
    eval.judge.score_factual_groundedness's existing claim-level
    grounded/unsupported/not_applicable verdicts (already validated,
-   noise-isolated — see docs/notes/PROMPT_CHANGELOG.md) and rolls them up
+   noise-isolated — see the project's prompt changelog (maintained privately)) and rolls them up
    per category with a FIXED, DISCLOSED rule (not a second LLM judgment),
    so the rollup is deterministic and auditable against the claim data.
 
@@ -19,7 +19,7 @@ different things:
    rubric wording the human packet shows reviewers, so a human's pick and
    the judge's pick are answering the literal same question. This is an
    unvalidated instrument as of this writing — no noise-isolation pass has
-   been run on it yet (see docs/notes/PROMPT_CHANGELOG.md's own convention
+   been run on it yet (see the prompt changelog's own convention
    that a new/changed judge prompt should be validated before being
    trusted) — treat these verdicts as provisional until that's done.
 

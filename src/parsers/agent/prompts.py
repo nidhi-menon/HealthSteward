@@ -1,7 +1,7 @@
 """System prompts for per-section LLM extraction."""
 
 # Version tags for each prompt below — bump the relevant entry and add an
-# entry to docs/notes/PROMPT_CHANGELOG.md whenever a prompt's content
+# entry to the project's prompt changelog (maintained privately) whenever a prompt's content
 # changes (project-wide prompt-versioning convention, started 2026-07-19).
 PROMPT_VERSIONS = {
     "VITALS_SYSTEM": "v1",

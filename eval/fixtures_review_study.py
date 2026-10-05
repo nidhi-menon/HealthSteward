@@ -1,5 +1,5 @@
 """25 additional synthetic patient cases for the human-vs-LLM-judge review
-study (see docs/notes/... review packet work), extending the 5 deliberately
+study (review packet work), extending the 5 deliberately
 adversarial cases in eval/fixtures.py's GENERATION_CASES.
 
 Those 5 are all engineered to probe a specific known failure mode (scope

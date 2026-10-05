@@ -26,4 +26,4 @@ assignees: ''
 <!-- Small / Medium / Large, and why. Note if this needs a DEC entry before implementation
      (new dependency, new external service, schema change, new subsystem — see CONTRIBUTING.md). -->
 
-Related: <!-- DEC-XXX, other issue/PR numbers, docs/notes/DESIGN.md section -->
+Related: <!-- DEC-XXX, other issue/PR numbers -->

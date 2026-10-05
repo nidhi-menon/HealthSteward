@@ -29,7 +29,7 @@ from eval.fixtures import EvalCase
 from src.agents.llm_backend import ClaudeBackend
 
 # Bumped whenever this prompt's wording changes in a way that could affect
-# judgments — see docs/notes/PROMPT_CHANGELOG.md.
+# judgments — see the project's prompt changelog (maintained privately).
 FACTUAL_GROUNDEDNESS_JUDGE_PROMPT_VERSION = "v3"
 
 _JUDGE_SYSTEM_PROMPT = """You are an independent fact-checking judge for an AI health-coordination \

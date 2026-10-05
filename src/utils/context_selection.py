@@ -99,7 +99,7 @@ STAGE_2_MAX_CANDIDATES = 15
 
 # Version tag for stage2_llm_scoring's relevance-scoring prompt (built inline
 # in that method) — bump alongside any prompt-text edit and add an entry to
-# docs/notes/PROMPT_CHANGELOG.md (project-wide prompt-versioning convention,
+# the project's prompt changelog (maintained privately) (project-wide prompt-versioning convention,
 # started 2026-07-19).
 STAGE2_SCORING_PROMPT_VERSION = "v1"
 
