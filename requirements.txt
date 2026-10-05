@@ -2,7 +2,7 @@
 torch==2.1.2
 transformers==4.36.2
 accelerate==0.25.0
-peft==0.7.1
+peft==0.21.2
 bitsandbytes==0.41.2
 trl==0.7.9
 
