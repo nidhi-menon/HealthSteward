@@ -36,7 +36,7 @@ requests==2.31.0
 # Development & Notebooks
 jupyter==1.0.0
 ipython==8.18.1
-ipykernel==6.26.0
+ipykernel==7.4.0
 
 # Utilities & Configuration
 python-dotenv==1.0.0
