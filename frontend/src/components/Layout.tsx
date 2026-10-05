@@ -10,8 +10,9 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-brand-paper">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
+      {/* Header. Hidden when printing (issue #99) — app navigation is not part
+          of a sheet someone hands to their doctor. */}
+      <header className="bg-white border-b border-gray-200 print-hide">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
