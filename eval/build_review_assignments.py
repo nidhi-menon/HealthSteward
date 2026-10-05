@@ -2,7 +2,7 @@
 review study (30 cases: eval/fixtures.py's 5 adversarial GENERATION_CASES +
 eval/fixtures_review_study.py's 25 REVIEW_STUDY_CASES).
 
-Design (see docs/notes/... review-study discussion for the full reasoning):
+Design (review-study design):
 - 30 cases, 3 raters/case target -> 90 example-ratings needed.
 - 9 reviewers x 10 cases each = 90 -> exact match, uniform packet size
   (no per-reviewer fatigue-confound from unequal workloads).

@@ -4,7 +4,7 @@ Catches hallucination shapes the LLM judge (eval/judge.py) found concrete,
 repeated evidence for — presupposing a specific test/lab result, referral
 relationship, or additional medication that isn't in the patient's actual
 structured data — without depending on any model's instruction-following.
-A prompt-level fix for the same patterns (v7, docs/notes/PROMPT_CHANGELOG.md)
+A prompt-level fix for the same patterns (v7, the project's prompt changelog (maintained privately))
 was tried first and measurably regressed the rate on this project's small
 local default model (llama3.2:latest); this checks structured data directly
 instead. Extended after the first validated pass's own residual claims

@@ -285,7 +285,7 @@ class VisitPrepAgent(BaseAgent):
     Uses anonymization and intelligent context selection per DEC-006 and DEC-008.
     """
 
-    # See docs/notes/PROMPT_CHANGELOG.md for version history/rationale —
+    # See the project's prompt changelog (maintained privately) for version history/rationale —
     # bump the version and add an entry there whenever either prompt below
     # changes, per the project-wide prompt-versioning convention.
     SYSTEM_PROMPT_TEMPLATE_VERSION = "v10-2026-08-24"
@@ -452,7 +452,7 @@ Before finalizing your response, count your questions. You must have between 8 a
         """Version tag for whichever prompt _get_system_prompt returns —
         logged alongside the conversation so a real ConversationLog row is
         traceable to which prompt version produced it. See
-        docs/notes/PROMPT_CHANGELOG.md for the project-wide convention.
+        the project's prompt changelog (maintained privately) for the project-wide convention.
         """
         return self.SYSTEM_PROMPT_TEMPLATE_VERSION if specialty else self.SYSTEM_PROMPT_GENERIC_VERSION
 

@@ -2,13 +2,13 @@
 
 All notable changes to HealthSteward are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project doesn't yet follow strict semantic versioning (pre-1.0, `v0.x.y-alpha` releases).
 
-For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rationale) and `docs/notes/DEVELOPMENT_LOG.md` (narrative build history) — this file tracks *what* shipped, not the reasoning.
+This file tracks *what* shipped, not the reasoning behind it.
 
 ## [Unreleased]
 
 ### Added
 - Deterministic evaluation harness (v1) for visit-prep output quality — format validity, groundedness, specialty-scope, tool-call necessity, and Phase 1/Phase 2 retrieval-redundancy checks, runnable on-demand against the real pipeline (#29, DEC-018)
-- Project-wide prompt versioning — every LLM prompt now carries a version tag, with change history in `docs/notes/PROMPT_CHANGELOG.md` (DEC-018)
+- Project-wide prompt versioning — every LLM prompt now carries a version tag, with change history kept in a prompt changelog (DEC-018)
 - `VisitPrep.used_fallback` flag, surfaced as a warning banner in the UI, so a total LLM backend failure (e.g. unreachable/misconfigured Ollama URL) no longer looks like a normal successful generation with generic placeholder questions (#47, DEC-020)
 - A unified "currently snoozed" view (`GET /snoozed-items`) across both action-item snooze mechanisms, an "Un-snooze now" action per item, and an 8-second undo banner after any snooze action — snoozing was previously a silent, unrecoverable action-item removal with no way to see or reverse it (#44)
 - Ollama auto-discovery on the Settings page — an explicit "Detect" button probes well-known candidate addresses and auto-fills the Base URL field, with a guided fallback (different machine / different port / Docker) if nothing responds (#48, DEC-021)
@@ -20,7 +20,7 @@ For the *why* behind a change, see `docs/notes/DECISIONS.md` (architectural rati
 - `temperature` was sent top-level for the Ollama backend, which Ollama's native `/api/chat` silently ignores (needs nesting under `options`) — sampling temperature had no effect for Ollama-backed calls
 - The agentic loop's backend HTTP call had no total wall-clock timeout, only a per-chunk read timeout, so a slow/trickling response could hang indefinitely with no error or fallback triggered
 - The visit-prep system prompt's own stated 8-15 question requirement and its grounding guidance were being under-followed by local models — reinforced prompt wording, validated via the new eval harness (before/after: 0/5 → 3/5 cases passing format validity on identical fixtures)
-- The eval harness's fixed 8-question format-validity floor was in tension with data-sparse cases (e.g. `cold_start`) correctly following the prompt's own anti-hallucination rule — floor now scales to how much real patient data a case has (`eval/scorers.py`'s `expected_min_questions()`); visit-prep prompts bumped to v3 to require real data behind a category before including it and to omit empty categories rather than padding them (see `docs/notes/PROMPT_CHANGELOG.md`)
+- The eval harness's fixed 8-question format-validity floor was in tension with data-sparse cases (e.g. `cold_start`) correctly following the prompt's own anti-hallucination rule — floor now scales to how much real patient data a case has (`eval/scorers.py`'s `expected_min_questions()`); visit-prep prompts bumped to v3 to require real data behind a category before including it and to omit empty categories rather than padding them
 - The eval harness's groundedness scorer didn't know the prompt explicitly allows the "Lifestyle & Prevention" category to stay data-light, and was flagging its generic-but-permitted questions as ungrounded
 - Ollama agentic-loop calls never set `num_ctx`, so Ollama silently used its own runtime default (commonly 2048) independent of this app's own context budget — added an explicit, formula-derived default plus a runtime warning when a request estimate crosses 75% of it (#71, DEC-019)
 - `Doctor.notes` was persisted and user-editable but never reached visit-prep's AI context, unlike `Condition.notes`/`Appointment.visit_notes` — now anonymized and included the same way (#51)

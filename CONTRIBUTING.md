@@ -7,19 +7,13 @@ By participating in this project, you're expected to follow the [Code of Conduct
 ## Before you start
 
 - Check [open issues](https://github.com/nidhi-menon/HealthSteward/issues) first — most non-trivial work is scoped there before it's built, including open questions and explicit non-goals.
-- For anything architectural (new dependency, new external service, a schema change, a new subsystem), open an issue or start a [Discussion](https://github.com/nidhi-menon/HealthSteward/discussions) before writing code. See "Decision log" below for why.
+- For anything architectural (new dependency, new external service, a schema change, a new subsystem), open an issue or start a [Discussion](https://github.com/nidhi-menon/HealthSteward/discussions) before writing code. See "Decision records" below.
 - New issues use the **Enhancement** or **Bug report** templates (`.github/ISSUE_TEMPLATE/`) — they mirror the Context / Change / Open questions / Scope shape most existing issues already follow, so fill them in rather than deleting sections that don't seem to apply.
-- PRs use `.github/pull_request_template.md` — Summary / Test plan, plus a checklist for the DEC/dev-log/migration/privacy conventions below.
+- PRs use `.github/pull_request_template.md` — Summary / Test plan, plus a migration/privacy checklist.
 
-## Decision log and development log
+## Decision records
 
-Two docs record *why* the codebase looks the way it does — read them before assuming something is an oversight:
-
-- **`docs/notes/DECISIONS.md`** — architectural decisions (framework choices, scope cuts, privacy trade-offs), one entry per `DEC-XXX`. If your PR makes or changes an architectural call, add an entry here in the same format (Date / Topic / Context / Options Considered / Decision / Reasoning / Status).
-- **`docs/notes/DEVELOPMENT_LOG.md`** — narrative history of what was built and why, one entry per significant unit of work. Add an entry for anything beyond a small fix.
-- **`docs/notes/DESIGN.md`** — a point-in-time architecture snapshot, not a living doc. Most DEC entries don't need it touched. Update it only if your DEC represents a genuine architectural shift: adds/removes a major subsystem, changes a trust boundary or core pattern, or deprecates something the doc currently describes. If you do update it, refresh the date/commit-stamp at the top.
-
-Both DECISIONS.md and DEVELOPMENT_LOG.md exist so that "why is this deferred" or "why isn't X built yet" has a documented answer instead of living only in someone's memory. Skipping them isn't a blocker for a tiny PR, but is expected for anything that changes behavior or defers/descopes something.
+Architectural decisions (`DEC-XXX` references you'll see in code comments) and build history are tracked by the maintainer outside this repo. You don't need to write them for a PR. If your change makes or reverses an architectural call (new dependency, new external service, schema change, new subsystem), say so in the PR description or open an issue first so it can be discussed.
 
 ## Privacy is a hard constraint, not a preference
 
@@ -54,7 +48,6 @@ Check the generated migration by hand — autogenerate doesn't always get column
 
 - Keep commits scoped to one logical change; don't bundle an unrelated doc update into a feature PR (or vice versa).
 - PR description should say *why*, not just *what* — the diff already shows what changed.
-- If your change touches something DEC-XXX already covers, reference it in the PR description.
 
 ## Code style
 

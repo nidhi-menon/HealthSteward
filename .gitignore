@@ -8,12 +8,6 @@ data/
 *.sqlite3
 
 # ===============================================
-# PRIVATE DOCS
-# ===============================================
-docs/notes/PATENT_ANALYSIS.md
-docs/notes/RESEARCH_IDEAS.md
-
-# ===============================================
 # CLAUDE CODE (local-only, per its own header)
 # ===============================================
 CLAUDE.md
@@ -188,7 +182,6 @@ linkedin-posts/
 medium-posts/
 content/
 
-# Internal dev-reference notes not meant for the public repo (docs/tdd.html is
-# the public-facing version; this houses the file-path/issue-number/DEC-id
-# level detail trimmed out of it)
-docs/notes/DESIGN_INTERNAL.html
+
+# Planning notes live in the private healthsteward-planning repo; keep them out of here
+docs/notes/

@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-HealthSteward sends patient data to an external LLM (Claude API) for visit-prep assistance. [DEC-006](../../docs/notes/DECISIONS.md) established a PII anonymization boundary — nothing leaves the machine unredacted. The current approach is regex patterns plus optional spaCy NER for person names. [OpenMed](https://github.com/OpenMed) is an open-source suite of clinical NLP models, including PII detectors, and issue #122 asked: is it a better fit than what's already running?
+HealthSteward sends patient data to an external LLM (Claude API) for visit-prep assistance. DEC-006 established a PII anonymization boundary — nothing leaves the machine unredacted. The current approach is regex patterns plus optional spaCy NER for person names. [OpenMed](https://github.com/OpenMed) is an open-source suite of clinical NLP models, including PII detectors, and issue #122 asked: is it a better fit than what's already running?
 
 ## Methodology
 
