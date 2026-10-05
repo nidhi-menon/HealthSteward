@@ -20,7 +20,7 @@ sentence-transformers==2.2.2
 
 # Model Serving (add later when deploying)
 # vllm==0.3.0
-ollama==0.6.1
+ollama==0.6.3
 
 # Data Processing & Analysis
 pandas==2.1.3
