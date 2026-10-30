@@ -50,6 +50,20 @@ rows only as long as the waitlist exists; delete them when you shut it down. Whe
 load the list into an email tool, exclude anyone in `suppression` and anyone who has
 unsubscribed there.
 
+## Weekly digest
+
+Every Friday at 10pm Pacific the Worker emails the owner a summary: new signups this week
+(email, first name, time), the total, and 0-new weeks too. Cron triggers run in UTC only (and
+weekdays count from Sunday=1), so `wrangler.toml` fires Saturday 05:00 and 06:00 UTC and the Worker
+sends only on the run that is 10pm Pacific, which keeps it at 10pm through daylight-saving changes.
+
+- Sent with the Cloudflare Email Service `send_email` binding (`EMAIL`) from `DIGEST_FROM`
+  (`waitlist@healthstewardai.com`) to the secret `DIGEST_TO` (keeps the address out of this public
+  repo): `npx wrangler secret put DIGEST_TO`.
+- Failures are only visible with `npx wrangler tail` (request logging is off). Test locally with
+  `bash test/digest.sh`.
+- The email contains signup addresses, so it goes to the owner only.
+
 ## Behavior
 
 - `POST /join` with JSON `{email, first_name?, consent_version, website?}`; `website` is a

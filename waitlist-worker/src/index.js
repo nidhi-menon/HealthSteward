@@ -10,6 +10,10 @@ const RATE_WINDOW_SEC = 600;    // ... per 10 minutes per client
 const KNOWN_CONSENT_VERSIONS = new Set(["2026-10-29-v1"]);
 
 export default {
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(sendWeeklyDigest(controller, env));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     const cors = corsHeaders(request, env);
@@ -138,4 +142,64 @@ function json(obj, status, headers = {}) {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...headers },
   });
+}
+
+// ---- Weekly digest -------------------------------------------------------------------------
+// Cron triggers run in UTC only, and Friday 10pm Pacific is Sat 05:00 UTC in daylight time and
+// Sat 06:00 UTC in standard time. wrangler.toml fires at both hours; this check lets only the
+// one that is 10pm Pacific through, so the digest lands at 10pm Pacific all year.
+const DIGEST_DAYS = 7;
+const DIGEST_MAX_ROWS = 100;
+const PT = "America/Los_Angeles";
+
+function pacificParts(date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: PT, weekday: "short", hour: "numeric", hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (t) => parts.find((p) => p.type === t)?.value;
+  return { weekday: get("weekday"), hour: Number(get("hour")) };
+}
+
+function fmtPacific(iso) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: PT, month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(new Date(iso));
+}
+
+async function sendWeeklyDigest(controller, env) {
+  const scheduled = new Date(controller.scheduledTime);
+  const { weekday, hour } = pacificParts(scheduled);
+  if (!(weekday === "Fri" && hour === 22)) return;          // the other cron hour: skip
+
+  if (!env.EMAIL || !env.DIGEST_TO || !env.DIGEST_FROM) {
+    console.error("digest not configured (EMAIL binding, DIGEST_TO, DIGEST_FROM)");
+    return;
+  }
+  try {
+    const since = new Date(scheduled.getTime() - DIGEST_DAYS * 86400 * 1000).toISOString();
+    const total = (await env.DB.prepare("SELECT count(*) AS n FROM waitlist").first()).n;
+    const { results } = await env.DB
+      .prepare("SELECT email, first_name, consented_at FROM waitlist WHERE consented_at >= ? ORDER BY consented_at")
+      .bind(since)
+      .all();
+    const shown = results.slice(0, DIGEST_MAX_ROWS);
+    const lines = shown.map((r) =>
+      `${fmtPacific(r.consented_at)} PT  ${r.email}${r.first_name ? `  (${r.first_name})` : ""}`);
+    if (results.length > shown.length) lines.push(`...and ${results.length - shown.length} more`);
+
+    const text =
+      `HealthSteward waitlist, week ending ${fmtPacific(scheduled.toISOString())} PT\n\n` +
+      `New this week: ${results.length}\nTotal on the list: ${total}\n\n` +
+      (lines.length ? `New signups:\n${lines.join("\n")}\n` : "No new signups this week.\n") +
+      `\nTo remove someone, see waitlist-worker/README.md.`;
+
+    await env.EMAIL.send({
+      to: env.DIGEST_TO,
+      from: env.DIGEST_FROM,
+      subject: `HealthSteward waitlist: ${results.length} new this week (${total} total)`,
+      text,
+    });
+  } catch (err) {
+    console.error("digest failed", err && (err.code || err.message));
+  }
 }
