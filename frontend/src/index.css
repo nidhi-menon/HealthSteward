@@ -12,3 +12,97 @@
   --color-brand-paper: #fafaf9;
   --color-brand-ink: #171f1d;
 }
+
+/* --------------------------------------------------------------------------
+   Print styles (issue #99, DEC-037)
+   --------------------------------------------------------------------------
+   "Print / Save as PDF" is how visit prep gets off the screen and into the
+   visit. The browser's own print dialog provides PDF export on every target
+   platform, so this is the whole PDF story — no rendering library, no server
+   round-trip, and nothing leaves the machine.
+
+   The rule the classes below encode: print the *content* on the page, hide the
+   *controls* and the chrome. `.print-hide` marks anything interactive or
+   decorative (nav, buttons, edit affordances); `.print-only` marks text that
+   exists solely to identify a sheet once it's off the screen. Nothing else is
+   suppressed, so what prints is recognisably the page the user was looking at.
+   -------------------------------------------------------------------------- */
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Black on white. Tinted cards, badges and brand colours are screen
+     affordances; on paper they cost toner and legibility. */
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    background-image: none !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Drop card chrome and the layout's max-width/padding, which waste a
+     margin's worth of page width on paper. */
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .rounded-lg,
+  .rounded-full {
+    border-radius: 0 !important;
+  }
+
+  /* One hairline rule under a card header instead of a boxed card. */
+  .shadow-sm {
+    border: 0 !important;
+  }
+
+  /* A question must not straddle a page break — that is the single most
+     annoying thing a printed question sheet can do. */
+  li,
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Textareas hold in-progress edits, never printed content. */
+  textarea,
+  input,
+  select,
+  button {
+    display: none !important;
+  }
+
+  a[href] {
+    text-decoration: none;
+  }
+}
