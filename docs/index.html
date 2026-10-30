@@ -3,57 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HealthSteward</title>
-<meta name="description" content="Local, privacy-first agentic AI for patients navigating fragmented care.">
+<title>HealthSteward: AI care coordinator for patients</title>
+<meta name="description" content="AI care coordinator for patients navigating fragmented healthcare. Consumer app in development; open-source v1.0 available today.">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="apple-touch-icon" href="assets/brand/mark-180.png">
 <link rel="canonical" href="https://healthstewardai.com/">
 <meta name="theme-color" content="#20464c">
 <meta name="google-site-verification" content="KJbkC1jDcb2b_A_LWv6G5lQa-ROrikM86w5-Eeb1Sr8" />
 
-<!-- Open Graph / Twitter Card — explicit tags so link previews (LinkedIn, Slack, etc.)
-     show the project identity, not whatever heading text a scraper falls back to
-     scanning when these are absent. -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://healthstewardai.com/">
-<meta property="og:title" content="HealthSteward">
-<meta property="og:description" content="Local, privacy-first agentic AI for patients navigating fragmented care.">
-<meta property="og:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/website-og-card.png">
+<meta property="og:title" content="HealthSteward: AI care coordinator for patients">
+<meta property="og:description" content="AI care coordinator for patients navigating fragmented healthcare. Consumer app in development; open-source v1.0 available today.">
+<meta property="og:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/website-og-card-landing.png">
 <meta property="og:image:width" content="2400">
 <meta property="og:image:height" content="1260">
-<meta property="og:image:alt" content="HealthSteward — Local, privacy-first agentic AI for patients navigating fragmented care">
+<meta property="og:image:alt" content="HealthSteward: AI care coordinator for patients navigating fragmented healthcare">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="HealthSteward">
-<meta name="twitter:description" content="Local, privacy-first agentic AI for patients navigating fragmented care.">
-<meta name="twitter:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/website-og-card.png">
-<meta name="twitter:image:alt" content="HealthSteward — Local, privacy-first agentic AI for patients navigating fragmented care">
+<meta name="twitter:title" content="HealthSteward: AI care coordinator for patients">
+<meta name="twitter:description" content="AI care coordinator for patients navigating fragmented healthcare. Consumer app in development; open-source v1.0 available today.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/website-og-card-landing.png">
+<meta name="twitter:image:alt" content="HealthSteward: AI care coordinator for patients navigating fragmented healthcare">
 
-<!-- JSON-LD structured data — helps search engines understand this as a
-     software product (category, license, price=free) rather than just a
-     generic page, and is a prerequisite for any potential rich-result
-     display in search. -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
+  "@type": "Organization",
   "name": "HealthSteward",
-  "description": "Local, privacy-first agentic AI for patients navigating fragmented care.",
   "url": "https://healthstewardai.com/",
-  "image": "https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/website-og-card.png",
-  "applicationCategory": "HealthApplication",
-  "operatingSystem": "Cross-platform (self-hosted)",
-  "softwareVersion": "0.2.0-alpha",
-  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
-  "codeRepository": "https://github.com/nidhi-menon/HealthSteward",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "author": {
-    "@type": "Person",
-    "name": "Nidhi Menon"
-  }
+  "description": "AI care coordinator for patients navigating fragmented healthcare.",
+  "logo": "https://raw.githubusercontent.com/nidhi-menon/HealthSteward/main/docs/assets/brand/mark-512.png",
+  "founder": { "@type": "Person", "name": "Nidhi Menon" },
+  "sameAs": [
+    "https://github.com/nidhi-menon/HealthSteward",
+    "https://www.linkedin.com/company/healthsteward-ai/"
+  ]
 }
 </script>
 <style>
@@ -146,6 +130,7 @@
     letter-spacing: -0.01em;
     font-size: 15px;
   }
+  a.brand { color: inherit; text-decoration: none; }
   .brand .mark { flex: none; display: block; }
   .brand .mark rect.card { fill: none; stroke: var(--ink); stroke-width: 1.4; }
   .brand .mark line { stroke: var(--ink-soft); stroke-width: 1.4; stroke-linecap: square; }
@@ -342,6 +327,62 @@
   footer nav { display: flex; gap: 18px; }
   footer nav a { font-family: ui-monospace, monospace; font-size: 13px; color: var(--ink-soft); text-decoration: none; }
   footer nav a:hover { color: var(--ink); }
+
+  /* status chips on feature rows */
+  .status {
+    display: inline-block;
+    margin-top: 8px;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+  }
+  .status.built { border-color: var(--teal-bright); color: var(--teal); }
+
+  /* demo video */
+  .video-wrap { margin: 22px 0 10px; border: 1px solid var(--line); background: var(--redact); }
+  .video-wrap video { display: block; width: 100%; height: auto; }
+  .video-caption { font-family: ui-monospace, monospace; font-size: 13px; color: var(--ink-soft); max-width: 620px; }
+
+  /* waitlist form */
+  .waitlist-form {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    padding: 22px;
+    max-width: 460px;
+    margin-top: 14px;
+  }
+  .waitlist-form label {
+    display: block;
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    margin: 0 0 6px;
+  }
+  .waitlist-form .field-row { margin-bottom: 16px; }
+  .waitlist-form input[type="email"], .waitlist-form input[type="text"] {
+    width: 100%;
+    font: inherit;
+    font-size: 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--ink-faint);
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 0;
+  }
+  .waitlist-form .optional { color: var(--ink-faint); }
+  .waitlist-form .btn { width: 100%; }
+  .form-note { font-size: 14px; color: var(--ink-soft); max-width: 460px; margin: 14px 0 0; }
+  .form-note.fine { font-size: 13px; color: var(--ink-faint); }
+  .hero-note a { color: inherit; }
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .form-status { margin: 12px 0 0; font-size: 15px; min-height: 1.4em; }
+  .form-status.ok { color: var(--select-hl); font-weight: 600; }
+  .form-status.err { color: #9a3a2e; }
 </style>
 </head>
 <body>
@@ -349,7 +390,7 @@
 <a class="skip-link" href="#main-content">Skip to content</a>
 
 <header class="top">
-  <div class="brand">
+  <a class="brand" href="index.html" aria-label="HealthSteward home">
     <svg class="mark" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
       <rect class="card" x="1.5" y="1.5" width="17" height="17"></rect>
       <line x1="4.5" y1="6.5" x2="15.5" y2="6.5"></line>
@@ -357,36 +398,35 @@
       <line x1="4.5" y1="14.5" x2="11" y2="14.5"></line>
     </svg>
     HealthSteward
-  </div>
+  </a>
   <nav>
     <a href="#motivation">the problem</a>
-    <a href="#what">features</a>
-    <a href="#privacy">privacy</a>
-    <a href="#start">setup</a>
-    <a href="#from-me">personal note</a>
-    <a href="tdd.html">technical design doc</a>
-    <a href="https://github.com/nidhi-menon/HealthSteward">github</a>
+    <a href="#demo">meet Emily</a>
+    <a href="#what">what it does</a>
+    <a href="#status">where we are</a>
+    <a href="open-source.html">open source</a>
+    <a href="#waitlist">waitlist</a>
   </nav>
 </header>
 
 <section class="hero" id="main-content">
   <div class="wrap">
-    <div class="eyebrow">open source · privacy-first · v0, active development</div>
+    <div class="eyebrow">AI care coordinator · consumer app in development</div>
     <h1 id="hero-h1">
       <span class="line"><span>Nobody on the clinical side</span></span>
       <span class="line"><span>owns the coordination work.</span></span>
       <span class="line"><span>HealthSteward does.</span></span>
     </h1>
     <p class="lede">
-      Every specialist has their own chart. None of them talk to each other. HealthSteward
-      centralizes what they gave you — locally, on your machine — and turns it into what to
-      bring up at the next appointment.
+      Every specialist has their own chart. None of them talk to each other. HealthSteward is
+      being built to hold the whole picture for you and turn it into what to bring up at the
+      next appointment.
     </p>
     <div class="hero-ctas">
-      <a class="btn primary" href="#start">Get started</a>
-      <a class="btn" href="https://github.com/nidhi-menon/HealthSteward">View source</a>
+      <a class="btn primary" href="#waitlist">Join the waitlist</a>
+      <a class="btn" href="open-source.html">Try the open-source version</a>
     </div>
-    <p class="hero-note" style="margin-top:18px;">no cloud storage · no sync · nothing leaves your machine</p>
+    <p class="hero-note" style="margin-top:18px;">Open-source v1.0 is available today. The consumer app is not released yet.</p>
   </div>
 </section>
 
@@ -417,91 +457,111 @@
   </div>
 </section>
 
+<section class="field" id="demo">
+  <div class="wrap">
+    <div class="field-label eyebrow">Product vision</div>
+    <h2>Meet Emily</h2>
+    <p>
+      Emily has several chronic conditions and sees several specialists who don't share
+      records. This walkthrough shows what HealthSteward is being built to do for her: one
+      record, a prep brief before each visit, and a Village of trusted people who help.
+    </p>
+    <div class="video-wrap">
+      <video controls preload="metadata" playsinline poster="assets/consumer-app-demo-poster.jpg">
+        <source src="assets/consumer-app-demo.mp4" type="video/mp4">
+        <track kind="captions" src="assets/consumer-app-demo.vtt" srclang="en" label="English">
+        Your browser can't play this video.
+      </video>
+    </div>
+    <p class="video-caption">Design prototype with synthetic data. This is the planned consumer app, not the open-source v1.0.</p>
+  </div>
+</section>
+
 <section class="field" id="what">
   <div class="wrap">
-    <div class="field-label eyebrow">Features</div>
-    <h2>What it does</h2>
+    <div class="field-label eyebrow">What it does</div>
+    <h2>One coordinator for the whole picture</h2>
     <div class="chart-lines">
       <div class="chart-line">
-        <div class="tag">Profile</div>
+        <div class="tag">Record</div>
         <div>
-          <h3>Health profile management</h3>
-          <p>Conditions with ICD-10 codes, medications, doctors, and appointments, kept in one place.</p>
+          <h3>One continuous record</h3>
+          <p>Conditions, medications, and labs from all your doctors and health systems, in one place.</p>
+          <span class="status built">v1.0: built from uploaded after-visit summaries</span>
+          <span class="status">Planned: linking to provider records</span>
         </div>
       </div>
       <div class="chart-line">
         <div class="tag">Prep</div>
         <div>
-          <h3>AI visit preparation</h3>
-          <p>An agentic loop drafts personalized questions for an upcoming visit, pulling relevant history and calling tools (medication lookup, past-visit lookup) before it finalizes anything. Runs fully local via Ollama by default — Claude API and other providers are opt-in.</p>
+          <h3>A prep brief for every visit</h3>
+          <p>What changed since the last visit, and the questions worth asking.</p>
+          <span class="status built">Built in v1.0, running locally</span>
         </div>
       </div>
       <div class="chart-line">
-        <div class="tag">Ingest</div>
+        <div class="tag">Village</div>
         <div>
-          <h3>After-visit summary parsing</h3>
-          <p>Upload the PDF you're handed on the way out. Parsed locally with Ollama, reviewed by you, then applied to your profile.</p>
+          <h3>A Village of trusted people</h3>
+          <p>Invite family or friends to see the parts of your record you choose and to share tasks, so you're not the only one carrying it.</p>
+          <span class="status">Planned</span>
         </div>
       </div>
       <div class="chart-line">
-        <div class="tag">Follow-up</div>
+        <div class="tag">Ask</div>
         <div>
-          <h3>Proactive action items</h3>
-          <p>Follow-ups to book, labs to get done, referrals to schedule — surfaced right after a visit, and again in a persistent "needs attention" list until you snooze or resolve them.</p>
+          <h3>Ask your record</h3>
+          <p>A chat over your record, for you and your Village.</p>
+          <span class="status">Planned</span>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="field" id="privacy">
+<section class="field" id="status">
   <div class="wrap">
-    <div class="field-label eyebrow">Privacy</div>
-    <h2>Two trust boundaries, not one</h2>
-    <p>Health data is sensitive by default, so nothing crosses a boundary un-redacted.</p>
+    <div class="field-label eyebrow">Where we are</div>
+    <h2>Open source today, consumer app next</h2>
     <div class="boundaries">
       <div class="boundary">
-        <div class="eyebrow">Stays on device — default</div>
-        <h3>Ollama, local</h3>
-        <p>PDF parsing always runs on a local model, and visit prep does too by default. Your raw records never touch the network unless you opt out.</p>
+        <div class="eyebrow">Built</div>
+        <h3>Open-source v1.0</h3>
+        <p>Turns uploaded after-visit summaries into a record, action items, and visit prep. It runs on your machine and is tested on synthetic cases and a few real documents, not yet with real patients. <a href="open-source.html">See how it works and how to run it.</a></p>
       </div>
       <div class="boundary">
-        <div class="eyebrow">Anonymized first</div>
-        <h3>Claude, or any provider you choose — optional</h3>
-        <p>Switch visit prep to Claude API or any OpenAI-compatible provider from Settings — names, DOB, and contact info are stripped — deterministically and via NER — before anything is sent.</p>
+        <div class="eyebrow">Next</div>
+        <h3>Consumer app</h3>
+        <p>A hosted app with record linking, the Village, and chat over your record. It is in development and not yet available. <a href="#waitlist">Join the waitlist</a> and we'll email you when early access opens.</p>
       </div>
     </div>
-    <p style="margin-top:16px; font-size:14.5px;">
-      This reduces exposure but isn't a guarantee — NER-based detection can miss names or
-      identifying details in unusual free-text phrasing. Local-only mode (Ollama for both
-      parsing and visit prep, the default) needs no anonymization step, since nothing leaves the machine.
-    </p>
   </div>
 </section>
 
-<section class="field" id="start">
+<section class="field" id="waitlist">
   <div class="wrap">
-    <div class="field-label eyebrow">Setup</div>
-    <h2>Get started</h2>
-    <p>Everything, including the database, stays in a folder on your machine. Needs Python 3.11+, Node 18+/pnpm, and <a href="https://ollama.ai">Ollama</a>.</p>
-    <div class="install-block">
-      <div class="eyebrow">terminal — backend</div>
-      <pre class="cmd"><span class="prompt">$</span> git clone https://github.com/nidhi-menon/HealthSteward.git &amp;&amp; cd HealthSteward
-<span class="prompt">$</span> pip install -r requirements.txt
-<span class="prompt">$</span> python -m alembic upgrade head
-<span class="prompt">$</span> python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000</pre>
-    </div>
-    <div class="install-block" style="margin-top:14px;">
-      <div class="eyebrow">terminal — frontend</div>
-      <pre class="cmd"><span class="prompt">$</span> cd frontend &amp;&amp; pnpm install &amp;&amp; pnpm dev</pre>
-    </div>
-    <div class="install-block" style="margin-top:14px;">
-      <div class="eyebrow">terminal — local models, for PDF parsing and visit prep</div>
-      <pre class="cmd"><span class="prompt">$</span> ollama serve
-<span class="prompt">$</span> ollama pull qwen2.5:7b
-<span class="prompt">$</span> ollama pull llama3.2</pre>
-    </div>
-    <p class="install-note">Full setup, including the <code>.env</code> file, is in the <a href="https://github.com/nidhi-menon/HealthSteward#quick-start">README</a>. A one-step installer for people who'd rather not open a terminal is on the way — <a href="https://github.com/nidhi-menon/HealthSteward/issues/18">track progress on GitHub</a>.</p>
+    <div class="field-label eyebrow">Waitlist</div>
+    <h2>Join the consumer app waitlist</h2>
+    <p>Leave your email and we'll tell you when early access opens, plus the occasional progress update.</p>
+    <form class="waitlist-form" id="waitlist-form" novalidate>
+      <div class="field-row">
+        <label for="wl-email">Email</label>
+        <input type="email" name="email" id="wl-email" autocomplete="email" required>
+      </div>
+      <div class="field-row">
+        <label for="wl-first-name">First name <span class="optional">(optional)</span></label>
+        <input type="text" name="first_name" id="wl-first-name" autocomplete="given-name" maxlength="60">
+      </div>
+      <div class="hp" aria-hidden="true">
+        <label for="wl-website">Leave this field empty</label>
+        <input type="text" name="website" id="wl-website" tabindex="-1" autocomplete="off">
+      </div>
+      <button class="btn primary" type="submit" id="wl-submit">Join the waitlist</button>
+      <p class="form-status" id="wl-status" role="status" aria-live="polite"></p>
+    </form>
+    <noscript><p class="form-note">The form needs JavaScript. You can also email <a href="mailto:contact@healthstewardai.com?subject=Waitlist">contact@healthstewardai.com</a> and we'll add you.</p></noscript>
+    <p class="form-note">By joining, you agree to get occasional emails from HealthSteward about the consumer app. You can ask to be removed at any time. Please don't share any medical or health information here.</p>
+    <p class="form-note fine">We store your email, your first name if you give it, and when you joined. Nothing else, and no third-party trackers. See the <a href="privacy.html">privacy notice</a>.</p>
   </div>
 </section>
 
@@ -529,7 +589,7 @@
       I started building HealthSteward in December 2025 for myself: a way to hold together a
       medical system that asks you to track too many providers, records, and follow-ups in your
       own head. After sharing it with others navigating similarly fragmented care, it was clear
-      the need went well beyond me — so it's public, GPLv3, free to use, fork, or build on.
+      the need went well beyond me — so that first version is public, GPLv3, free to use, fork, or build on. I'm now building the consumer app.
     </p>
     <p>
       If something here is wrong, could be better, or you just have thoughts, I'd genuinely like
@@ -540,18 +600,55 @@
 
 <footer>
   <div class="wrap">
-    <p class="eyebrow mono">GPL-3.0 · active development · not a substitute for clinical judgment</p>
+    <p class="eyebrow mono">not a substitute for clinical judgment</p>
     <nav>
+      <a href="open-source.html">Open source</a>
       <a href="tdd.html">Technical Design Doc</a>
       <a href="https://github.com/nidhi-menon/HealthSteward">GitHub</a>
-      <a href="https://github.com/nidhi-menon/HealthSteward/discussions">Discussions</a>
-      <a href="https://github.com/nidhi-menon/HealthSteward/issues">Issues</a>
       <a href="https://www.linkedin.com/company/healthsteward-ai/">LinkedIn</a>
-      <a href="mailto:nidhi@healthstewardai.com">Contact</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="mailto:contact@healthstewardai.com">Contact</a>
     </nav>
   </div>
 </footer>
 
+<script>
+  (function () {
+    var ENDPOINT = 'https://waitlist.healthstewardai.com/join';
+    var CONSENT_VERSION = '2026-10-29-v1';
+    var form = document.getElementById('waitlist-form');
+    if (!form) return;
+    var statusEl = document.getElementById('wl-status');
+    var btn = document.getElementById('wl-submit');
+    function say(msg, cls) { statusEl.textContent = msg; statusEl.className = 'form-status ' + (cls || ''); }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = form.email.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say('Please enter a valid email address.', 'err'); form.email.focus(); return; }
+      btn.disabled = true; say('Joining…');
+      fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email,
+          first_name: form.first_name.value.trim(),
+          website: form.website.value,
+          consent_version: CONSENT_VERSION
+        })
+      }).then(function (r) {
+        if (r.ok) { form.reset(); say("You're on the list. We'll email you when early access opens.", 'ok'); return; }
+        return r.json().catch(function () { return {}; }).then(function (b) {
+          if (r.status === 429) say('Too many attempts. Please wait a minute and try again.', 'err');
+          else if (b.error === 'invalid_email') say('Please enter a valid email address.', 'err');
+          else say("We couldn't save your place. Please try again shortly.", 'err');
+          btn.disabled = false;
+        });
+      }).catch(function () {
+        say("We couldn't save your place. Please try again shortly.", 'err');
+      }).then(function () { if (statusEl.className.indexOf('ok') === -1) btn.disabled = false; else setTimeout(function(){ btn.disabled = false; }, 3000); });
+    });
+  })();
+</script>
 <script>
   var spans = document.querySelectorAll('#hero-h1 .line span');
   spans.forEach(function (el, i) {
