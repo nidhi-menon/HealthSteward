@@ -1,0 +1,14 @@
+{
+  "name": "healthsteward-waitlist",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tiny Cloudflare Worker + D1 backend for the HealthSteward consumer-app waitlist",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HealthSteward privacy notice</title>
+<meta name="description" content="What HealthSteward collects through its website and consumer-app waitlist, and how to ask for deletion.">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="apple-touch-icon" href="assets/brand/mark-180.png">
+<link rel="canonical" href="https://healthstewardai.com/privacy.html">
+<meta name="theme-color" content="#20464c">
+<style>
+  :root {
+    --paper: #fafaf9;
+    --paper-raised: #ffffff;
+    --ink: #171f1d;
+    --ink-soft: #3b453f;
+    --ink-faint: #5a635d; /* shared token with tdd.html; unused on this page today but kept in sync for palette consistency across the site */
+    --teal: #20464c;
+    --teal-bright: #2f626a;
+    --amber: #8a5a17; /* shared token with tdd.html (accessible warm accent); unused on this page today — see --select-hl below for what this page actually uses for its selection highlight */
+    --select-hl: #047857; /* this page's text-selection highlight — was previously (mis)named --amber, despite being a green, not amber */
+    --redact: #101412;
+    --line: #cdccbf;
+    --focus: #047857;
+  }
+  /* Deliberately single-theme: the redaction-bar reveal needs dark ink on
+     light paper to read. Always paper/light, regardless of viewer theme. */
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: Iowan Old Style, Charter, Georgia, "Noto Serif", serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  ::selection { background: var(--select-hl); color: var(--redact); }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  a { color: var(--teal-bright); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    padding: 10px 16px;
+    z-index: 100;
+    text-decoration: none;
+  }
+  .skip-link:focus {
+    left: 12px;
+    top: 12px;
+  }
+
+  .wrap {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-size: 15px;
+  }
+  a.brand { color: inherit; text-decoration: none; }
+  .brand .mark { flex: none; display: block; }
+  .brand .mark rect.card { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+  .brand .mark line { stroke: var(--ink-soft); stroke-width: 1.4; stroke-linecap: square; }
+  .brand .mark rect.bar { fill: var(--teal); }
+  .top nav { display: flex; gap: 22px; }
+  .top nav a {
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+  .top nav a:hover { color: var(--ink); }
+
+  /* HERO */
+  .hero {
+    padding: 88px 24px 64px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .eyebrow { margin-bottom: 18px; }
+  h1 {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 42px);
+    line-height: 1.28;
+    letter-spacing: -0.01em;
+    margin: 0 0 28px;
+    text-wrap: balance;
+    max-width: 640px;
+  }
+  h1 .line { display: block; overflow: hidden; }
+  h1 .line span {
+    display: inline-block;
+    background: linear-gradient(var(--redact), var(--redact));
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    color: transparent;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    animation: reveal 0.05s steps(1) 1 forwards;
+  }
+  .hero p.lede {
+    max-width: 560px;
+    font-size: 19px;
+    color: var(--ink-soft);
+    margin: 0 0 36px;
+  }
+  .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+
+  .btn {
+    font-family: ui-monospace, monospace;
+    font-size: 13.5px;
+    letter-spacing: 0.02em;
+    padding: 12px 20px;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    text-decoration: none;
+    display: inline-block;
+    background: transparent;
+    cursor: pointer;
+  }
+  .btn.primary {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: #f3f1e6;
+  }
+  .btn.primary:hover { background: var(--teal-bright); border-color: var(--teal-bright); }
+  .btn:hover { background: var(--paper-raised); }
+  .hero-note { font-family: ui-monospace, monospace; font-size: 14px; color: var(--ink-soft); }
+
+  /* redaction reveal keyframe applied via JS toggling class */
+  h1 .line span.revealed {
+    animation: unredact 1.5s cubic-bezier(.65,0,.35,1) forwards;
+  }
+  @keyframes unredact {
+    0%   { background-size: 100% 100%; color: transparent; }
+    72%  { background-size: 100% 100%; color: transparent; }
+    73%  { color: inherit; }
+    100% { background-size: 0% 100%; color: inherit; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    h1 .line span { animation: none !important; background-size: 0% 100% !important; color: inherit !important; }
+  }
+
+  /* SECTIONS styled like chart fields */
+  section.field {
+    padding: 52px 24px;
+    border-bottom: 1px solid var(--line);
+    scroll-margin-top: 84px;
+  }
+  section.field .field-label {
+    margin-bottom: 22px;
+  }
+  h2 {
+    font-family: ui-monospace, monospace;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+  }
+  section.field p {
+    max-width: 620px;
+    color: var(--ink-soft);
+    margin: 0 0 16px;
+  }
+  section.field p:last-child { margin-bottom: 0; }
+  section.field strong { color: var(--ink); font-weight: 600; }
+
+  /* feature list = chart line items */
+  .chart-lines { border-top: 1px solid var(--line); margin-top: 8px; }
+  .chart-line {
+    display: grid;
+    grid-template-columns: 108px 1fr;
+    gap: 20px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .chart-line .tag {
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--teal-bright);
+    padding-top: 3px;
+  }
+  .chart-line h3 {
+    margin: 0 0 6px;
+    font-size: 16.5px;
+    font-family: Iowan Old Style, Charter, Georgia, serif;
+    font-weight: 700;
+  }
+  .chart-line p { margin: 0; font-size: 15.5px; color: var(--ink-soft); max-width: 560px; }
+
+  /* trust boundary cards */
+  .boundaries {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-top: 8px;
+  }
+  .boundary {
+    background: var(--paper);
+    padding: 22px;
+  }
+  .boundary .eyebrow { margin-bottom: 10px; }
+  .boundary h3 { margin: 0 0 10px; font-size: 16px; font-family: ui-monospace, monospace; }
+  .boundary p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+  @media (max-width: 620px) {
+    .boundaries { grid-template-columns: 1fr; }
+  }
+
+  /* header/footer nav rows had no wrap fallback — brand + nav links (5 in the
+     footer, after adding LinkedIn) forced horizontal overflow below ~440px.
+     Stack onto their own row instead of scrolling the whole page sideways. */
+  @media (max-width: 640px) {
+    header.top { flex-wrap: wrap; row-gap: 10px; }
+    .top nav { flex-wrap: wrap; row-gap: 8px; width: 100%; }
+    footer nav { flex-wrap: wrap; row-gap: 8px; }
+  }
+
+  /* install block styled like a form/prescription strip */
+  .install-block {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    padding: 20px 22px;
+    margin-top: 10px;
+  }
+  .install-block .eyebrow { margin-bottom: 12px; }
+  pre.cmd {
+    margin: 0;
+    font-family: ui-monospace, monospace;
+    font-size: 14px;
+    color: var(--ink);
+    overflow-x: auto;
+    white-space: pre;
+    padding-bottom: 2px;
+  }
+  pre.cmd .prompt { color: var(--teal-bright); }
+  .install-note { margin-top: 14px; font-size: 13.5px; color: var(--ink-soft); }
+  .install-note code { font-family: ui-monospace, monospace; font-size: 0.92em; }
+
+  footer {
+    padding: 40px 24px 60px;
+  }
+  footer .wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  footer .eyebrow { margin: 0; }
+  footer nav { display: flex; gap: 18px; }
+  footer nav a { font-family: ui-monospace, monospace; font-size: 13px; color: var(--ink-soft); text-decoration: none; }
+  footer nav a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+
+<header class="top">
+  <a class="brand" href="index.html" aria-label="HealthSteward home">
+    <svg class="mark" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+      <rect class="card" x="1.5" y="1.5" width="17" height="17"></rect>
+      <line x1="4.5" y1="6.5" x2="15.5" y2="6.5"></line>
+      <rect class="bar" x="4.5" y="9.3" width="11" height="2.4"></rect>
+      <line x1="4.5" y1="14.5" x2="11" y2="14.5"></line>
+    </svg>
+    HealthSteward
+  </a>
+  <nav>
+    <a href="index.html">home</a>
+    <a href="open-source.html">open source</a>
+    <a href="index.html#waitlist">waitlist</a>
+  </nav>
+</header>
+
+<section class="field" id="main-content">
+  <div class="wrap">
+    <div class="field-label eyebrow">Privacy notice</div>
+    <h2>What we collect, and why</h2>
+    <p>Last updated October 29, 2026. This notice covers this website and the consumer-app waitlist. It does not cover the open-source app, which runs on your own machine (see <a href="open-source.html#privacy">how the open-source version handles data</a>).</p>
+
+    <h2 style="margin-top:34px;">Waitlist</h2>
+    <p><strong>What we store:</strong> your email address, your first name if you choose to give it, the date and time you joined (UTC), and which version of the signup wording you saw. We don't store your IP address, browser details or referring page with your signup. To limit abuse we keep a short-lived counter keyed to a secret-keyed hash of your IP address, deleted within about a day. Cloudflare, which runs the signup, may separately process technical data such as IP addresses to operate and secure its network, under its own policies.</p>
+    <p><strong>Why:</strong> to email you about the HealthSteward consumer app: when early access opens, and occasional progress updates. We don't sell your information, share it for advertising, or use it for anything else.</p>
+    <p><strong>Who handles it:</strong> the signup runs on Cloudflare (a Worker and a database), and the list is stored there, in a database located in the United States. We don't use a third-party form or email-marketing service for signup, and the form loads no third-party scripts. If we later use an email service to send updates, we'll name it here before we do.</p>
+    <p><strong>Health information:</strong> the form doesn't ask for any, and please don't send any. Joining the list doesn't create a medical record.</p>
+    <p><strong>Your choices:</strong> to be removed, to get a copy of your information, or to have it deleted, email <a href="mailto:contact@healthstewardai.com">contact@healthstewardai.com</a>. We'll delete your entry. We'll also keep a hash of your email made with a secret key, which can't practically be reversed without that key, so you aren't added again by mistake. We keep it only while the waitlist exists. Cloudflare keeps database history for up to 7 days so the database can be restored, so a deleted entry can remain in that history for up to that long. Every email we send will also include an unsubscribe link.</p>
+
+    <h2 style="margin-top:34px;">This website</h2>
+    <p>The site is hosted on GitHub Pages, which keeps its own server logs (for example, IP addresses) under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>. We don't run analytics or advertising trackers on these pages, and the demo video is hosted on the site itself. The waitlist form sends your entry to our Worker at waitlist.healthstewardai.com, which runs on Cloudflare.</p>
+
+    <h2 style="margin-top:34px;">Contact</h2>
+    <p>Questions about this notice: <a href="mailto:contact@healthstewardai.com">contact@healthstewardai.com</a>. We'll update this page, and the date above, if our practices change.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="eyebrow mono">HealthSteward</p>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="open-source.html">Open source</a>
+      <a href="https://github.com/nidhi-menon/HealthSteward">GitHub</a>
+      <a href="mailto:contact@healthstewardai.com">Contact</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

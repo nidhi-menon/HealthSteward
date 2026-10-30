@@ -1,0 +1,20 @@
+name = "healthsteward-waitlist"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Served at https://waitlist.healthstewardai.com (DNS is already on Cloudflare).
+routes = [
+  { pattern = "waitlist.healthstewardai.com", custom_domain = true }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "healthsteward-waitlist"
+database_id = "6623040d-308a-49c1-9d91-e2397c044364"
+
+[vars]
+ALLOWED_ORIGINS = "https://healthstewardai.com,https://www.healthstewardai.com"
+
+# Do not record request logs: submitted emails must never end up in logs.
+[observability]
+enabled = false

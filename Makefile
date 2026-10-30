@@ -75,7 +75,7 @@ docker-clean:
 
 run:
 	@echo "Starting HealthSteward locally..."
-	python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+	python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
 
 test:
 	@echo "Running tests..."
