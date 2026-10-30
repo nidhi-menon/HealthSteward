@@ -12,8 +12,19 @@ binding = "DB"
 database_name = "healthsteward-waitlist"
 database_id = "6623040d-308a-49c1-9d91-e2397c044364"
 
+# Weekly digest: Friday 10pm Pacific. Cron is UTC and weekdays count from Sunday=1, so fire
+# Saturday 05:00 and 06:00 UTC and let the Worker pick the one that is 10pm Pacific.
+[triggers]
+crons = ["0 5,6 * * sat"]
+
+# Sends the digest. Needs the Email Service binding; the recipient (DIGEST_TO) is a Worker secret
+# so the address is not published in this public repo.
+[[send_email]]
+name = "EMAIL"
+
 [vars]
 ALLOWED_ORIGINS = "https://healthstewardai.com,https://www.healthstewardai.com"
+DIGEST_FROM = "waitlist@healthstewardai.com"
 
 # Do not record request logs: submitted emails must never end up in logs.
 [observability]
