@@ -1279,3 +1279,19 @@ class TestTokenScopeNER:
 
         assert result.count("[REDACTED]") == 2
         assert "PERSON_1" not in result
+
+
+class TestNERDependencyDeclared:
+    """Free-text name redaction only works if spaCy and its model are installed.
+
+    The NER tests above skip silently when they are missing (as they once were in every
+    default install), so check that the install files still declare both.
+    """
+
+    @pytest.mark.parametrize("path", ["requirements.txt", "environment.yml"])
+    def test_spacy_and_model_declared(self, path):
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parent.parent / path).read_text()
+        assert "spacy" in text
+        assert "en_core_web_sm" in text

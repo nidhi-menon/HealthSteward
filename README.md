@@ -13,7 +13,7 @@
 ![release](https://img.shields.io/github/v/release/nidhi-menon/HealthSteward?include_prereleases&color=20464c)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22181289.svg)](https://doi.org/10.5281/zenodo.22181289)
 
-**[Website](https://healthstewardai.com/) · [LinkedIn](https://www.linkedin.com/company/healthsteward-ai/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues) · [Contact](mailto:nidhi@healthstewardai.com)**
+**[Website](https://healthstewardai.com/) · [LinkedIn](https://www.linkedin.com/company/healthsteward-ai/) · [GitHub Discussions](https://github.com/nidhi-menon/HealthSteward/discussions) · [Report a Bug](https://github.com/nidhi-menon/HealthSteward/issues) · [Request a Feature](https://github.com/nidhi-menon/HealthSteward/issues) · [Contact](mailto:contact@healthstewardai.com)**
 
 If HealthSteward is useful to you, consider giving it a ⭐ — it helps this reach more people navigating fragmented care.
 
@@ -48,7 +48,7 @@ This isn't a replacement for clinical judgment. It's infrastructure for the part
 - **AI visit preparation** — an agentic loop generates personalized questions for upcoming doctor visits, with intelligent context selection from past visits and on-demand tools (medication lookup, past-visit lookup) it can call before finalizing; runs fully local via Ollama by default, or on Claude API or any OpenAI-compatible provider, switchable from the Settings page without restarting — with automatic fallback to single-shot generation if tool-calling isn't reliable
 - **AVS PDF parsing** — upload after-visit summary PDFs, parse locally with Ollama, review extracted items, and update your profile
 - **Proactive action items** — after applying a parsed AVS, surfaces follow-ups to book, labs to get done, and referrals to schedule; persistent "Needs Attention" section on the overview tab with flexible snooze (1w / 2w / 1m), a currently-snoozed view with early un-snooze and an undo banner after snoozing, one-click completion, previously-snoozed indicators, and a resolved history toggle
-- **PII anonymization** — data sent to Claude or a custom provider is anonymized via deterministic field replacement, regex, and spaCy NER (names, DOB, contact info); best-effort on free text, not a hard guarantee
+- **PII anonymization** — data sent to Claude or a custom provider is anonymized via deterministic field replacement, regex, and spaCy NER (names, DOB, contact info; installed with `requirements.txt`, and the anonymizer falls back to regex-only if it is missing); best-effort on free text, not a hard guarantee
 - **Complete privacy** — health data stays local; PDF parsing uses only local Ollama (no PHI leaves your machine)
 
 ## Architecture
@@ -115,7 +115,7 @@ pip install -r requirements.txt
 python -m alembic upgrade head
 
 # Start the API server
-python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ### Frontend
