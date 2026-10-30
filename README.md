@@ -3,9 +3,10 @@
   <img src="docs/assets/brand/lockup-transparent-2040.png" alt="HealthSteward" width="420">
 </picture>
 
-> **Local, privacy-first agentic AI for patients navigating fragmented care.**
-> Your health is split across multiple specialists on different systems, none talking to each other.
-> HealthSteward centralizes it — locally, on your machine — and prepares you for every appointment.
+> **An AI care coordinator for patients navigating fragmented healthcare.**
+> Your care is split across specialists on different systems, none talking to each other, and you end up holding the whole picture. HealthSteward is being built to take on that coordination work: one continuous record, a prep brief for every visit, and a "Village" of people you trust.
+>
+> **This repository is the open-source v1.0.** It runs on your machine (local models by default, with optional Claude or OpenAI-compatible providers), turns uploaded after-visit summaries into a record, action items, and visit prep, and has been tested on synthetic cases and a few real documents, not yet with real patients. A hosted consumer app is in development: [join the waitlist](https://healthstewardai.com/#waitlist).
 
 ![license](https://img.shields.io/badge/license-GPL--3.0-20464c)
 ![python](https://img.shields.io/badge/python-3.11+-2f626a)
