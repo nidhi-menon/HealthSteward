@@ -37,6 +37,7 @@ from src.utils.anonymization import (
     token_scope,
 )
 from src.utils.context_selection import ContextSelectionResult, ContextSelector
+from src.utils.dates import sort_by_date
 
 
 class AgenticLoopNotConvergedError(RuntimeError):
@@ -419,9 +420,12 @@ Before finalizing your response, count your questions. You must have between 8 a
         vitals_result = await self.db.execute(
             select(Vitals)
             .where(Vitals.profile_id == profile_id)
-            .order_by(Vitals.measured_date.desc())
+            .order_by(Vitals.created_at)
         )
-        vitals = list(vitals_result.scalars().all())
+        # measured_date is free text; order by the parsed date, newest first.
+        vitals = sort_by_date(
+            vitals_result.scalars().all(), lambda v: v.measured_date, reverse=True
+        )
 
         followup_result = await self.db.execute(
             select(FollowUp)
