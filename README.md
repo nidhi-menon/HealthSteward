@@ -1,7 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/lockup-dark-transparent-2040.png">
-  <img src="docs/assets/brand/lockup-transparent-2040.png" alt="HealthSteward" width="420">
-</picture>
+<img src="docs/assets/brand/lockup-on-paper-2040.png" alt="HealthSteward" width="420">
 
 > **An AI care coordinator for patients navigating fragmented healthcare.**
 > Your care is split across specialists on different systems, none talking to each other, and you end up holding the whole picture. HealthSteward is being built to take on that coordination work: one continuous record, a prep brief for every visit, and a "Village" of people you trust.
