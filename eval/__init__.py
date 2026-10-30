@@ -1,6 +1,6 @@
 """Visit-prep evaluation harness (issue #29).
 
-Deterministic-only v1 — see docs/tdd.html's Evaluation Plan tab for the full
+Deterministic-only v1 — see design/tdd.html's Evaluation Plan tab for the full
 plan this is scoped from, and the (private) development log for the entry
 documenting what v1 covers and what's deferred to v2 (LLM-as-judge).
 

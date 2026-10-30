@@ -1,6 +1,6 @@
 # Public Site Style Guide
 
-Governs `docs/index.html` (landing page) and `docs/tdd.html` (technical design doc), served via GitHub Pages. Read this before editing either file, and update it when a genuinely new pattern gets introduced — this is a living reference.
+Governs the public site under `docs/` (served via GitHub Pages; the technical design doc lives unpublished in `design/tdd.html`). Read this before editing any page, and update it when a genuinely new pattern gets introduced — this is a living reference.
 
 ---
 

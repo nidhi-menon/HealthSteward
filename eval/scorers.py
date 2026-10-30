@@ -143,7 +143,7 @@ def in_scope_entities(case: EvalCase) -> set[str]:
 def score_groundedness(result: dict[str, Any], entities: set[str]) -> dict[str, Any]:
     """Cheap entity-match pass: does each question reference at least one real entity.
 
-    This is the "smoke test" version, not the deeper NLI-judge pass docs/tdd.html
+    This is the "smoke test" version, not the deeper NLI-judge pass design/tdd.html
     describes for v2 — it catches obvious hallucination (an entity that was never
     in the input) but can't catch subtler unsupported inferential claims.
 

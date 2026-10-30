@@ -1,7 +1,7 @@
 """CLI entrypoint for the v1 visit-prep eval harness (issue #29).
 
 Deterministic-only, run on-demand — no CI integration, per the eval plan
-in docs/tdd.html. Runs the real pipeline (real DB rows, real VisitPrepAgent,
+in design/tdd.html. Runs the real pipeline (real DB rows, real VisitPrepAgent,
 real ContextSelector) against whichever LLM backend is configured via
 Settings, at temperature=0.0 so repeated runs are comparable.
 
