@@ -2,7 +2,7 @@
 
 External/marketing-use brand assets — not referenced by the live site (see `docs/assets/favicon.svg` and `docs/assets/social-preview.png` for those). Use these for LinkedIn, decks, README embeds elsewhere, or any other external surface.
 
-All colors match the canonical brand palette in `docs/SITE_STYLE_GUIDE.md` (teal `#20464c`/`#2f626a`, ink `#171f1d`).
+All colors match the canonical brand palette in `design/SITE_STYLE_GUIDE.md` (teal `#20464c`/`#2f626a`, ink `#171f1d`).
 
 ## Icon only (`mark.*`)
 
@@ -23,4 +23,4 @@ The README uses both light and dark variants together via a `<picture>` element 
 
 Flat brand teal (`#20464c`), sized exactly to LinkedIn's company page banner spec (1128×191). No text or logo — the icon and name/tagline already render separately on a LinkedIn company page (icon overlaps the banner, name/tagline sit below it as plain text), so repeating them in the banner image itself would just be redundant. A tone-on-tone patterned version (reusing the icon's bar motif) was tried and rejected — read as too busy/wallpaper-like at this aspect ratio; flat won out as cleaner.
 
-If the brand palette changes (see `docs/SITE_STYLE_GUIDE.md` for the source of truth), regenerate these rather than hand-editing — the SVG sources are simple enough to recolor and re-export via `rsvg-convert`.
+If the brand palette changes (see `design/SITE_STYLE_GUIDE.md` for the source of truth), regenerate these rather than hand-editing — the SVG sources are simple enough to recolor and re-export via `rsvg-convert`.

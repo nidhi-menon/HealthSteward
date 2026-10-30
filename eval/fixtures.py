@@ -1,7 +1,7 @@
 """Synthetic eval cases for the visit-prep generation harness (issue #29).
 
 Each case is fabricated data, not real patient history — see the
-"synthetic example" convention already used by docs/tdd.html's Walkthrough
+"synthetic example" convention already used by design/tdd.html's Walkthrough
 tab. Every case is deliberately constructed to exercise a specific check,
 not just be "a plausible patient":
 
@@ -16,7 +16,7 @@ not just be "a plausible patient":
 - cold_start: zero past visits, zero medications — exercises the
   fallback/format-validity path with minimal input.
 - tool_call_necessity_dosing: two same-specialty medications with a real
-  absorption-timing interaction (mirrors docs/tdd.html's Walkthrough
+  absorption-timing interaction (mirrors design/tdd.html's Walkthrough
   example) — the "correct" answer benefits from a get_medication_details
   call, so this case's tool_calls are worth checking for.
 - retrieval_redundancy: enough past visits with the target doctor that
@@ -194,7 +194,7 @@ GENERATION_CASES: list[EvalCase] = [
         id="tool_call_necessity_dosing",
         description=(
             "Two same-specialty medications with a real absorption-timing "
-            "interaction (mirrors docs/tdd.html's Walkthrough example) — "
+            "interaction (mirrors design/tdd.html's Walkthrough example) — "
             "get_medication_details is worth calling to answer this well."
         ),
         profile_name="Eval Patient — Dosing",

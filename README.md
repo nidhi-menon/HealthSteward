@@ -249,7 +249,7 @@ Context is assembled via a 4-stage selection pipeline, then handed to an agentic
 
 ## Documentation
 
-- `docs/SITE_STYLE_GUIDE.md` — palette, typography, layout, diagram, and accessibility conventions for the public site (`docs/index.html`, `docs/tdd.html`)
+- `design/SITE_STYLE_GUIDE.md` — palette, typography, layout, diagram, and accessibility conventions for the public site (`docs/index.html`, `docs/open-source.html`)
 - `eval/` — visit-prep quality eval harness (deterministic + cheap-assertion tiers, DEC-018); run via `python -m eval.run`
 - `CONTRIBUTING.md` — how to contribute, including the privacy constraints PRs must respect
 - `SECURITY.md` — how to report a vulnerability
