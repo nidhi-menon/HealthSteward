@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "HealthSteward"
     app_version: str = "0.1.0"
-    api_host: str = "0.0.0.0"
+    api_host: str = "127.0.0.1"
     api_port: int = 8000
 
     @property
