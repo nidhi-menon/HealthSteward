@@ -1651,3 +1651,29 @@ async def test_versions_are_scoped_to_their_own_appointment(
     assert len(first_versions) == 1
     assert first_versions[0]["generated_questions"] == {"First": ["one"]}
     assert second_versions == []
+
+
+@pytest.mark.asyncio
+async def test_clinical_data_lists_vitals_newest_first_across_a_year_boundary(
+    client: AsyncClient, db_session, sample_profile_data,
+):
+    """Vitals.measured_date is free text; newest-first must follow the calendar,
+    not string order ("01/05/2026" sorts before "12/03/2025" as text)."""
+    from src.agents.visit_prep import VisitPrepAgent
+    from src.data.models import Document, Vitals
+
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    for raw in ("12/03/2025", "01/05/2026", "06/15/2025", None):
+        doc = Document(
+            profile_id=profile_id, original_filename="t.pdf", file_path="/tmp/t.pdf",
+            file_size_bytes=1, parse_status="completed",
+        )
+        db_session.add(doc)
+        await db_session.commit()
+        await db_session.refresh(doc)
+        db_session.add(Vitals(profile_id=profile_id, document_id=doc.id, weight="150 lbs", measured_date=raw))
+        await db_session.commit()
+
+    data = await VisitPrepAgent(db_session)._get_clinical_data(profile_id)
+
+    assert [v.measured_date for v in data["vitals"]] == ["01/05/2026", "12/03/2025", "06/15/2025", None]

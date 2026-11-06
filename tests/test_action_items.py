@@ -196,3 +196,47 @@ async def test_snoozed_vitals_alert_shows_real_trend_message_not_bare_metric_nam
 
     active_again = await client.get(f"/api/profiles/{profile_id}/vitals-alerts")
     assert len(active_again.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_vitals_alert_direction_is_correct_across_a_year_boundary_with_mmddyyyy_dates(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data,
+):
+    """measured_date is free text ("MM/DD/YYYY" from the AVS parser). A plain
+    string sort puts 01/05/2026 before 12/03/2025, which inverts oldest/newest
+    and reports a weight gain as a loss.
+    """
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    doc_old = await _make_document(db_session, profile_id)
+    doc_new = await _make_document(db_session, profile_id)
+    db_session.add(Vitals(profile_id=profile_id, document_id=doc_old, weight="150 lbs", measured_date="12/03/2025"))
+    db_session.add(Vitals(profile_id=profile_id, document_id=doc_new, weight="160 lbs", measured_date="01/05/2026"))
+    await db_session.commit()
+
+    alerts = (await client.get(f"/api/profiles/{profile_id}/vitals-alerts")).json()
+
+    assert len(alerts) == 1
+    assert alerts[0]["direction"] == "up"
+    assert "increased by 10.0 lbs" in alerts[0]["message"]
+    assert alerts[0]["oldest_value"] == "150 lbs"
+    assert alerts[0]["newest_value"] == "160 lbs"
+
+
+@pytest.mark.asyncio
+async def test_vitals_alert_ignores_readings_with_unparseable_dates(
+    client: AsyncClient, db_session: AsyncSession, sample_profile_data,
+):
+    """A reading that can't be placed in time must not be guessed into the trend."""
+    profile_id = (await client.post("/api/profiles/", json=sample_profile_data)).json()["id"]
+    docs = [await _make_document(db_session, profile_id) for _ in range(3)]
+    db_session.add(Vitals(profile_id=profile_id, document_id=docs[0], weight="150 lbs", measured_date="12/03/2025"))
+    db_session.add(Vitals(profile_id=profile_id, document_id=docs[1], weight="160 lbs", measured_date="01/05/2026"))
+    db_session.add(Vitals(profile_id=profile_id, document_id=docs[2], weight="100 lbs", measured_date="sometime last week"))
+    await db_session.commit()
+
+    alerts = (await client.get(f"/api/profiles/{profile_id}/vitals-alerts")).json()
+
+    assert len(alerts) == 1
+    assert alerts[0]["oldest_value"] == "150 lbs"
+    assert alerts[0]["newest_value"] == "160 lbs"
+    assert alerts[0]["visit_count"] == 2

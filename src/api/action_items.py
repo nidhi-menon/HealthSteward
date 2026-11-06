@@ -20,6 +20,7 @@ from src.models.schemas import (
     NudgeStateResponse,
     ReferralResponse,
 )
+from src.utils.dates import sort_by_date
 
 router = APIRouter(prefix="/api/profiles/{profile_id}", tags=["action-items"])
 
@@ -335,9 +336,13 @@ async def _compute_all_vitals_alerts(db: AsyncSession, profile_id: str) -> list[
     result = await db.execute(
         select(Vitals)
         .where(Vitals.profile_id == profile_id)
-        .order_by(Vitals.measured_date)
+        .order_by(Vitals.created_at)
     )
-    all_vitals = result.scalars().all()
+    # measured_date is free text, so order by the parsed date. Readings whose
+    # date can't be parsed can't be placed in a trend and are left out.
+    all_vitals = sort_by_date(
+        result.scalars().all(), lambda v: v.measured_date, drop_undated=True
+    )
     if len(all_vitals) < 2:
         return []
 
