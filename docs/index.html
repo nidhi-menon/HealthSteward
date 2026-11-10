@@ -629,5 +629,15 @@
     setTimeout(function () { el.classList.add('revealed'); }, Math.max(0, -400 + i * 900));
   });
 </script>
+<script>
+  // ?to=waitlist scrolls to the signup form; query params survive in-app browsers that drop #fragments.
+  (function () {
+    if (new URLSearchParams(location.search).get('to') !== 'waitlist') return;
+    var el = document.getElementById('waitlist');
+    if (!el) return;
+    function go() { el.scrollIntoView(); }
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
+  })();
+</script>
 </body>
 </html>
